@@ -1,13 +1,23 @@
 import os
 import secrets
+import logging
 
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
 
 
 def _default_secret_key() -> str:
     if os.environ.get("SECRET_KEY"):
         return os.environ["SECRET_KEY"]
-    return secrets.token_urlsafe(48)
+    generated = secrets.token_urlsafe(48)
+    logger.warning(
+        "SECRET_KEY não definida via env var. Usando chave aleatória gerada agora. "
+        "Em produção, defina SECRET_KEY para garantir portabilidade dos dados criptografados (Fernet). "
+        "Sem uma SECRET_KEY fixa, senhas de certificados e outros dados cifrados não poderão ser "
+        "descriptografados após reinício do servidor."
+    )
+    return generated
 
 
 def _default_debug() -> bool:

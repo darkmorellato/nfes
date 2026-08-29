@@ -5,16 +5,16 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from lxml import etree
 
-from backend.database import get_db_connection, list_certificates_db
+from backend.database import get_db_connection, list_certificates_db, get_certificate_record
 from backend.services.danfe_service import build_synthetic_nfe_xml
 
 
 def gerar_qrcode_nfce_url(
     chave: str,
+    csc_token: str,
+    csc_token_id: str = "000001",
     ambiente: str = "1", # 1 = Produção, 2 = Homologação
     uf: str = "35", # SP
-    csc_token_id: str = "000001",
-    csc_token: str = "1234567890ABCDEF1234567890ABCDEF",
     data_emissao: Optional[str] = None,
     valor_total: float = 0.0,
     cpf_dest: Optional[str] = None
@@ -22,6 +22,7 @@ def gerar_qrcode_nfce_url(
     """
     Gera a URL oficial do QR Code da NFC-e versão 2.0 conforme Manual de Padrões Técnicos do DANFE NFC-e.
     Formato: URL_SEFAZ?p=chNFe|2|tpAmb|cIdToken|digVal|hashSHA1
+    O `csc_token` e `csc_token_id` são específicos de cada empresa emitente e devem ser obtidos do certificado cadastrado.
     """
     tp_amb = "1" if ambiente == "producao" or ambiente == "1" else "2"
     d_emi = data_emissao or datetime.now().isoformat()
@@ -82,8 +83,19 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
     valor_total_venda = sum(float(it.get("quantidade", 1)) * float(it.get("valor_unitario", 0)) for it in itens)
 
     # Gera URL do QR Code
+    cert_rec = get_certificate_record(empresa_cnpj)
+    csc_token = (cert_rec.get("csc_token") if cert_rec else "") or ""
+    csc_token_id = "000001"
+    if not csc_token:
+        raise ValueError(
+            f"Certificado da empresa CNPJ {empresa_cnpj} não encontrado ou não possui csc_token cadastrado. "
+            "Cadastre o CSC token no registro do certificado para emitir NFC-e."
+        )
+
     qrcode_url = gerar_qrcode_nfce_url(
         chave=chave_completa,
+        csc_token=csc_token,
+        csc_token_id=csc_token_id,
         ambiente="1",
         valor_total=valor_total_venda,
         data_emissao=now_iso

@@ -65,6 +65,7 @@ def init_db():
                 telefone TEXT,
                 email TEXT,
                 crt INTEGER DEFAULT 1,
+                csc_token TEXT DEFAULT '',
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -85,6 +86,7 @@ def init_db():
             ("telefone", "TEXT"),
             ("email", "TEXT"),
             ("crt", "INTEGER DEFAULT 1"),
+            ("csc_token", "TEXT DEFAULT ''"),
         ]
         for cname, ctype in cols_certs:
             try:
@@ -441,6 +443,7 @@ def save_certificate_record(cert_data: Dict[str, Any]) -> bool:
 
     raw_password = str(cert_data.get("password") or "")
     stored_password = encrypt_secret(raw_password)
+    csc_token = str(cert_data.get("csc_token") or "")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -448,8 +451,8 @@ def save_certificate_record(cert_data: Dict[str, Any]) -> bool:
             INSERT INTO certificates (
                 cnpj, razao_social, filename, path, password, valid_from, valid_to,
                 days_remaining, is_active, last_nsu, max_nsu, last_sync_time, last_sync_status,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                crt, csc_token, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(cnpj) DO UPDATE SET
                 razao_social = excluded.razao_social,
                 filename = excluded.filename,
@@ -459,6 +462,8 @@ def save_certificate_record(cert_data: Dict[str, Any]) -> bool:
                 valid_to = excluded.valid_to,
                 days_remaining = excluded.days_remaining,
                 is_active = excluded.is_active,
+                crt = excluded.crt,
+                csc_token = excluded.csc_token,
                 updated_at = excluded.updated_at
         """, (
             cnpj,
@@ -474,6 +479,8 @@ def save_certificate_record(cert_data: Dict[str, Any]) -> bool:
             cert_data.get("max_nsu") or "0",
             cert_data.get("last_sync_time") or "",
             cert_data.get("last_sync_status") or "",
+            int(cert_data.get("crt") or 1),
+            csc_token,
             now, now
         ))
         conn.commit()
@@ -574,23 +581,36 @@ def update_cert_sync_state(cnpj: str, last_nsu: str, max_nsu: Optional[str] = No
 
 
 def auto_register_disk_certificates():
-    """Varre a pasta certs/ e cadastra automaticamente os arquivos .pfx encontrados."""
+    """Varre a pasta certs/ e cadastra automaticamente os arquivos .pfx encontrados.
+
+    A senha do certificado deve estar em cert_meta.json ou na variável de ambiente CERT_PASSWORD.
+    Não é feito brute-force com senhas padrão.
+    """
     from cryptography.hazmat.primitives.serialization import pkcs12
     from cryptography.hazmat.backends import default_backend
 
     cert_files = glob.glob(os.path.join(settings.CERT_DIR, "*.pfx")) + glob.glob(os.path.join(settings.CERT_DIR, "*.p12"))
-    known_passwords = ["Banana@10", "1", "1234", "123456", ""]
+    if not cert_files:
+        return
 
-    # Verifica senha configurada no cert_meta.json
+    # Senha única: cert_meta.json ou env var (não brute-force)
+    pwd: str = ""
     meta_path = os.path.join(settings.CERT_DIR, "cert_meta.json")
     if os.path.exists(meta_path):
         try:
             with open(meta_path) as f:
-                p = json.load(f).get("password")
-                if p and p not in known_passwords:
-                    known_passwords.insert(0, p)
+                pwd = json.load(f).get("password") or ""
         except Exception:
             pass
+    if not pwd:
+        pwd = os.environ.get("CERT_PASSWORD", "")
+
+    if not pwd:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Auto-registro de certificados pulado: nenhuma senha encontrada em cert_meta.json ou env var CERT_PASSWORD."
+        )
+        return
 
     for cf in cert_files:
         filename = os.path.basename(cf)
@@ -598,48 +618,45 @@ def auto_register_disk_certificates():
             with open(cf, "rb") as f:
                 data = f.read()
 
-            for pwd in known_passwords:
-                try:
-                    key, cert, _ = pkcs12.load_key_and_certificates(data, pwd.encode("utf-8") if pwd else None, default_backend())
-                    subject = cert.subject.rfc4514_string()
-                    cnpj = ""
-                    for part in subject.split(","):
-                        if ":" in part:
-                            _, v = part.split(":", 1)
-                            digits = "".join(c for c in v if c.isdigit())
-                            if len(digits) == 14:
-                                cnpj = digits
+            key, cert, _ = pkcs12.load_key_and_certificates(data, pwd.encode("utf-8"), default_backend())
+            if not cert:
+                continue
 
-                    # Extrai Razão Social
-                    razao = ""
-                    for attr in cert.subject:
-                        if attr.oid._name == "commonName":
-                            razao = attr.value.split(":")[0].strip()
-                            break
-                    if not razao:
-                        razao = os.path.splitext(filename)[0]
+            subject = cert.subject.rfc4514_string()
+            cnpj = ""
+            for part in subject.split(","):
+                if ":" in part:
+                    _, v = part.split(":", 1)
+                    digits = "".join(c for c in v if c.isdigit())
+                    if len(digits) == 14:
+                        cnpj = digits
 
-                    val_from = cert.not_valid_before_utc.strftime("%d/%m/%Y")
-                    val_to = cert.not_valid_after_utc.strftime("%d/%m/%Y")
-                    days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()).days)
-
-                    if cnpj:
-                        save_certificate_record({
-                            "cnpj": cnpj,
-                            "razao_social": razao,
-                            "filename": filename,
-                            "path": cf,
-                            "password": pwd,
-                            "valid_from": val_from,
-                            "valid_to": val_to,
-                            "days_remaining": days_rem,
-                            "is_active": 1,
-                        })
+            razao = ""
+            for attr in cert.subject:
+                if attr.oid._name == "commonName":
+                    razao = attr.value.split(":")[0].strip()
                     break
-                except Exception:
-                    continue
+            if not razao:
+                razao = os.path.splitext(filename)[0]
+
+            val_from = cert.not_valid_before_utc.strftime("%d/%m/%Y")
+            val_to = cert.not_valid_after_utc.strftime("%d/%m/%Y")
+            days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()).days)
+
+            if cnpj:
+                save_certificate_record({
+                    "cnpj": cnpj,
+                    "razao_social": razao,
+                    "filename": filename,
+                    "path": cf,
+                    "password": pwd,
+                    "valid_from": val_from,
+                    "valid_to": val_to,
+                    "days_remaining": days_rem,
+                    "is_active": 1,
+                })
         except Exception:
-            pass
+            continue
 
 
 # ====================================================================

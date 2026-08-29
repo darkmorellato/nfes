@@ -144,7 +144,7 @@ def get_cert_password(cnpj: Optional[str] = None) -> str:
             meta = json.load(f)
         return meta.get("password", "")
 
-    return "Banana@10"
+    return ""
 
 
 def get_cert_info(cnpj: Optional[str] = None) -> Dict[str, Any]:

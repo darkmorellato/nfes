@@ -1,17 +1,12 @@
 /**
  * Integração Google Firebase & Cloud Firestore
  * Projeto: nfes-dd7ab
+ *
+ * A configuração é carregada dinamicamente do backend via /api/firebase-config.
+ * Não há credenciais hardcoded — se o backend não responder, o Firebase não inicializa.
  */
 
-const firebaseConfig = {
-    apiKey: "FIREBASE_API_KEY_REMOVED",
-    authDomain: "nfes-dd7ab.firebaseapp.com",
-    projectId: "nfes-dd7ab",
-    storageBucket: "nfes-dd7ab.firebasestorage.app",
-    messagingSenderId: "845868073907",
-    appId: "1:845868073907:web:3075c8479fb4e34a5d01c6",
-    measurementId: "G-4346B1KGE7"
-};
+const firebaseConfig = {};
 
 let firebaseApp = null;
 let firestoreDb = null;
@@ -38,7 +33,7 @@ function initFirebase() {
             }
 
             isFirestoreAvailable = true;
-            console.log("✓ Firebase & Cloud Firestore inicializados com sucesso! Projeto:", firebaseConfig.projectId);
+            console.log("✓ Firebase & Cloud Firestore inicializados com sucesso!");
             updateFirestoreStatusUI(true);
         } else {
             console.warn("SDK do Firebase não foi carregado via CDN.");
@@ -58,7 +53,7 @@ function updateFirestoreStatusUI(connected, errorMsg = "") {
     if (connected) {
         badge.textContent = "☁️ Firestore OK";
         badge.className = "badge-firestore badge-firestore-ok";
-        badge.title = `Conectado ao Cloud Firestore: ${firebaseConfig.projectId}`;
+        badge.title = "Conectado ao Cloud Firestore";
         badge.style.display = "inline-flex";
     } else {
         badge.textContent = "☁️ Firestore Offline";
@@ -203,13 +198,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         const resp = await fetch("/api/firebase-config");
         if (resp.ok) {
             const cfg = await resp.json();
-            // Atualiza apenas se o backend retornou valores válidos
             if (cfg.apiKey) {
                 Object.assign(firebaseConfig, cfg);
+                initFirebase();
+            } else {
+                const msg = "Config do Firebase não disponível no backend. Sincronização com nuvem desativada.";
+                console.warn(msg);
+                updateFirestoreStatusUI(false, msg);
             }
+        } else {
+            const msg = `Backend retornou status ${resp.status} ao carregar config do Firebase.`;
+            console.warn(msg);
+            updateFirestoreStatusUI(false, msg);
         }
     } catch (e) {
-        console.warn("Falha ao carregar config do Firebase do backend, usando fallback hardcoded.", e);
+        const msg = "Falha ao conectar ao backend para carregar config do Firebase. Sincronização com nuvem desativada.";
+        console.warn(msg, e);
+        updateFirestoreStatusUI(false, msg);
     }
-    initFirebase();
 });
