@@ -3,7 +3,6 @@ import os
 import tempfile
 from typing import Optional
 from datetime import datetime, timedelta
-import random
 
 import matplotlib
 matplotlib.use('Agg')
@@ -23,6 +22,13 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 from backend.config import settings
+from backend.database import (
+    get_db_connection,
+    get_analytics_dashboard,
+    get_price_divergences,
+    get_auditoria_fornecedores,
+    get_dre_tendencia,
+)
 
 
 def _register_fonts():
@@ -45,14 +51,37 @@ def _create_temp_image(fig) -> str:
 def _generate_status_data(periodo_dias: int):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=periodo_dias)
+    start_str = start_date.strftime('%Y-%m-%d')
+    end_str = end_date.strftime('%Y-%m-%d')
 
-    status_labels = ['Autorizado', 'Cancelado', 'Rejeitado', 'Em Processamento', 'Denegado']
-    status_counts = [random.randint(40, 70) for _ in range(len(status_labels))]
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT situacao, COUNT(*) as cnt FROM nfe_docs "
+            "WHERE data_emissao >= ? AND data_emissao <= ? "
+            "GROUP BY situacao ORDER BY cnt DESC",
+            (start_str, end_str + "T23:59:59"),
+        )
+        rows = cursor.fetchall()
+
+    status_labels = []
+    status_counts = []
+    for row in rows:
+        status_labels.append(row["situacao"] or "Sem status")
+        status_counts.append(row["cnt"])
+
+    if not status_labels:
+        status_labels = ['Autorizado', 'Cancelado', 'Rejeitado', 'Em Processamento', 'Denegado']
+        status_counts = [0, 0, 0, 0, 0]
+
     total = sum(status_counts)
-    status_percentages = [round((count / total) * 100, 1) for count in status_counts]
+    status_percentages = [
+        round((count / total) * 100, 1) if total > 0 else 0
+        for count in status_counts
+    ]
 
     return {
-        'periodo': f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}",
+        'periodo': f"{start_str} a {end_str}",
         'total': total,
         'status': list(zip(status_labels, status_counts, status_percentages))
     }
@@ -61,32 +90,58 @@ def _generate_status_data(periodo_dias: int):
 def _generate_monthly_data(meses: int):
     end_date = datetime.now()
     months = []
-    values = []
+    month_prefixes = []
     for i in range(meses - 1, -1, -1):
         d = end_date - timedelta(days=30 * i)
         months.append(d.strftime('%m/%Y'))
-        values.append(random.randint(100, 500))
+        month_prefixes.append(d.strftime('%Y-%m'))
 
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        placeholders = ",".join("?" for _ in month_prefixes)
+        cursor.execute(
+            f"SELECT substr(data_emissao, 1, 7) as mes, COUNT(*) as cnt "
+            f"FROM nfe_docs WHERE substr(data_emissao, 1, 7) IN ({placeholders}) "
+            f"GROUP BY mes ORDER BY mes",
+            month_prefixes,
+        )
+        rows = cursor.fetchall()
+        counts_map = {r["mes"]: r["cnt"] for r in rows}
+
+    values = [counts_map.get(mp, 0) for mp in month_prefixes]
     return {'meses': months, 'valores': values}
 
 
 def _generate_compliance_data(periodo_dias: int):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=periodo_dias)
+    start_str = start_date.strftime('%Y-%m-%d')
+    end_str = end_date.strftime('%Y-%m-%d')
 
-    total_docs = random.randint(200, 500)
-    docs_compliance = random.randint(int(total_docs * 0.85), total_docs)
-    docs_pending = total_docs - docs_compliance
-    compliance_rate = round((docs_compliance / total_docs) * 100, 2) if total_docs > 0 else 0
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) as cnt FROM nfe_docs WHERE data_emissao >= ? AND data_emissao <= ?",
+            (start_str, end_str + "T23:59:59"),
+        )
+        total_docs = cursor.fetchone()["cnt"]
+
+    divergencias = get_price_divergences(limit=200)
+    docs_con_divergencia = len(divergencias)
+
+    audit = get_auditoria_fornecedores()
+    docs_conformes = max(0, total_docs - docs_con_divergencia)
+    docs_pendentes = 0
+    taxa_conformidade = round((docs_conformes / total_docs) * 100, 2) if total_docs > 0 else 100
 
     return {
-        'periodo': f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}",
+        'periodo': f"{start_str} a {end_str}",
         'total_documentos': total_docs,
-        'documentos_conformes': docs_compliance,
-        'documentos_pendentes': docs_pending,
-        'taxa_conformidade': compliance_rate,
-        'divergencias': random.randint(0, 10),
-        'alertas': random.randint(0, 5)
+        'documentos_conformes': docs_conformes,
+        'documentos_pendentes': docs_pendentes,
+        'taxa_conformidade': taxa_conformidade,
+        'divergencias': docs_con_divergencia,
+        'alertas': docs_con_divergencia
     }
 
 
@@ -94,29 +149,26 @@ def _generate_emitter_data(periodo_dias: int):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=periodo_dias)
 
-    emitters = [
-        ('EMPRESA A LTDA', '12345678000190', random.randint(50, 200)),
-        ('EMPRESA B LTDA', '98765432000190', random.randint(30, 150)),
-        ('EMPRESA C LTDA', '45678912000190', random.randint(20, 100)),
-        ('EMPRESA D LTDA', '78912345000190', random.randint(10, 80)),
-        ('EMPRESA E LTDA', '32165498000190', random.randint(5, 60)),
-    ]
+    dash = get_analytics_dashboard(mes=end_date.month, ano=end_date.year)
+    top_fornecedores = dash.get('top_fornecedores', [])[:5]
 
-    total_value = sum(e[2] for e in emitters)
     result = []
-    for name, cnpj, count in emitters:
-        percentage = round((count / total_value) * 100, 2) if total_value > 0 else 0
+    for f in top_fornecedores:
         result.append({
-            'razao_social': name,
-            'cnpj': cnpj,
-            'quantidade': count,
-            'percentual': percentage
+            'razao_social': f.get('emitente_nome', '—'),
+            'cnpj': f.get('emitente_cnpj', ''),
+            'quantidade': f.get('qtd_notas', 0),
+            'percentual': 0
         })
+
+    total_value = sum(e['quantidade'] for e in result)
+    for e in result:
+        e['percentual'] = round((e['quantidade'] / total_value) * 100, 2) if total_value > 0 else 0
 
     return {
         'periodo': f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}",
         'emissores': result,
-        'total_emissores': len(emitters),
+        'total_emissores': len(result),
         'total_documentos': total_value
     }
 

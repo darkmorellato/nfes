@@ -11,18 +11,31 @@ from backend.config import settings
 
 
 def generate_dacce_pdf(chave: str, n_seq: int = 1) -> io.BytesIO:
-    """Gera o Documento Auxiliar da Carta de Correção Eletrônica (DACCE) oficial em PDF."""
+    """Gera o Documento Auxiliar da Carta de Correção Eletrônica (DACCE) oficial em PDF.
+
+    Levanta ValueError se o evento de CC-e (110110) não estiver registrado no banco,
+    pois o DACCE sem protocolo real da SEFAZ não tem validade fiscal.
+    """
     chave_clean = "".join(c for c in str(chave) if c.isdigit())
     doc = get_nfe_detail(chave_clean) or {}
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM nfe_events WHERE chave = ? AND tipo_evento = '110110' ORDER BY n_seq DESC LIMIT 1", (chave_clean,))
+        cursor.execute(
+            "SELECT * FROM nfe_events WHERE chave = ? AND tipo_evento = '110110' ORDER BY n_seq DESC LIMIT 1",
+            (chave_clean,),
+        )
         evento = cursor.fetchone()
 
-    justificativa = evento["x_motivo"] if evento else "Correção nos dados adicionais da nota fiscal nos termos do Art. 58-B do Convênio SINIEF s/n."
-    protocolo = evento["protocolo"] if evento else "135240001928374"
-    dh_evento = evento["dh_evento"] if evento else (doc.get("data_emissao") or datetime.now().isoformat())
+    if not evento:
+        raise ValueError(
+            f"Evento de CC-e (110110) não encontrado para a chave {chave_clean}. "
+            "A Carta de Correção deve estar registrada na SEFAZ antes de gerar o DACCE."
+        )
+
+    justificativa = evento["x_motivo"]
+    protocolo = evento["protocolo"]
+    dh_evento = evento["dh_evento"]
 
     buf = io.BytesIO()
     doc_pdf = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
