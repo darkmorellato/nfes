@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nfe-manager-backend"
+version = "1.0.0"
+description = "Backend FastAPI para interface de gerenciamento NF-e via PyNFe"
+requires-python = ">=3.9, <4"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,85 @@
+ 
+Inicio
++
+Cadastros
++
+Vendas
++
+Compras
++
+PCP
++
+OS
++
+Financeiro
++
+Relatórios
++
+Tesouraria
++
+Config
+Olá JAQUELINE, GR: 911 - sexta-feira, 28 de agosto de 2026
+Usuário Logado: jaquelineberaldo@yahoo.com.br
+JAQUELINE DE ALMEIDA BERALDO 30700878840
+     
+Relatório de Cadastro de Pessoas
+Filiais
+ 	Código	Filial
+	1111	MI PLACE DOM PEDRO II
+	1203	MI PLACE XV
+	1271	MI PLACE BENJAMIN
+	1272	MI PLACE PREMIUM
+	1273	MI PLACE KASSOUF
+Nome, Fantasia ou Razão Social
+Data de Cadastro
+ até
+UF
+Todos
+SP
+RJ
+AC
+AL
+AP
+AM
+BA
+CE
+DF
+ES
+GO
+MA
+MT
+MS
+MG
+PA
+PB
+PR
+PE
+PI
+RN
+RS
+RO
+RR
+SC
+SE
+TO
+Cidade
+Todas
+CNPJ
+CPF
+Vendedor
+Todos
+Data de Nascimento ou Fundação
+Segmento
+Todos
+Classificação
+Cliente	Fornecedor	Funcionario	Cooperado	Outro	Transportadora	Envolvido CTE
+
+
+Canais de Atendimento
+ Fone/WhatsApp (19) 3041-0975
+ E-mail suporte@hostmundo.net
+Precisa de Certificado Digital? Clique aqui e compre direto pelo WhatsApp
+SEU IP 186.218.19.35
+Rev: HOSTMUNDO
+
+Processando... por favor, aguarde.

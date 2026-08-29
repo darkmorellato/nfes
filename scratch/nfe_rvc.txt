@@ -1,0 +1,91 @@
+ 
+Inicio
++
+Cadastros
++
+Vendas
++
+Compras
++
+PCP
++
+OS
++
+Financeiro
++
+Relatórios
++
+Tesouraria
++
+Config
+Olá JAQUELINE, GR: 911 - sexta-feira, 28 de agosto de 2026
+Usuário Logado: jaquelineberaldo@yahoo.com.br
+JAQUELINE DE ALMEIDA BERALDO 30700878840
+     
+Busca NFe
+Filiais
+ 	Código	Filial
+	1111	MI PLACE DOM PEDRO II
+	1203	MI PLACE XV
+	1271	MI PLACE BENJAMIN
+	1272	MI PLACE PREMIUM
+	1273	MI PLACE KASSOUF
+N.º da Nota
+Chave
+Data de emissão
+ até 
+N.º Pedido de Venda
+Código do Cliente
+Situação da NFe
+Todas
+Autorizadas
+Canceladas
+Pendentes
+Inutilizadas
+Situação ProcNFe
+Todas
+Status OK
+Ausente
+Ambiente
+Todas
+Ausente
+Produção
+Homologação
+Tipo de Operação
+Todas
+Entrada
+Saida
+1794 NFe
+1755 autorizada
+6 canceladas
+32 pendente
+2.997.245,75 produtos
+2.997.245,75 total
+0,00 icms
+0,00 de icms st
+
+
+Ações	F.	N.º	Status	Emissão	Cliente	ICMS	ST	Produtos	Total	ProcNFe	Tipo	 	 
+            	1111	532	AUTORIZADA	08/08/2026	JULIO CESAR PEREIRA DA SILVA	0,00	0,00	1.900,00	1.900,00	OK	SAIDA	P	
+            	1111	531	AUTORIZADA	08/08/2026	BENEDITO ANTONIO MARIANO	0,00	0,00	1.600,00	1.600,00	OK	SAIDA	P	
+            	1111	530	AUTORIZADA	07/08/2026	ALEXSANDRO ROCHA SOARES	0,00	0,00	1.400,00	1.400,00	OK	SAIDA	P	
+            	1111	529	AUTORIZADA	25/08/2026	VANESSA SHIRLEY DE SOUZA ORTIZ	0,00	0,00	1.400,00	1.400,00	OK	SAIDA	P	
+            	1111	528	AUTORIZADA	24/08/2026	MARLON ARRUDA SODRE	0,00	0,00	1.599,00	1.599,00	OK	SAIDA	P	
+            	1111	527	AUTORIZADA	22/08/2026	ALANA PAMELLA RAMALHO DE OLIVEIRA	0,00	0,00	2.200,00	2.200,00	OK	SAIDA	P	
+            	1111	526	AUTORIZADA	20/08/2026	HANDRESSA ANTUNES FRANCO DE OLIVEIRA	0,00	0,00	1.600,00	1.600,00	OK	SAIDA	P	
+            	1111	525	AUTORIZADA	19/08/2026	CARLA CRISTINA LUCCA	0,00	0,00	2.600,00	2.600,00	OK	SAIDA	P	
+            	1111	524	AUTORIZADA	18/08/2026	ELISABETE GUERRERO	0,00	0,00	1.600,00	1.600,00	OK	SAIDA	P	
+            	1111	523	AUTORIZADA	17/08/2026	FABRICIO EMILIANO DA CRUZ	0,00	0,00	1.750,00	1.750,00	OK	SAIDA	P	
+            	1111	522	AUTORIZADA	17/08/2026	SANDRA MARTINS PEREIRA	0,00	0,00	1.750,00	1.750,00	OK	SAIDA	P	
+            	1111	521	AUTORIZADA	12/08/2026	JOÃO VITOR BATISTA	0,00	0,00	2.600,00	2.600,00	OK	SAIDA	P	
+            	1111	520	AUTORIZADA	10/08/2026	ANTONIO FELIPE DE SOUSA	0,00	0,00	3.300,00	3.300,00	OK	SAIDA	P	
+            	1111	519	AUTORIZADA	13/08/2026	ADRIANO LUNA DA SILVA	0,00	0,00	6.156,00	6.156,00	OK	SAIDA	P	
+            	1111	518	AUTORIZADA	06/08/2026	LUIS HENRIQUE ZARBETTI	0,00	0,00	1.900,00	1.900,00	OK	SAIDA	P	
+
+1	2	3	4	5	6	7	8	9	10	...	Última
+Canais de Atendimento
+ Fone/WhatsApp (19) 3041-0975
+ E-mail suporte@hostmundo.net
+Precisa de Certificado Digital? Clique aqui e compre direto pelo WhatsApp
+SEU IP 186.218.19.35
+Rev: HOSTMUNDO
