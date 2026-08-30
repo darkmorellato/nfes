@@ -33,8 +33,12 @@ def _open_ui(url: str, chrome: str | None) -> None:
     try:
         if chrome and os.path.exists(chrome):
             subprocess.Popen([chrome, "--no-sandbox", f"--app={url}"])
-        else:
-            webbrowser.open(url)
+            return
+    except Exception as e:
+        print(f"AVISO: falha ao abrir o Chromium embutido ({e}); usando o navegador do sistema.")
+    # Fallback: navegador padrão do SO (funciona mesmo sem o Chromium do bundle).
+    try:
+        webbrowser.open(url)
     except Exception as e:
         print(f"AVISO: não foi possível abrir a UI automaticamente: {e}")
 

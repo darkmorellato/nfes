@@ -23,19 +23,12 @@ cat > "$HOME/.local/share/applications/${APP}.desktop" <<EOF
 [Desktop Entry]
 Name=NFE Manager
 Comment=Portal NF-e local (SEFAZ) sem Java
-Exec=${DEST}/${APP}.AppImage
+Exec=${DEST}/${APP}.AppImage --appimage-extract-and-run
 Icon=nfe-manager
 Type=Application
 Categories=Office;Finance;
 Terminal=false
 EOF
-
-# Sem FUSE: usa extração em tempo de execução.
-if ! command -v fusermount >/dev/null 2>&1 && ! command -v fusermount3 >/dev/null 2>&1; then
-    sed -i "s|^Exec=.*|Exec=${DEST}/${APP}.AppImage --appimage-extract-and-run|" \
-        "$HOME/.local/share/applications/${APP}.desktop"
-    echo "FUSE ausente: o atalho usará --appimage-extract-and-run."
-fi
 
 # Ícone (opcional).
 if [ -f "AppDir/nfe-manager.png" ]; then
