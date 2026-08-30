@@ -16,6 +16,9 @@ def _resolve_data_dir() -> str:
     env = os.environ.get("NFE_DATA_DIR")
     if env:
         return os.path.abspath(env)
+    repo_data = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    if os.path.isdir(repo_data):
+        return repo_data
     return os.path.join(_xdg_data_root(), "nfe-manager", "data")
 
 

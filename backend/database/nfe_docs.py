@@ -141,6 +141,38 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
                 ))
 
         conn.commit()
+
+    # Espelhamento automático em tempo real no Cloud Firestore (não-bloqueante)
+    try:
+        from backend.services.firestore_service import sync_single_nfe_async
+        doc_payload = {
+            "chave": chave,
+            "empresa_cnpj": empresa_cnpj,
+            "numero": numero,
+            "serie": serie,
+            "modelo": modelo,
+            "tipo_doc": tipo_doc,
+            "emitente_cnpj": emit_cnpj,
+            "emitente_nome": emit_nome,
+            "emitente_uf": emit_uf,
+            "destinatario_cnpj": dest_cnpj,
+            "destinatario_nome": dest_nome,
+            "destinatario_uf": dest_uf,
+            "data_emissao": dt_emi,
+            "data_autorizacao": dt_aut,
+            "valor_total": v_total,
+            "valor_icms": v_icms,
+            "valor_pis": v_pis,
+            "valor_cofins": v_cofins,
+            "valor_ipi": v_ipi,
+            "situacao": situacao,
+            "nsu": nsu,
+            "has_xml": bool(has_xml),
+        }
+        sync_single_nfe_async(doc_payload)
+    except Exception:
+        pass
+
     return True
 
 def save_nfe_event(event: Dict[str, Any]) -> bool:
@@ -178,6 +210,13 @@ def save_nfe_event(event: Dict[str, Any]) -> bool:
             cursor.execute("UPDATE nfe_docs SET situacao = 'Cancelada', updated_at = ? WHERE chave = ?", (now, chave))
 
         conn.commit()
+
+    try:
+        from backend.services.firestore_service import sync_event_to_firestore_async
+        sync_event_to_firestore_async(event)
+    except Exception:
+        pass
+
     return True
 
 def list_nfe_docs(
@@ -403,7 +442,22 @@ def cancelar_nfe_doc(chave: str, protocolo: str, justificativa: str) -> bool:
             ) VALUES (?, '110111', 'Cancelamento de NF-e homologado', 1, ?, '135', ?, ?, ?)
         """, (chave_clean, protocolo, justificativa, now_iso, now_iso))
         conn.commit()
-        return True
+
+    try:
+        from backend.services.firestore_service import sync_event_to_firestore_async, sync_single_nfe_async
+        sync_event_to_firestore_async({
+            "chave": chave_clean,
+            "tipo_evento": "110111",
+            "desc_evento": "Cancelamento de NF-e homologado",
+            "n_seq": 1,
+            "protocolo": protocolo,
+            "x_motivo": justificativa,
+        })
+        sync_single_nfe_async({"chave": chave_clean, "situacao": "Cancelada"})
+    except Exception:
+        pass
+
+    return True
 
 
 # ====================================================================

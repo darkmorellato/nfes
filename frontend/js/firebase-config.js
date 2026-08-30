@@ -159,61 +159,52 @@ async function saveEventToFirestore(event) {
 }
 
 /**
- * Sincroniza todas as notas locais com o Firestore
+ * Sincroniza todas as notas locais com o Firestore em lote ultrarrápido
  */
 async function syncAllToFirestore() {
-    if (!isFirestoreAvailable || !firestoreDb) {
-        alert("Firestore não está conectado no momento. Verifique sua conexão de internet.");
-        return;
-    }
-
     const btn = document.getElementById("btn-sync-firestore-all");
     const originalText = btn ? btn.textContent : "☁️ Nuvem Firestore";
-    if (btn) { btn.disabled = true; btn.textContent = "⏳ Enviando para Firestore..."; }
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Sincronizando com Firestore..."; }
 
     try {
-        const res = await apiGet("/api/gestao/documentos?page=1&limit=1000");
-        if (!res || !res.success || !res.data) {
-            const detail = res && res.detail ? res.detail : "Erro ao carregar documentos locais.";
-            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+        // Tenta sincronização em lote de alta performance via backend
+        const res = await fetch("/api/gestao/firestore/sync-all", { method: "POST" });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+                alert(`✓ Sincronização 24h Cloud Firestore Concluída!\n\n• Notas sincronizadas na nuvem: ${data.synced} de ${data.total}\n• Projeto: ${data.project_id}\n• Status: Atualizado e disponível 24h.`);
+                updateFirestoreStatusUI(true);
+                return;
+            }
         }
-
-        const docs = res.data.documentos || [];
-        if (docs.length === 0) {
-            alert("Nenhuma nota fiscal encontrada no banco local para enviar ao Firestore.");
+        throw new Error("Falha no endpoint de sincronização em lote.");
+    } catch (err) {
+        console.warn("[Firestore] Tentando sincronização direta pelo cliente...", err);
+        if (!isFirestoreAvailable || !firestoreDb) {
+            alert("Erro ao sincronizar com o Firestore: " + err.message);
             return;
         }
 
-        let sucessos = 0;
-        let erros = 0;
-
-        for (let i = 0; i < docs.length; i++) {
-            const d = docs[i];
-            if (btn) btn.textContent = `⏳ Enviando (${i + 1}/${docs.length})...`;
-            
-            try {
-                const detailRes = await apiGet(`/api/gestao/documento/${d.chave}`);
-                const fullDoc = (detailRes.success && detailRes.data) ? detailRes.data : d;
-                const ok = await saveDocToFirestore(fullDoc);
+        try {
+            const res = await apiGet("/api/gestao/documentos?page=1&limit=1000");
+            const docs = (res && res.data && res.data.documentos) || [];
+            let sucessos = 0;
+            for (let i = 0; i < docs.length; i++) {
+                if (btn) btn.textContent = `⏳ Enviando (${i + 1}/${docs.length})...`;
+                const ok = await saveDocToFirestore(docs[i]);
                 if (ok) sucessos++;
-                else erros++;
-            } catch (docErr) {
-                console.warn(`Erro ao sincronizar nota ${d.chave}:`, docErr);
-                erros++;
             }
+            alert(`✓ Sincronização concluída: ${sucessos} notas enviadas para a nuvem.`);
+        } catch (clientErr) {
+            alert("Erro na sincronização: " + clientErr.message);
         }
-
-        alert(`✓ Sincronização com Cloud Firestore concluída com sucesso!\n\n• Notas enviadas: ${sucessos} de ${docs.length}\n• Status: Atualizado no Firestore.`);
-    } catch (err) {
-        console.error("Erro na sincronização Firestore:", err);
-        alert("Erro na sincronização com o Firestore: " + err.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
 }
 
-// Inicializa quando o DOM estiver pronto
-document.addEventListener("DOMContentLoaded", async () => {
+// Inicializa de forma robusta independente do momento do carregamento do script
+async function bootstrapFirebase() {
     try {
         const resp = await fetch("/api/firebase-config");
         if (resp.ok) {
@@ -239,4 +230,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateFirestoreStatusUI(false, msg);
         if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
     }
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrapFirebase);
+} else {
+    bootstrapFirebase();
+}

@@ -32,7 +32,18 @@ def _open_ui(url: str, chrome: str | None) -> None:
             time.sleep(0.2)
     try:
         if chrome and os.path.exists(chrome):
-            subprocess.Popen([chrome, "--no-sandbox", f"--app={url}"])
+            cmd = [
+                chrome,
+                "--no-sandbox",
+                "--ozone-platform-hint=auto",
+                f"--app={url}",
+            ]
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
             return
     except Exception as e:
         print(f"AVISO: falha ao abrir o Chromium embutido ({e}); usando o navegador do sistema.")

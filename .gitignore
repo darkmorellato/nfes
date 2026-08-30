@@ -51,3 +51,6 @@ AppDir/usr/lib/playwright/
 .secret_key
 *.secret_key
 
+# Agentes e caches locais
+.jan/
+

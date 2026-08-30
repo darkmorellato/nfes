@@ -36,9 +36,7 @@ const AUTH_MAX_ATTEMPTS = 5;
 const AUTH_BLOCK_MINUTES = 15;
 const AUTH_SESSION_KEY = "nfe_auth_session";
 
-// ─── Inicialização ───────────────────────────────────────────────────────────
-
-document.addEventListener("DOMContentLoaded", () => {
+function initAuth() {
     injectLoginOverlay();
     restoreSession();
     // Verifica conexão com o backend (a autenticação usa SQLite local, não Firestore)
@@ -61,7 +59,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (icon) icon.textContent = "🔴";
         if (text) { text.textContent = "Servidor offline"; text.style.color = "#8b1a22"; }
     });
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAuth);
+} else {
+    initAuth();
+}
 
 /**
  * Injeta o overlay de login no DOM antes de qualquer conteúdo do sistema.

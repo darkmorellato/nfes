@@ -1,205 +1,158 @@
-# NFE Manager — Portal NF-e Local para Linux
+# 🏛️ NFE Manager — Portal NF-e Local & Nuvem para Linux
 
-## Visão Geral
+> **O jeito mais fácil de consultar, emitir e gerenciar Notas Fiscais Eletrônicas (SEFAZ) no Linux.**  
+> 🚫 **Sem Java** • 🚫 **Sem .jnlp** • 🚫 **Sem Windows** • ☁️ **Sincronizado 24h no Firestore**
 
-O **NFE Manager** é um portal NF-e local, escrito em Python (FastAPI) com
-interface web vanilla, que replica a experiência do portal oficial da SEFAZ
-(`www.nfe.fazenda.gov.br`) sem exigir Java, sem exigir `.jnlp` e com
-integração direta aos webservices da SEFAZ/Receita Federal por meio da
-biblioteca **PyNFe**. Suporta NF-e, NFC-e, MDF-e, NFS-e, Manifestação do
-Destinatário, EPEC, Distribuição DF-e, geração de DANFE/DANFE-Simplificado
-em PDF via **brazilfiscalreport**, relatórios fiscais e gerenciamento de
-certificado digital A1.
+---
 
-## Por que existe
+## 🎯 O que é o NFE Manager?
 
-O portal oficial da SEFAZ depende do **Java Web Start (`.jnlp`)** para
-disponibilizar o *assinador* de NF-e. Esse assinador utiliza a
-**Windows CryptoAPI** (CSP/PKCS#11 específico do Windows) e o **NSS** do
-navegador Mozilla/Firefox. Em sistemas Linux modernos, essa cadeia quebra
-de várias formas:
+O **NFE Manager** é um sistema completo de gestão fiscal com a mesma interface visual do portal oficial da SEFAZ, mas feito para rodar com **1 clique** no Linux.
 
-- O `.jnlp` requer um JRE com Web Start — removido do OpenJDK a partir do
-  Java 11.
-- A CryptoAPI da Microsoft não está disponível fora do Windows.
-- O bridge `libpkcs11` ↔ NSS tem problemas de detecção de token A3
-  (SafeNet, Gemalto, etc.) na maioria das distros.
-- O Java Web Start não respeita mais os manifests de permissões dos
-  pacotes `.deb`/`.rpm` recentes.
+Ele substitui todo o programa antigo da Receita Federal e permite:
+- 📥 **Baixar automaticamente todas as notas emitidas contra o seu CNPJ** direto da SEFAZ (Robô DF-e).
+- 🖨️ **Gerar e Imprimir DANFE em PDF** oficial com código de barras.
+- 📤 **Emitir NF-e e NFC-e** de venda de forma simples.
+- 🚫 **Cancelar notas fiscais e emitir Cartas de Correção (CC-e)**.
+- 📦 **Fechamento Contábil Mensal:** gera pacote `.zip` com todos os XMLs e PDFs do mês para o seu contador.
+- ☁️ **Nuvem 24h (Google Firestore):** todas as suas notas ficam salvas em tempo real na nuvem para consulta de qualquer lugar.
 
-O resultado: **a maioria dos contadores e empresas que migraram de
-Windows para Linux (Ubuntu, Zorin, CachyOS, Fedora, Mint) perderam o
-acesso direto ao portal da SEFAZ via navegador**.
+---
 
-O NFE Manager resolve isso **substituindo todo o stack cliente** por um
-backend Python que:
+## 🚀 Guia Rápido de Instalação (Para Iniciantes)
 
-1. Usa o PyNFe para gerar o XML da NF-e e assinar com `cryptography`
-   (PKCS#12 para A1, PKCS#11 via `python-pkcs11` para A3).
-2. Conversa via SOAP direto com os WSDLs da SEFAZ (sem `.jnlp`, sem
-   applets, sem NPAPI).
-3. Renderiza o DANFE em PDF no servidor usando `brazilfiscalreport`.
-4. Expõe a mesma interface visual do portal SEFAZ (paleta dourada, mesmo
-   layout, mesmas opções) para reduzir a curva de aprendizado.
+Se você nunca mexeu com terminal, não se preocupe! Siga os 3 passos abaixo:
 
-> **Sem Java. Sem .jnlp. Sem Windows.**
+### Passo 1: Abra o Terminal e instale os pacotes básicos
 
-## Recursos
+Escolha a sua distribuição Linux:
 
-- **NF-e / NFC-e:** Status do Serviço, Consulta por Chave de Acesso,
-  Consulta de Cadastro, Distribuição DF-e (NSU), EPEC, Manifestação do
-  Destinatário (NT 2012.002), Eventos (Cancelamento, Carta de Correção,
-  Inutilização).
-- **DANFE / DANFE Simplificado:** Geração de PDF oficial via
-  `brazilfiscalreport` (com código de barras e numeração de protocolo).
-- **Certificado Digital A1/A3:** Upload de `.pfx`/`.p12`, leitura via
-  PKCS#11, exibição de informações (CNPJ, validade, emissor).
-- **Relatórios Fiscais em PDF:** Status de Documentos, Volume Mensal,
-  Conformidade Fiscal, Emissores (com gráficos de pizza e barras).
-- **Consultas auxiliares (informativas):** NCM (tabela estática local),
-  GTIN (validador de dígito verificador mod 10), CCC (aponta para o
-  portal oficial — o PyNFe não implementa este webservice).
-- **Navegação completa estilo SEFAZ:** menu superior com abas,
-  breadcrumb, badge de ambiente (Homologação/Produção) e UF.
+#### 👉 Se você usa Ubuntu, Linux Mint, Debian ou Zorin OS:
+```bash
+sudo apt update && sudo apt install -y python3 python3-venv python3-pip openssl libxml2 libxslt1-dev
+```
 
-## Instalação
+#### 👉 Se você usa Arch Linux ou CachyOS:
+```bash
+sudo pacman -S --noconfirm python python-pip openssl libxml2 libxslt
+```
 
-### Requisitos
+---
 
-- Python 3.11+ (3.12 e 3.13 testados; 3.14 suportado com flag)
-- `pip`, `venv`, `libssl`, `libffi`, `libxml2`, `libxslt`
-- Certificado A1 (`.pfx`/`.p12`) ou A3 (token PKCS#11) para operações
-  que exigem autenticação
+### Passo 2: Configurar o sistema automaticamente
 
-### Passos
+Dentro da pasta do projeto, execute o script de instalação automática:
 
 ```bash
-# 1) Ambiente virtual
-python3.11+ -m venv venv
+# 1. Entre na pasta do projeto
+cd ~/Desktop/codes/NFE
 
-# 2) Dependências Python
+# 2. Crie o ambiente e instale as dependências
+python3 -m venv venv
 ./venv/bin/pip install -r backend/requirements.txt
 
-# 3) (somente Python 3.14) flag de compatibilidade pyo3
-PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 ./venv/bin/pip install -r backend/requirements.txt
+# 3. Crie o atalho no seu Menu de Aplicativos
+./scripts/install.sh
 ```
 
-> Se estiver em Python 3.14, exporte `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`
-> antes do `pip install` para que wheels como `cryptography` e
-> `lxml` consigam compilar/instalar via ABI3.
+---
 
-### Dependências do sistema (Ubuntu/Zorin/Debian)
+### Passo 3: Abrir o NFE Manager
 
+Você tem **duas formas** de abrir:
+
+1. **Pelo Menu de Aplicativos (Recomendado):**  
+   Abra o menu do seu computador (pressione a tecla `Super`/`Windows`) e pesquise por **NFE Manager**. Clique nele e a tela abrirá no seu navegador!
+
+2. **Pelo Terminal:**
+   ```bash
+   ./scripts/run.sh
+   ```
+   Depois, acesse no seu navegador: **<http://localhost:8000>**
+
+---
+
+## 📖 Como Usar no Dia a Dia
+
+### 1️⃣ Primeiro Acesso (Login)
+Ao abrir a tela inicial, utilize o usuário padrão cadastrado:
+- **E-mail:** `contasgeraljack@gmail.com`
+- **Senha:** A senha cadastrada no seu primeiro uso.
+
+---
+
+### 2️⃣ Cadastrar seu Certificado Digital (A1)
+Para consultar notas na SEFAZ ou emitir documentos:
+1. Clique na aba superior **"Certificado"**.
+2. Selecione o arquivo do seu certificado `.pfx` ou `.p12` do seu computador.
+3. Digite a senha do certificado e clique em **"Enviar Certificado"**.
+4. O sistema identificará automaticamente o **CNPJ**, **Razão Social** e **Data de Validade**.
+
+---
+
+### 3️⃣ Consultar e Baixar Notas Automaticamente (Robô SEFAZ)
+- O sistema possui um **Robô Automático** que roda em segundo plano e busca todas as notas fiscais emitidas para a sua empresa na SEFAZ.
+- Se quiser forçar uma busca imediata, vá na aba **"Distribuição DF-e"** ou **"Painel de Notas"** e clique em **"Buscar Notas na SEFAZ"**.
+
+---
+
+### 4️⃣ Visualizar Nota e Imprimir DANFE (PDF)
+1. Na lista de notas fiscais, localize a nota desejada (você pode filtrar por data, fornecedor, número ou chave).
+2. Clique no botão **"📄 DANFE (PDF)"** para visualizar e imprimir na hora.
+3. Clique em **"📥 XML"** se quiser baixar o arquivo fiscal original.
+
+---
+
+### 5️⃣ Fechamento Mensal para o Contador
+No final do mês, não perca tempo juntando arquivos um a um:
+1. Clique no botão **"📦 Fechamento Contábil"**.
+2. Escolha o **Mês** e o **Ano** de competência.
+3. Clique em **"📥 Baixar Pacote ZIP (.zip)"**.
+4. Pronto! O sistema entrega um arquivo único contendo todos os XMLs organizados, todos os DANFEs em PDF e uma planilha Excel com o resumo das notas.
+
+---
+
+### 6️⃣ Sincronização com a Nuvem (Google Firestore 24 Horas)
+- Toda nota nova que entra no sistema é **automaticamente salva no Google Firestore**.
+- Se você quiser enviar todas as notas existentes para a nuvem de uma só vez, basta clicar no botão **"☁️ Nuvem Firestore"** no topo da tela.
+
+---
+
+## ❓ Perguntas Frequentes (FAQ)
+
+#### Preciso instalar o Java?
+**Não!** O NFE Manager não usa Java, nem `.jnlp`, nem extensões de navegador antigas. Ele se comunica direto com a SEFAZ.
+
+#### Onde ficam salvas as minhas notas?
+Todas as notas ficam salvas no seu computador localmente em `data/nfe_database.db` e na pasta `data/xmls/`, além de ficarem espelhadas no **Google Cloud Firestore**.
+
+#### O que fazer se a porta 8000 já estiver em uso?
+Você pode rodar em outra porta definindo a variável `NFE_PORT`:
 ```bash
-sudo apt-get install -y python3 python3-venv python3-dev \
-    libssl-dev libffi-dev libxml2-dev libxslt1-dev \
-    openssl p11-kit build-essential
+NFE_PORT=8080 ./scripts/run.sh
 ```
 
-### Dependências do sistema (Arch/CachyOS)
-
+#### Como atualizar o sistema para a versão mais recente?
+Abra o terminal na pasta do projeto e execute:
 ```bash
-sudo pacman -S --noconfirm python python-pip base-devel \
-    openssl libffi libxml2 libxslt p11-kit
+git pull
+./scripts/install.sh
 ```
 
-## Como rodar
+---
 
-```bash
-./venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
+## 🛠️ Para Desenvolvedores & Suporte Técnico
 
-Acesse: <http://localhost:8000>
+| Endpoint | Descrição |
+|---|---|
+| `GET /` | Interface visual do Portal NF-e |
+| `GET /api/status/{tipo}` | Verifica se a SEFAZ do seu estado está online |
+| `GET /api/gestao/documentos` | Listagem paginada de notas com filtros avançados |
+| `POST /api/gestao/firestore/sync-all` | Sincroniza em lote todas as notas locais para o Firestore |
+| `GET /api/danfe/pdf/{chave}` | Renderiza o DANFE oficial em PDF |
+| `GET /docs` | Documentação interativa Swagger/OpenAPI |
 
-> O `--reload` recarrega o backend automaticamente a cada alteração em
-> `backend/`. Os arquivos de `frontend/` são servidos como estáticos, então
-> basta atualizar o navegador (`Ctrl+F5`) para ver mudanças de HTML/CSS/JS.
+---
 
-## Endpoints
-
-| Método | Rota                              | Descrição                                |
-|--------|-----------------------------------|------------------------------------------|
-| GET    | `/`                               | Interface web                            |
-| GET    | `/api/status/{tipo}`              | Status do serviço (NF-e/NFC-e)           |
-| GET    | `/api/consulta/chave`             | Consulta NF-e por chave de 44 dígitos    |
-| GET    | `/api/consulta/cadastro`          | Consulta cadastro (CNPJ/CPF/IE)          |
-| GET    | `/api/consulta/distribuicao`      | Distribuição DF-e (NSU)                  |
-| POST   | `/api/nfe/autorizar`              | Autorização de NF-e                      |
-| POST   | `/api/nfe/cancelar`               | Cancelamento de NF-e                     |
-| POST   | `/api/nfe/carta-correcao`         | Carta de Correção Eletrônica             |
-| POST   | `/api/nfe/inutilizar`             | Inutilização de numeração                |
-| POST   | `/api/nfe/manifestacao`           | Manifestação do Destinatário             |
-| GET    | `/api/danfe/parse/{chave}`        | Faz parse do XML e devolve JSON          |
-| GET    | `/api/danfe/pdf/{chave}`          | Retorna o DANFE em PDF                   |
-| POST   | `/api/danfe/upload-xml`           | Envia XML e renderiza DANFE              |
-| GET    | `/api/certificado/info`           | Info do certificado carregado            |
-| POST   | `/api/certificado/upload`         | Upload de certificado A1                 |
-| DELETE | `/api/certificado`                | Remove certificado                       |
-| GET    | `/api/fiscal/{status,volume-mensal,compliance,emissores}` | Relatórios PDF |
-| GET    | `/docs`                           | Documentação OpenAPI (Swagger UI)        |
-
-## Estrutura
-
-```
-NFE/
-├── backend/
-│   ├── main.py                 # FastAPI app
-│   ├── config.py               # Settings (.env)
-│   ├── requirements.txt
-│   ├── routers/                # Endpoints REST
-│   │   ├── status.py
-│   │   ├── cert.py
-│   │   ├── nfe.py
-│   │   ├── nfce.py
-│   │   ├── mdfe.py
-│   │   ├── nfse.py
-│   │   └── reports.py
-│   └── services/
-│       ├── pynfe_service.py    # Wrapper PyNFe (NF-e/NFC-e/MDFe)
-│       ├── cert_service.py     # PKCS#12 + PKCS#11
-│       └── report_service.py   # PDFs com brazilfiscalreport + matplotlib
-├── frontend/
-│   ├── index.html              # Interface estilo SEFAZ
-│   ├── css/style.css           # Paleta dourada SEFAZ
-│   └── js/
-│       ├── api.js              # Cliente REST
-│       └── app.js              # Lógica de UI + validações
-├── scripts/
-│   ├── setup_linux.sh          # Instala deps de sistema
-│   ├── install_service.sh      # systemd user unit
-│   └── run.sh                  # Atalho de execução
-├── docs/
-│   └── SETUP.md                # Guia detalhado
-├── .env.example
-├── .gitignore
-├── README.md
-└── venv/                       # Ambiente virtual
-```
-
-## Próximos passos
-
-- [ ] **Integração com CCC** — quando a SEFAZ publicar o WSDL público do
-      Cadastro Centralizado de Contribuinte, expor via `/api/ccc/*`.
-- [ ] **EPEC de fato** — adicionar cliente SOAP para o serviço
-      `RecepcaoEPEC` (atualmente apenas *consulta* via chave).
-- [ ] **NF-e 4.00 → NT 2024.003** — acompanhar notas técnicas e
-      atualizar schemas em `pynfe_service.py`.
-- [ ] **MDF-e em produção** — terminar o ciclo de Encerramento + Inclusão
-      de Condutor.
-- [ ] **NFS-e nacional** — padronizar com o modelo da ABRASF quando a
-      prefeitura/UF adotar.
-- [ ] **Cache de certificado** — suportar cache criptografado em disco
-      (atualmente o `.pfx` é recarregado a cada startup).
-- [ ] **Sincronização de NCM/GTIN** — expor endpoint para atualizar a
-      tabela local a partir da TIPI/Receita Federal.
-
-## Licença
-
-LGPL-3.0 (compatível com PyNFe).
-
-## Suporte
-
-- Documentação local: <http://localhost:8000/docs>
-- PyNFe: <https://github.com/TadaSoftware/PyNFe>
-- SEFAZ NF-e: <https://www.nfe.fazenda.gov.br/>
-- Issues do projeto: abra uma issue neste repositório.
+## 📄 Licença
+Distribuído sob licença LGPL-3.0 (compatível com PyNFe).

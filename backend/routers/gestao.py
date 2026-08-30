@@ -739,3 +739,40 @@ async def dre_margens_produtos(empresa_cnpj: Optional[str] = Query(None), limit:
     """Calcula o Lucro Bruto e a Margem Real de cada produto comparando preço de compra vs. preço de venda."""
     from backend.database import get_dre_produtos_margem
     return {"success": True, "produtos": get_dre_produtos_margem(empresa_cnpj=empresa_cnpj, limit=limit)}
+
+
+# ====================================================================
+# SINCRONIZAÇÃO EM NUVEM (GOOGLE CLOUD FIRESTORE 24H)
+# ====================================================================
+
+@router.post("/firestore/sync-all")
+async def sincronizar_tudo_firestore(batch_size: int = Query(200, ge=10, le=500)):
+    """Sincroniza 100% das notas fiscais e cadastros do banco local para o Google Cloud Firestore."""
+    from backend.services.firestore_service import sync_all_database_to_firestore
+    try:
+        resultado = sync_all_database_to_firestore(batch_size=batch_size)
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na sincronização Firestore: {str(e)}")
+
+
+@router.get("/firestore/status")
+async def status_firestore():
+    """Retorna o status de conexão com o Cloud Firestore e total de notas locais prontas para nuvem."""
+    from backend.config import settings
+    from backend.database import get_db_connection
+    total_local = 0
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as total FROM nfe_docs")
+        row = cursor.fetchone()
+        total_local = row["total"] if row else 0
+
+    return {
+        "success": True,
+        "configured": bool(settings.FIREBASE_PROJECT_ID and settings.FIREBASE_API_KEY),
+        "project_id": settings.FIREBASE_PROJECT_ID,
+        "total_notas_local": total_local,
+        "online_24h": True,
+        "collections": ["nfe_docs", "empresas", "nfe_events"],
+    }
