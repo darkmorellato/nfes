@@ -3,7 +3,7 @@
 set -e
 
 APP="NFE-Manager"
-APPIMAGE="$(ls ./*.AppImage 2>/dev/null | head -1)"
+APPIMAGE="$(ls ./NFE-Manager*.AppImage 2>/dev/null | head -1)"
 if [ -z "${APPIMAGE}" ]; then
     echo "Coloque o NFE-Manager-x86_64.AppImage nesta pasta e rode ./scripts/install.sh"
     exit 1
