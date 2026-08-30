@@ -164,6 +164,7 @@ Este projeto prioriza segurança por padrão:
 - **Segredos no Git:** `.env`, `certs/`, `data/*.db*` estão em `.gitignore`. A chave Firebase do `.env` **NUNCA** é commitada.
 - **CORS restritivo:** o coringa `*` foi removido. Apenas origens explícitas em `ALLOWED_ORIGINS` são aceitas.
 - **SQL Injection:** o endpoint `/debug/nfe-completo` foi corrigido e fica disponível **apenas** quando `DEBUG=True`.
+- **Plano Firebase:** este projeto usa **APENAS** o plano Spark (gratuito). Sem Cloud Functions, sem triggers do lado servidor. Sincronização roda no backend local ou no navegador.
 
 ### ⚠️ Ação manual recomendada
 
