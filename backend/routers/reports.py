@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import io
@@ -6,6 +6,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+from backend.dependencies import require_session
 
 from backend.services.report_service import (
     generate_invoice_status_report,
@@ -14,7 +15,7 @@ from backend.services.report_service import (
     generate_emitter_report,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_session)])
 
 
 @router.get("/fiscal/status")

@@ -1,13 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pynfe.processamento.comunicacao import ComunicacaoSefaz
 from backend.config import settings
 from backend.services.cert_service import get_cert_path, get_cert_password
 from backend.services.pynfe_service import uf_from_chave
+from backend.dependencies import require_session
 from typing import Optional
 
 router = APIRouter()
 
 
+# Endpoint público: checagem de status da SEFAZ é feita antes do login.
 @router.get("/status/{tipo}")
 async def status_servico(tipo: str, uf: Optional[str] = None, homologacao: Optional[bool] = None):
     uf = (uf or settings.DEFAULT_UF).upper()
@@ -23,7 +25,7 @@ async def status_servico(tipo: str, uf: Optional[str] = None, homologacao: Optio
         return {"error": str(e)}
 
 
-@router.get("/consulta/chave")
+@router.get("/consulta/chave", dependencies=[Depends(require_session)])
 async def consulta_chave(
     chave: str,
     modelo: str = "nfe",
@@ -43,7 +45,7 @@ async def consulta_chave(
         return {"error": str(e)}
 
 
-@router.get("/consulta/cadastro")
+@router.get("/consulta/cadastro", dependencies=[Depends(require_session)])
 async def consulta_cadastro(
     documento: str,
     tipo: str = "CNPJ",
@@ -167,7 +169,7 @@ def _parse_distribuicao_xml(xml_text: str) -> dict:
     return out
 
 
-@router.get("/consulta/distribuicao")
+@router.get("/consulta/distribuicao", dependencies=[Depends(require_session)])
 async def consulta_distribuicao(
     cnpj: Optional[str] = None,
     cpf: Optional[str] = None,

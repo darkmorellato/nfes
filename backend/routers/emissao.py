@@ -1,6 +1,6 @@
 import io
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Depends
 
 from backend.database import (
     save_cliente,
@@ -15,6 +15,7 @@ from backend.database import (
     list_nfe_saidas,
     get_nfe_detail,
 )
+from backend.dependencies import require_session
 from fastapi.responses import Response, StreamingResponse
 from backend.services.nfe_emissao_service import (
     emitir_nfe_profissional,
@@ -29,7 +30,7 @@ from backend.services.nfe_emissao_service import (
     consultar_status_servico_sefaz,
 )
 
-router = APIRouter(prefix="/emissao", tags=["Emissão de NF-e e Cadastros"])
+router = APIRouter(prefix="/emissao", tags=["Emissão de NF-e e Cadastros"], dependencies=[Depends(require_session)])
 
 
 # ====================================================================

@@ -1,6 +1,15 @@
 """
 Serviço de Sincronização em Tempo Real com o Google Cloud Firestore.
-Projeto: nfes-dd7ab
+
+Plano Firebase: SPARK (gratuito).
+Este serviço usa SOMENTE a REST API pública do Firestore com a
+chave de API do projeto — sem Cloud Functions, sem triggers e
+sem credenciais de service account. Tudo é executado a partir do
+backend local (ou do navegador do usuário).
+
+ATENÇÃO: a ``FIREBASE_API_KEY`` precisa estar configurada em
+``.env`` (ou nas variáveis de ambiente). Se não estiver, o serviço
+retorna um erro amigável e segue em frente.
 """
 import json
 import logging
@@ -15,11 +24,37 @@ from backend.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
+# Cache de validação: uma vez que detectarmos que a chave não está
+# configurada, paramos de poluir os logs com avisos repetidos.
+_API_KEY_MISSING_WARNED = False
+_PROJECT_ID_MISSING_WARNED = False
+
+
 def _get_api_key() -> str:
-    return getattr(settings, "FIREBASE_API_KEY", "") or "FIREBASE_API_KEY_REMOVED"
+    """Lê a API key do Firebase do ambiente. Não há fallback hardcoded."""
+    global _API_KEY_MISSING_WARNED
+    key = (getattr(settings, "FIREBASE_API_KEY", "") or "").strip()
+    if not key and not _API_KEY_MISSING_WARNED:
+        logger.warning(
+            "[Firestore] FIREBASE_API_KEY não configurada em .env — "
+            "sincronização com a nuvem desativada. Defina a chave no .env "
+            "para habilitar."
+        )
+        _API_KEY_MISSING_WARNED = True
+    return key
+
 
 def _get_project_id() -> str:
-    return getattr(settings, "FIREBASE_PROJECT_ID", "") or "nfes-dd7ab"
+    """Lê o project_id do Firebase do ambiente. Não há fallback hardcoded."""
+    global _PROJECT_ID_MISSING_WARNED
+    pid = (getattr(settings, "FIREBASE_PROJECT_ID", "") or "").strip()
+    if not pid and not _PROJECT_ID_MISSING_WARNED:
+        logger.warning(
+            "[Firestore] FIREBASE_PROJECT_ID não configurado em .env — "
+            "sincronização com a nuvem desativada."
+        )
+        _PROJECT_ID_MISSING_WARNED = True
+    return pid
 
 def _py_to_firestore_value(val: Any) -> Dict[str, Any]:
     if val is None:

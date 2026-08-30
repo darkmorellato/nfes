@@ -79,21 +79,45 @@ def init_db():
             except Exception:
                 pass
 
-        # Atualização dos dados cadastrais e fiscais reais das 5 filiais
-        empresas_fiscais = [
-            ("34511185000110", "JACKCELL CELULARES E IMPORTADOS LTDA", "JACKCELL", "535758386119", "Rua Dom Pedro II", "857", "", "Centro", "Piracicaba", "3538709", "SP", "13400390", 1),
-            ("13787408000105", "FERNANDES COMERCIO DE CELULARES E IMPORTACAO LTDA", "SPACE STORE", "535891235110", "Rua Quinze de Novembro", "910", "", "Centro (Artemis)", "Piracicaba", "3538709", "SP", "13432033", 1),
-            ("44739622000101", "FILIPE ALMEIDA GIL DE SOUZA LTDA", "FILIPE ALMEIDA", "535911741117", "Rua Benjamin Constant", "1230", "", "Centro", "Piracicaba", "3538709", "SP", "13400053", 1),
-            ("58186781000130", "J. DE A. FERNANDES OPERACOES DE CREDITO", "JACKCELL CREDITO", "168197097116", "RUA TREZE DE MAIO", "26", "", "CENTRO", "Amparo", "3501905", "SP", "13900005", 1),
-            ("58495100000116", "MI PLACE AMPARO LTDA", "MI PLACE AMPARO", "168197715110", "RUA TREZE DE MAIO", "218", "", "CENTRO", "Amparo", "3501905", "SP", "13900005", 1),
-        ]
-        for cnpj, rz, fant, ie, logr, num, comp, bpo, mun, codmun, uf, cep, crt in empresas_fiscais:
-            cursor.execute("""
-                UPDATE certificates
-                SET ie = ?, nome_fantasia = ?, logradouro = ?, numero = ?, complemento = ?,
-                    bairro = ?, municipio = ?, cod_municipio = ?, uf = ?, cep = ?, crt = ?
-                WHERE cnpj = ?
-            """, (ie, fant, logr, num, comp, bpo, mun, codmun, uf, cep, crt, cnpj))
+        # Atualização dos dados cadastrais e fiscais a partir do JSON externo.
+        # O JSON ``certs/empresas_fiscais.json`` está em .gitignore e contém
+        # os dados reais das emitentes; este template nunca toca o repositório.
+        try:
+            from backend.constants import _empresas_file_path
+            import json
+            _path = _empresas_file_path()
+            if os.path.exists(_path):
+                with open(_path, "r", encoding="utf-8") as _f:
+                    _data = json.load(_f)
+                for emp in _data.get("empresas", []) or []:
+                    cnpj = "".join(c for c in str(emp.get("cnpj") or "") if c.isdigit())
+                    if not cnpj:
+                        continue
+                    cursor.execute("""
+                        UPDATE certificates
+                        SET ie = ?, nome_fantasia = ?, logradouro = ?, numero = ?,
+                            complemento = ?, bairro = ?, municipio = ?, cod_municipio = ?,
+                            uf = ?, cep = ?, crt = ?
+                        WHERE cnpj = ?
+                    """, (
+                        emp.get("ie", ""),
+                        emp.get("nome_fantasia", ""),
+                        emp.get("logradouro", ""),
+                        emp.get("numero", ""),
+                        emp.get("complemento", ""),
+                        emp.get("bairro", ""),
+                        emp.get("municipio", ""),
+                        emp.get("cod_municipio", ""),
+                        emp.get("uf", ""),
+                        emp.get("cep", ""),
+                        int(emp.get("crt", 1) or 1),
+                        cnpj,
+                    ))
+        except Exception as _e:
+            import logging
+            logging.getLogger("nfe.schema").warning(
+                f"Falha ao aplicar dados fiscais externos: {_e}"
+            )
 
         # Tabela de Usuários do Sistema (autenticação backend)
         cursor.execute("""
@@ -109,17 +133,55 @@ def init_db():
             )
         """)
 
-        # Seed do usuário administrador padrão (se ainda não existir)
-        # A senha é armazenada apenas como SHA-256 — nunca em texto puro.
+        # Seed do usuário administrador padrão (se ainda não existir).
+        # IMPORTANTE: a senha do admin NÃO fica mais hardcoded no repositório.
+        # Na primeira execução, geramos uma senha aleatória e a exibimos uma
+        # única vez no log para que o operador anote. Caso o seed anterior
+        # (SHA-256 legado) ainda esteja presente, deixamos intocado — ele
+        # será migrado para bcrypt automaticamente no primeiro login válido
+        # (ver backend/routers/auth.py).
         import hashlib
+        import secrets
+        import logging
+
         _admin_email = "contasgeraljack@gmail.com"
-        _admin_hash  = "ADMIN_HASH_REMOVED"  # SHA-256 de '#ADMIN_PASSWORD_REMOVED'
-        _admin_nome  = "Administrador"
-        cursor.execute("""
-            INSERT INTO usuarios (email, senha_hash, nome, ativo, perfil, created_at, updated_at)
-            VALUES (?, ?, ?, 1, 'admin', datetime('now'), datetime('now'))
-            ON CONFLICT(email) DO NOTHING
-        """, (_admin_email, _admin_hash, _admin_nome))
+        _admin_nome = "Administrador"
+        cursor.execute(
+            "SELECT senha_hash FROM usuarios WHERE email = ?",
+            (_admin_email,),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            try:
+                # Tenta gerar hash bcrypt (preferencial)
+                import bcrypt as _bcrypt
+                _temp_password = secrets.token_urlsafe(16)
+                _admin_hash = "bcrypt$" + _bcrypt.hashpw(
+                    _temp_password.encode("utf-8"),
+                    _bcrypt.gensalt(rounds=12),
+                ).decode("utf-8")
+                _log = logging.getLogger("nfe.schema")
+                _log.warning(
+                    "[NFE] Usuário admin criado com senha temporária: %s "
+                    "(troque imediatamente via /api/auth/alterar-senha)",
+                    _temp_password,
+                )
+            except ImportError:
+                # Sem bcrypt: cai no legado SHA-256, mas ainda assim com
+                # senha aleatória em vez de valor fixo no repositório.
+                _temp_password = secrets.token_urlsafe(16)
+                _admin_hash = hashlib.sha256(_temp_password.encode("utf-8")).hexdigest()
+                _log = logging.getLogger("nfe.schema")
+                _log.warning(
+                    "[NFE] bcrypt indisponível — admin criado com hash SHA-256. "
+                    "Senha temporária: %s",
+                    _temp_password,
+                )
+            cursor.execute("""
+                INSERT INTO usuarios (email, senha_hash, nome, ativo, perfil, created_at, updated_at)
+                VALUES (?, ?, ?, 1, 'admin', datetime('now'), datetime('now'))
+                ON CONFLICT(email) DO NOTHING
+            """, (_admin_email, _admin_hash, _admin_nome))
 
         # Tabela principal de Documentos Fiscais (NF-e)
         cursor.execute("""

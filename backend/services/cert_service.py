@@ -19,6 +19,7 @@ def save_certificate(content: bytes, password: str, filename: str = "certificado
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.serialization import pkcs12
+    from backend.services.crypto_service import encrypt_secret
 
     pass_bytes = password.encode("utf-8") if isinstance(password, str) else password
     key, cert, _ = pkcs12.load_key_and_certificates(content, pass_bytes, backend=default_backend())
@@ -76,17 +77,24 @@ def save_certificate(content: bytes, password: str, filename: str = "certificado
         "is_active": 1,
     })
 
-    # Atualiza cert_meta.json com o último carregado
+    # Atualiza cert_meta.json com o último carregado.
+    # A senha é gravada CIFRADA (Fernet) para não ficar em texto puro no disco.
+    # Restringe permissões do arquivo a 0o600 (apenas o dono lê).
     metadata = {
         "filename": final_filename,
         "path": cert_path,
-        "password": password,
+        "password": encrypt_secret(password),
         "cnpj": cnpj,
         "razao_social": razao,
         "uploaded_at": datetime.now().isoformat(),
     }
-    with open(os.path.join(settings.CERT_DIR, "cert_meta.json"), "w") as f:
+    meta_path = os.path.join(settings.CERT_DIR, "cert_meta.json")
+    with open(meta_path, "w") as f:
         json.dump(metadata, f, indent=2)
+    try:
+        os.chmod(meta_path, 0o600)
+    except Exception:
+        pass
 
     return {
         "loaded": True,
@@ -127,22 +135,37 @@ def get_cert_path(cnpj: Optional[str] = None) -> str:
 
 
 def get_cert_password(cnpj: Optional[str] = None) -> str:
-    """Obtém a senha do certificado."""
+    """Obtém a senha do certificado (sempre descriptografada)."""
+    from backend.services.crypto_service import (
+        decrypt_secret,
+        is_encrypted,
+    )
+
     if cnpj:
         rec = get_certificate_record(cnpj)
         if rec and rec.get("password"):
-            return rec["password"]
+            pwd = rec["password"]
+            return decrypt_secret(pwd) if is_encrypted(pwd) else pwd
 
     certs = list_certificates_db()
     for c in certs:
         if c.get("is_active") and c.get("password"):
-            return c["password"]
+            pwd = c["password"]
+            return decrypt_secret(pwd) if is_encrypted(pwd) else pwd
 
     meta_path = os.path.join(settings.CERT_DIR, "cert_meta.json")
     if os.path.exists(meta_path):
         with open(meta_path, "r") as f:
             meta = json.load(f)
-        return meta.get("password", "")
+        pwd = meta.get("password", "")
+        if pwd and is_encrypted(pwd):
+            try:
+                return decrypt_secret(pwd)
+            except Exception:
+                # Falha ao descriptografar (provavelmente metadata legado):
+                # devolve vazio para evitar vazamento.
+                return ""
+        return pwd
 
     return ""
 

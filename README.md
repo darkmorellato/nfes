@@ -154,5 +154,54 @@ git pull
 
 ---
 
+## 🔒 Segurança & Boas Práticas
+
+Este projeto prioriza segurança por padrão:
+
+- **Autenticação obrigatória:** todos os endpoints (exceto `/api/auth/login`, `/health`, `/`) exigem `X-Session-Token` válido.
+- **Senhas:** armazenadas com **bcrypt** (rounds=12), com fallback transparente para hashes SHA-256 legados.
+- **Segredos no disco:** senhas de certificado, tokens de Telegram/Webhook são cifrados com **Fernet (AES-128-CBC + HMAC-SHA256)** antes de ir para o banco/JSON.
+- **Segredos no Git:** `.env`, `certs/`, `data/*.db*` estão em `.gitignore`. A chave Firebase do `.env` **NUNCA** é commitada.
+- **CORS restritivo:** o coringa `*` foi removido. Apenas origens explícitas em `ALLOWED_ORIGINS` são aceitas.
+- **SQL Injection:** o endpoint `/debug/nfe-completo` foi corrigido e fica disponível **apenas** quando `DEBUG=True`.
+
+### ⚠️ Ação manual recomendada
+
+Como o repositório foi publicado em algum momento com credenciais reais já commitadas no histórico, **recomenda-se rotacionar todas as chaves**:
+
+1. **Firebase (você precisa fazer no console):**
+   - Acesse [console.firebase.google.com](https://console.firebase.google.com/) → projeto `nfes-dd7ab`
+   - Configurações do projeto → Chaves de API → clique em **Rotacionar** na chave exposta no histórico
+   - Atualize o valor em `.env` no seu `.env` local
+2. **Senha admin do sistema:** o `schema.py` agora gera uma senha aleatória na primeira inicialização (ela é exibida UMA vez no log). Faça login, troque via `/api/auth/alterar-senha`.
+3. **Certificado A1:** se a senha do `.pfx` foi commitada em `certs/cert_meta.json` no histórico, recomenda-se emitir um novo certificado junto à Autoridade Certificadora.
+
+### 🧹 Limpeza do histórico (opcional, destrutivo)
+
+Se você precisar reescrever o histórico para remover vestígios de credenciais:
+
+```bash
+# 1. Instale a ferramenta
+pip install git-filter-repo
+
+# 2. Crie um arquivo replacements.txt com os termos a apagar
+#    (preencha com os valores reais que você quer remover —
+#     NUNCA coloque credenciais reais neste README!)
+cat > /tmp/replacements.txt <<EOF
+SUA_CHAVE_FIREBASE_AQUI==>FIREBASE_API_KEY_REMOVED
+HASH_DA_SENHA_ADMIN_AQUI==>ADMIN_HASH_REMOVED
+SENHA_ADMIN_AQUI==>ADMIN_PASSWORD_REMOVED
+EOF
+
+# 3. Reescreva o histórico
+git filter-repo --replace-text /tmp/replacements.txt --force
+git remote add origin git@github.com:SEU_USUARIO/NFE.git   # re-adiciona se necessário
+git push origin --force --all
+```
+
+> ⚠️ **Atenção:** `git filter-repo` reescreve TODOS os hashes de commit. Todos os colaboradores precisam re-clonar ou fazer `git fetch && git reset --hard origin/main`.
+
+---
+
 ## 📄 Licença
 Distribuído sob licença LGPL-3.0 (compatível com PyNFe).

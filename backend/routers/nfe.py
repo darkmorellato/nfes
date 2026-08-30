@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Body
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Body, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import tempfile
@@ -15,8 +15,9 @@ from backend.services.pynfe_service import (
     manifestacao_destinatario,
 )
 from backend.config import settings
+from backend.dependencies import require_session
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_session)])
 
 
 class AutorizacaoRequest(BaseModel):

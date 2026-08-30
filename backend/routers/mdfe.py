@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 
@@ -10,8 +10,9 @@ from backend.services.pynfe_service import (
     encerrar_mdfe,
 )
 from backend.config import settings
+from backend.dependencies import require_session
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_session)])
 
 
 class AutorizacaoMDFeRequest(BaseModel):

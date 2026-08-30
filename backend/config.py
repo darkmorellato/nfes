@@ -122,7 +122,26 @@ os.makedirs(settings.DATA_DIR, exist_ok=True)
 
 
 def allowed_origins_list() -> list[str]:
+    """Lista de origens permitidas pelo CORS.
+
+    Importante: por padrão aceita apenas origens locais. O caractere
+    curinga '*' é explicitamente rejeitado para impedir que um deploy
+    em rede local exponha o sistema inteiro a qualquer site do browser.
+    """
     raw = (settings.ALLOWED_ORIGINS or "").strip()
-    if not raw or raw == "*":
-        return ["*"] if raw == "*" else []
-    return [o.strip() for o in raw.split(",") if o.strip()]
+    if not raw:
+        # default seguro: origens locais
+        return [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+    if raw == "*":
+        # '*' foi desativado por segurança. Caso o operador precise
+        # liberar, defina explicitamente uma lista em ALLOWED_ORIGINS.
+        return [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
+    return [o.strip() for o in raw.split(",") if o.strip() and o.strip() != "*"]

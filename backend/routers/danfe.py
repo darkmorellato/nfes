@@ -1,7 +1,7 @@
 import os
 import io
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 from lxml import etree
 
@@ -9,8 +9,9 @@ from backend.services.danfe_service import parse_nfe_xml, generate_danfe_pdf, pa
 from backend.services.cert_service import get_cert_path, get_cert_password, list_all_certificates
 from backend.database import get_nfe_detail, save_nfe_doc, list_certificates_db, XML_STORAGE_DIR
 from backend.config import settings
+from backend.dependencies import require_session
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_session)])
 
 
 def _get_local_xml(chave: str) -> Optional[bytes]:

@@ -3,7 +3,7 @@ import csv
 import zipfile
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 
 from backend.database import (
@@ -42,8 +42,13 @@ from backend.services.excel_service import generate_fiscal_excel
 from backend.services.notification_service import dispatch_notification
 from backend.services.label_service import generate_labels_html
 from backend.config import settings
+from backend.dependencies import require_session, require_admin
 
-router = APIRouter(prefix="/gestao", tags=["Gestão e Inteligência"])
+router = APIRouter(
+    prefix="/gestao",
+    tags=["Gestão e Inteligência"],
+    dependencies=[Depends(require_session)],
+)
 
 
 @router.get("/documentos")
@@ -342,23 +347,45 @@ async def marcar_notificacoes_lidas():
 
 @router.get("/notificacoes/config")
 async def obter_config_notificacoes():
-    """Retorna as configurações atuais de webhook e Telegram."""
+    """Retorna as configurações atuais de webhook e Telegram (descriptografadas)."""
+    from backend.services.crypto_service import decrypt_secret, is_encrypted
+
+    def _read(key: str) -> str:
+        val = get_sync_state(key, "") or ""
+        if is_encrypted(val):
+            try:
+                return decrypt_secret(val)
+            except Exception:
+                return ""
+        return val
+
     return {
-        "webhook_url": get_sync_state("notification_webhook_url", ""),
-        "telegram_bot_token": get_sync_state("telegram_bot_token", ""),
-        "telegram_chat_id": get_sync_state("telegram_chat_id", ""),
+        "webhook_url": _read("notification_webhook_url"),
+        "telegram_bot_token": _read("telegram_bot_token"),
+        "telegram_chat_id": _read("telegram_chat_id"),
     }
 
 
 @router.post("/notificacoes/config")
 async def salvar_config_notificacoes(payload: dict = Body(...)):
-    """Salva configurações de canais de notificação (Telegram / Webhook)."""
+    """Salva configurações de canais de notificação (Telegram / Webhook),
+    gravando os valores sensíveis CIFRADOS (Fernet) no sync_state.
+    """
+    from backend.services.crypto_service import encrypt_secret, is_encrypted
+
+    def _write(key: str, value: str) -> None:
+        val = (value or "").strip()
+        # Cifra antes de persistir. Não cifra de novo se já vier cifrado.
+        if val and not is_encrypted(val):
+            val = encrypt_secret(val)
+        set_sync_state(key, val)
+
     if "webhook_url" in payload:
-        set_sync_state("notification_webhook_url", str(payload["webhook_url"]).strip())
+        _write("notification_webhook_url", str(payload["webhook_url"]))
     if "telegram_bot_token" in payload:
-        set_sync_state("telegram_bot_token", str(payload["telegram_bot_token"]).strip())
+        _write("telegram_bot_token", str(payload["telegram_bot_token"]))
     if "telegram_chat_id" in payload:
-        set_sync_state("telegram_chat_id", str(payload["telegram_chat_id"]).strip())
+        _write("telegram_chat_id", str(payload["telegram_chat_id"]))
 
     # Dispara mensagem de teste
     dispatch_notification("Configuração de Alertas", "Notificações e canais de alerta configurados com sucesso!", tipo="info")
@@ -454,10 +481,17 @@ async def debug_nfe_completo(
     tipo_doc: Optional[int] = Query(None),
 ):
     """Endpoint de debug: retorna TODAS as NF-e sem paginação, com filtros opcionais,
-    para investigar e monitorar o que está ocorrendo com cada certificado/empresa."""
+    para investigar e monitorar o que está ocorrendo com cada certificado/empresa.
+
+    Restrito a ``settings.DEBUG=True`` — em produção devolve 404 para não vazar
+    dados fiscais completos sem filtro.
+    """
+    if not settings.DEBUG:
+        raise HTTPException(status_code=404, detail="Endpoint de debug desativado.")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        conditions = []
+        conditions: list[str] = []
         params: List[Any] = []
 
         if tipo_doc is not None:
@@ -466,7 +500,11 @@ async def debug_nfe_completo(
         if empresa_cnpj:
             emp_digits = "".join(c for c in str(empresa_cnpj) if c.isdigit())
             if emp_digits:
-                conditions.append("(nfe_docs.empresa_cnpj = ? OR nfe_docs.emitente_cnpj LIKE ? OR nfe_docs.destinatario_cnpj LIKE ?)")
+                conditions.append(
+                    "(nfe_docs.empresa_cnpj = ? "
+                    "OR nfe_docs.emitente_cnpj LIKE ? "
+                    "OR nfe_docs.destinatario_cnpj LIKE ?)"
+                )
                 params.extend([emp_digits, f"%{emp_digits}%", f"%{emp_digits}%"])
         if data_inicio:
             conditions.append("nfe_docs.data_emissao >= ?")
@@ -478,7 +516,10 @@ async def debug_nfe_completo(
         where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params_with_limit = params + [1000]
 
-        cursor.execute(f"""
+        # where_clause só contém literais "WHERE"/"AND"/identificadores de coluna
+        # (nenhum input do usuário). Valores vão em '?'. Os f-strings ficam
+        # isolados em locais nomeados para reduzir risco de regressão futura.
+        sql_docs = f"""
             SELECT chave, empresa_cnpj, tipo_doc, numero, serie, modelo,
                    emitente_cnpj, emitente_nome, emitente_uf,
                    destinatario_cnpj, destinatario_nome,
@@ -489,10 +530,12 @@ async def debug_nfe_completo(
             {where_clause}
             ORDER BY data_emissao DESC, created_at DESC
             LIMIT ? OFFSET 0
-        """, params_with_limit)
+        """
+        cursor.execute(sql_docs, params_with_limit)
         docs = [dict(r) for r in cursor.fetchall()]
 
-        cursor.execute(f"SELECT COUNT(*) as total FROM nfe_docs {where_clause}", params)
+        sql_count = f"SELECT COUNT(*) as total FROM nfe_docs {where_clause}"
+        cursor.execute(sql_count, params)
         total = cursor.fetchone()["total"]
 
     certs = list_certificates_db()

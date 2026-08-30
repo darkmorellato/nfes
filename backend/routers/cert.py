@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from backend.services.cert_service import (
@@ -8,8 +8,9 @@ from backend.services.cert_service import (
     list_all_certificates,
     delete_certificate as delete_cert_service,
 )
+from backend.dependencies import require_session
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_session)])
 
 
 class CertificadoResponse(BaseModel):
