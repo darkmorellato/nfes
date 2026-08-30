@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import nfe, nfce, mdfe, nfse, cert, status, reports, danfe, gestao, emissao
@@ -88,6 +88,14 @@ app.include_router(auth_router, prefix="/api", tags=["Autenticação"])
 async def index():
     with open(os.path.join(FRONTEND_DIR, "index.html"), "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    ico_path = os.path.join(FRONTEND_DIR, "favicon.ico")
+    if os.path.exists(ico_path):
+        return FileResponse(ico_path, media_type="image/x-icon")
+    return HTMLResponse(status_code=404)
 
 
 @app.get("/health")
