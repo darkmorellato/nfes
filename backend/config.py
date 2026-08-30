@@ -2,22 +2,54 @@ import os
 import secrets
 import logging
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
 
+def _xdg_data_root() -> str:
+    return os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+
+
+def _resolve_data_dir() -> str:
+    env = os.environ.get("NFE_DATA_DIR")
+    if env:
+        return os.path.abspath(env)
+    return os.path.join(_xdg_data_root(), "nfe-manager", "data")
+
+
+def _resolve_cert_dir() -> str:
+    env = os.environ.get("NFE_CERT_DIR")
+    if env:
+        return os.path.abspath(env)
+    return os.path.join(_xdg_data_root(), "nfe-manager", "certs")
+
+
 def _default_secret_key() -> str:
-    if os.environ.get("SECRET_KEY"):
-        return os.environ["SECRET_KEY"]
-    generated = secrets.token_urlsafe(48)
-    logger.warning(
-        "SECRET_KEY não definida via env var. Usando chave aleatória gerada agora. "
-        "Em produção, defina SECRET_KEY para garantir portabilidade dos dados criptografados (Fernet). "
-        "Sem uma SECRET_KEY fixa, senhas de certificados e outros dados cifrados não poderão ser "
-        "descriptografados após reinício do servidor."
-    )
-    return generated
+    env = os.environ.get("SECRET_KEY")
+    if env:
+        return env
+    # Persiste uma chave gerada uma vez no data dir para não quebrar a
+    # descriptografia Fernet de senhas de certificado entre execuções.
+    key_file = os.path.join(_resolve_data_dir(), ".secret_key")
+    try:
+        if os.path.exists(key_file):
+            with open(key_file, "r") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        os.makedirs(os.path.dirname(key_file), exist_ok=True)
+        generated = secrets.token_urlsafe(48)
+        with open(key_file, "w") as f:
+            f.write(generated)
+        os.chmod(key_file, 0o600)
+        return generated
+    except Exception:
+        logger.warning(
+            "SECRET_KEY não definida e não foi possível persistir. Usando chave aleatória por execução."
+        )
+        return secrets.token_urlsafe(48)
 
 
 def _default_debug() -> bool:
@@ -36,8 +68,10 @@ class Settings(BaseSettings):
     DEBUG: bool = _default_debug()
     SECRET_KEY: str = _default_secret_key()
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    CERT_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "certs")
-    DATA_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    CERT_DIR: str = _resolve_cert_dir()
+    DATA_DIR: str = _resolve_data_dir()
+    PORT: int = int(os.environ.get("NFE_PORT", "8000"))
+    HOST: str = os.environ.get("NFE_HOST", "127.0.0.1")
     HOMOLOGACAO: bool = True
     DEFAULT_UF: str = "SP"
     TIMEOUT: int = 60
@@ -55,6 +89,27 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+    @model_validator(mode="after")
+    def _normalize_paths(self) -> "Settings":
+        """Garante caminhos graváveis e absolutos.
+
+        Prioridade: NFE_DATA_DIR / NFE_CERT_DIR (explícitos, do ambiente real) >
+        valor vindo do .env (pode ser relativo) > default XDG.
+        Relativos são resolvidos contra a raiz do repo; o default XDG já é
+        absoluto. Assim o bundle read-only redireciona para ~/.local/share,
+        e o .env existente (CERT_DIR=./certs) continua funcional em dev.
+        """
+        repo = self.BASE_DIR
+        d = os.environ.get("NFE_DATA_DIR") or self.DATA_DIR
+        if not os.path.isabs(d):
+            d = os.path.abspath(os.path.join(repo, d))
+        self.DATA_DIR = d
+        c = os.environ.get("NFE_CERT_DIR") or self.CERT_DIR
+        if not os.path.isabs(c):
+            c = os.path.abspath(os.path.join(repo, c))
+        self.CERT_DIR = c
+        return self
 
 
 settings = Settings()

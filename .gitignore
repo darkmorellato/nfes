@@ -37,3 +37,17 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Empacotamento (AppImage / PyInstaller)
+*.AppImage
+appimagetool-x86_64.AppImage
+# Cache do Playwright (Chromium baixado para o bundle)
+.playwright/
+# Binários gerados DENTRO do AppDir (não versionar: ~90MB + ~390MB)
+AppDir/usr/bin/NFE-Manager
+AppDir/usr/lib/playwright/
+
+# Segredos / chaves persistidas
+.secret_key
+*.secret_key
+

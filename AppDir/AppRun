@@ -1,0 +1,25 @@
+#!/bin/sh
+# AppRun do NFE Manager AppImage.
+# Sobe o servidor (binário congelado) e abre a UI numa janela Chromium embutida.
+set -e
+
+HERE="$(dirname "$(readlink -f "${0}")")"
+
+# Libs nativas empacotadas (Chromium + Python) têm prioridade.
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+
+# Chromium embutido via Playwright.
+export PLAYWRIGHT_BROWSERS_PATH="${HERE}/usr/lib/playwright"
+CHROME_BIN="$(ls ${HERE}/usr/lib/playwright/chromium-*/chrome-linux/chrome ${HERE}/usr/lib/playwright/chromium-*/chrome-linux64/chrome 2>/dev/null | head -1)"
+if [ -n "${CHROME_BIN}" ]; then
+    export NFE_CHROME_BIN="${CHROME_BIN}"
+fi
+
+# Dados graváveis fora do bundle (read-only).
+export NFE_DATA_DIR="${NFE_DATA_DIR:-$HOME/.local/share/nfe-manager/data}"
+export NFE_CERT_DIR="${NFE_CERT_DIR:-$HOME/.local/share/nfe-manager/certs}"
+export NFE_HOST="${NFE_HOST:-127.0.0.1}"
+export NFE_PORT="${NFE_PORT:-8000}"
+
+# Instância única: se a porta já estiver em uso, apenas abre a UI.
+exec "${HERE}/usr/bin/NFE-Manager" "$@"
