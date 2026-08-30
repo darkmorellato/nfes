@@ -2,6 +2,7 @@ import os
 import io
 import zipfile
 import random
+import logging
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Dict, Any, List, Optional, Tuple
@@ -32,6 +33,8 @@ from backend.database import (
 )
 from backend.services.danfe_service import parse_nfe_xml, generate_danfe_pdf
 from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 import unicodedata
@@ -108,6 +111,8 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
     Constrói, valida conforme a legislação brasileira, assina digitalmente com Certificado A1
     e transmite uma Nota Fiscal Eletrônica (Modelo 55 - Saída / Venda / Devolução) para a SEFAZ.
     """
+    logger.info(f"[NFE EMISSAO] Iniciando emissão para CNPJ {payload.get('emitente_cnpj')} | destino={payload.get('destinatario', {}).get('razao_social')}")
+    
     emit_cnpj_clean = "".join(c for c in str(payload.get("emitente_cnpj", "")) if c.isdigit())
     if not emit_cnpj_clean:
         raise ValueError("CNPJ da empresa emitente é obrigatório.")
@@ -442,23 +447,23 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
     xml_assinado_str = etree.tostring(xml_assinado_element, encoding="utf-8").decode("utf-8")
 
     chave_acesso = nota_fiscal.identificador_unico.replace("NFe", "")
+    if not chave_acesso or len(chave_acesso) != 44:
+        raise ValueError(f"Chave de acesso inválida gerada pelo PyNFe: {chave_acesso!r}")
 
     # 10. Transmissão para a SEFAZ
     status_sefaz = "Autorizada"
-    # Valores padrão (simulação)
     protocolo = f"135260000{now.strftime('%H%M%S%f')[:7]}"
     motivo = "Autorizado o uso da NF-e"
     c_stat = "100"
     dh_recbto = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
     dig_val = "z8Fj19K4/6r+pXyV0A=="
+    sefaz_error = None
 
     try:
         con = ComunicacaoSefaz(emit_uf, cert_rec["path"], cert_rec["password"], homologacao=homolog)
         envio_resp = con.autorizacao(modelo="nfe", nota_fiscal=xml_assinado_element)
         if hasattr(envio_resp, "status_code") and envio_resp.status_code == 200:
-            # Parse the SEFAZ response to get cStat, xMotivo, nProt, dhRecbto, digVal
             xml_resp = envio_resp.text if hasattr(envio_resp, "text") else str(envio_resp)
-            # Remove namespaces for simplicity
             ns = {"ns": "http://www.portalfiscal.inf.br/nfe"}
             root = etree.fromstring(xml_resp)
             infProt = root.find(".//ns:infProt", namespaces=ns)
@@ -478,19 +483,16 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
                     dh_recbto = dhRecbto_elem.text.strip()
                 if digVal_elem is not None and digVal_elem.text:
                     dig_val = digVal_elem.text.strip()
-                else:
-                    dig_val = "z8Fj19K4/6r+pXyV0A=="
             else:
-                # If we can't find infProt, keep simulation (values already set)
-                pass
+                motivo = "Resposta SEFAZ sem protocolo de autorização (infProt não encontrado)"
+                sefaz_error = motivo
         else:
-            # SEFAZ returned non-200, keep simulation but we could log
-            pass
+            motivo = f"SEFAZ retornou HTTP {getattr(envio_resp, 'status_code', '?')}"
+            sefaz_error = motivo
     except Exception as sefaz_err:
-        print(f"Transmissão SEFAZ em ambiente controlado: {sefaz_err}")
-        motivo = f"Autorizado em Homologação ({sefaz_err})"
-        # Keep simulation values
-        pass
+        sefaz_error = str(sefaz_err)
+        motivo = f"Erro na transmissão SEFAZ: {sefaz_err}"
+        c_stat = "999"
 
     # 11. Montagem do nfeProc final (XML oficial com protocolo de autorização)
     xml_proc_completo = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -561,13 +563,22 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         ]
     }
 
-    save_nfe_doc(doc_dict, xml_raw=xml_proc_completo, empresa_cnpj=emit_cnpj_clean)
+    saved = save_nfe_doc(doc_dict, xml_raw=xml_proc_completo, empresa_cnpj=emit_cnpj_clean)
+    if not saved:
+        logger.error(f"[NFE EMISSAO] FALHA AO SALVAR no banco: chave={chave_acesso} emit_cnpj={emit_cnpj_clean}")
+        raise RuntimeError(f"Falha ao salvar NF-e no banco local (chave={chave_acesso}). Verifique os logs.")
+    logger.info(f"[NFE EMISSAO] Salvo no banco: chave={chave_acesso} data_emissao={doc_dict.get('data_emissao')} valor={doc_dict.get('totais', {}).get('v_nf')}")
+
+    if sefaz_error:
+        logger.error(f"[NFE EMISSAO] ERRO SEFAZ para chave {chave_acesso}: {sefaz_error} | cStat={c_stat} | motivo={motivo}")
+    else:
+        logger.info(f"[NFE EMISSAO] Sucesso: chave={chave_acesso} | cStat={c_stat} | protocolo={protocolo}")
 
     # 13. Gera automaticamente o PDF do DANFE em disco
     try:
         pdf_io = generate_danfe_pdf(xml_proc_completo.encode("utf-8"))
         if pdf_io:
-            pdf_dir = "data/danfe_pdfs"
+            pdf_dir = os.path.join(settings.DATA_DIR, "danfe_pdfs")
             os.makedirs(pdf_dir, exist_ok=True)
             with open(os.path.join(pdf_dir, f"{chave_acesso}.pdf"), "wb") as f_pdf:
                 f_pdf.write(pdf_io.getvalue())
@@ -1035,7 +1046,7 @@ def importar_lote_xmls_saida(arquivos: List[Tuple[str, bytes]]) -> Dict[str, Any
                 try:
                     pdf_io = generate_danfe_pdf(xml_bytes)
                     if pdf_io:
-                        pdf_path = os.path.join("data/danfe_pdfs", f"{chave}.pdf")
+                        pdf_path = os.path.join(settings.DATA_DIR, "danfe_pdfs", f"{chave}.pdf")
                         with open(pdf_path, "wb") as f_pdf:
                             f_pdf.write(pdf_io.getvalue())
                 except Exception:

@@ -2,12 +2,16 @@ import os
 import io
 import zipfile
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, PatternFill, Alignment
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 from backend.database import get_db_connection, XML_STORAGE_DIR, get_nfe_detail
 from backend.services.danfe_service import generate_danfe_pdf, build_synthetic_nfe_xml
+from backend.utils.excel_helpers import (
+    HEADER_FILL, HEADER_FONT, BOLD_FONT, CURRENCY_FMT,
+    apply_header_row, apply_title, apply_subtitle, auto_adjust_columns,
+)
 
 
 def generate_pacote_contabil_zip(
@@ -113,27 +117,23 @@ def _get_or_build_xml(doc: Dict[str, Any]) -> bytes:
 def _generate_excel_fechamento(ano: int, mes: int, entradas: list, saidas: list, empresa_cnpj: Optional[str]) -> bytes:
     wb = openpyxl.Workbook()
 
-    # Cores e Estilos
-    header_fill = PatternFill(start_color="1B4F72", end_color="1B4F72", fill_type="solid")
     sub_fill = PatternFill(start_color="2874A6", end_color="2874A6", fill_type="solid")
-    header_font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
-    bold_font = Font(name="Arial", size=10, bold=True)
-    normal_font = Font(name="Arial", size=10)
+    normal_font = Font(name="Calibri", size=10)
 
     # 1. ABA RESUMO GERAL
     ws_res = wb.active
     ws_res.title = "Resumo Geral do Mês"
 
-    ws_res.cell(1, 1, f"FECHAMENTO FISCAL & CONTÁBIL - COMPETÊNCIA {mes:02d}/{ano}").font = Font(name="Arial", size=14, bold=True, color="1B4F72")
-    ws_res.cell(2, 1, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | Empresa: {empresa_cnpj or 'Todas as Filiais do Grupo'}").font = Font(name="Arial", size=10, italic=True)
+    apply_title(ws_res, 1, 1, f"FECHAMENTO FISCAL & CONTÁBIL - COMPETÊNCIA {mes:02d}/{ano}")
+    apply_subtitle(ws_res, 2, 1, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} | Empresa: {empresa_cnpj or 'Todas as Filiais do Grupo'}")
 
     ws_res.append([])
     headers_res = ["Indicador Fiscal", "Qtd. Documentos", "Valor Total dos Produtos", "ICMS Destacado", "PIS", "COFINS"]
     ws_res.append(headers_res)
     for col in range(1, len(headers_res) + 1):
         cell = ws_res.cell(4, col)
-        cell.fill = header_fill
-        cell.font = header_font
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
     tot_sai_v = sum(float(d.get("valor_total") or 0.0) for d in saidas if "cancelad" not in (d.get("situacao") or "").lower())
@@ -146,12 +146,12 @@ def _generate_excel_fechamento(ano: int, mes: int, entradas: list, saidas: list,
     ws_res.append(["3. Saldo Operacional Líquido", len(saidas) + len(entradas), tot_sai_v - tot_ent_v, tot_sai_icms - tot_ent_icms, 0.0, 0.0])
 
     for row in range(5, 8):
-        ws_res.cell(row, 1).font = bold_font
+        ws_res.cell(row, 1).font = BOLD_FONT
         for c in range(2, 7):
             cell = ws_res.cell(row, c)
             cell.font = normal_font
             if c >= 3:
-                cell.number_format = "R$ #,##0.00"
+                cell.number_format = CURRENCY_FMT
 
     # 2. ABA SAÍDAS (VENDAS)
     ws_sai = wb.create_sheet(title="Notas de Saída (Vendas)")
@@ -160,7 +160,7 @@ def _generate_excel_fechamento(ano: int, mes: int, entradas: list, saidas: list,
     for col in range(1, len(headers_sai) + 1):
         cell = ws_sai.cell(1, col)
         cell.fill = sub_fill
-        cell.font = header_font
+        cell.font = HEADER_FONT
 
     for d in saidas:
         d_emi = (d.get("data_emissao") or "")[:10]
@@ -184,7 +184,7 @@ def _generate_excel_fechamento(ano: int, mes: int, entradas: list, saidas: list,
     for col in range(1, len(headers_ent) + 1):
         cell = ws_ent.cell(1, col)
         cell.fill = sub_fill
-        cell.font = header_font
+        cell.font = HEADER_FONT
 
     for d in entradas:
         d_emi = (d.get("data_emissao") or "")[:10]
@@ -200,12 +200,9 @@ def _generate_excel_fechamento(ano: int, mes: int, entradas: list, saidas: list,
             d.get("situacao", "Autorizada")
         ])
 
-    # Ajusta largura das colunas
-    for ws in [ws_res, ws_sai, ws_ent]:
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
-            col_letter = openpyxl.utils.get_column_letter(col[0].column)
-            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+    auto_adjust_columns(ws_res)
+    auto_adjust_columns(ws_sai)
+    auto_adjust_columns(ws_ent)
 
     buf = io.BytesIO()
     wb.save(buf)

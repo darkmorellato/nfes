@@ -104,14 +104,8 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Salva no Banco de Dados
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        EMPRESAS_OFICIAIS = {
-            "34511185000110": "JACKCELL CELULARES E IMPORTADOS LTDA",
-            "13787408000105": "FERNANDES COMERCIO DE CELULARES E IMPORTACAO LTDA",
-            "44739622000101": "FILIPE ALMEIDA GIL DE SOUZA LTDA",
-            "58186781000130": "J DE A FERNANDES OPERACOES DE CREDITO",
-            "58495100000116": "MI PLACE AMPARO LTDA",
-        }
-        emit_nome = EMPRESAS_OFICIAIS.get(empresa_cnpj, "JACKCELL CELULARES E IMPORTADOS LTDA")
+        from backend.constants import nome_empresa
+        emit_nome = nome_empresa(empresa_cnpj, "JACKCELL CELULARES E IMPORTADOS LTDA")
 
         # 1. Salva Documento Fiscal
         cursor.execute("""

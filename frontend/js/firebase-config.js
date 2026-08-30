@@ -13,6 +13,16 @@ let firestoreDb = null;
 let firebaseAnalytics = null;
 let isFirestoreAvailable = false;
 
+// Promise que resolve quando o Firebase terminar de inicializar.
+// auth.js aguarda esta promise antes de tentar o login, evitando
+// a race condition entre carregamento assíncrono do Firebase e o login.
+let _firebaseReadyResolve = null;
+let _firebaseReadyReject = null;
+const firebaseReadyPromise = new Promise((resolve, reject) => {
+    _firebaseReadyResolve = resolve;
+    _firebaseReadyReject = reject;
+});
+
 function initFirebase() {
     try {
         if (typeof firebase !== "undefined") {
@@ -35,31 +45,41 @@ function initFirebase() {
             isFirestoreAvailable = true;
             console.log("✓ Firebase & Cloud Firestore inicializados com sucesso!");
             updateFirestoreStatusUI(true);
+            // Notifica todos que aguardam o Firebase
+            if (_firebaseReadyResolve) _firebaseReadyResolve(true);
         } else {
-            console.warn("SDK do Firebase não foi carregado via CDN.");
-            updateFirestoreStatusUI(false, "SDK não carregado");
+            const msg = "SDK do Firebase não foi carregado via CDN.";
+            console.warn(msg);
+            isFirestoreAvailable = false;
+            updateFirestoreStatusUI(false, msg);
+            if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
         }
     } catch (err) {
         console.error("Erro ao inicializar Firebase:", err);
         isFirestoreAvailable = false;
         updateFirestoreStatusUI(false, err.message);
+        if (_firebaseReadyReject) _firebaseReadyReject(err);
     }
 }
 
 function updateFirestoreStatusUI(connected, errorMsg = "") {
     const badge = document.getElementById("badgeStatusFirestore");
-    if (!badge) return;
-
-    if (connected) {
-        badge.textContent = "☁️ Firestore OK";
-        badge.className = "badge-firestore badge-firestore-ok";
-        badge.title = "Conectado ao Cloud Firestore";
-        badge.style.display = "inline-flex";
-    } else {
-        badge.textContent = "☁️ Firestore Offline";
-        badge.className = "badge-firestore badge-firestore-off";
-        badge.title = errorMsg || "Cloud Firestore Offline";
-        badge.style.display = "inline-flex";
+    if (badge) {
+        if (connected) {
+            badge.textContent = "☁️ Firestore OK";
+            badge.className = "badge-firestore badge-firestore-ok";
+            badge.title = "Conectado ao Cloud Firestore";
+            badge.style.display = "inline-flex";
+        } else {
+            badge.textContent = "☁️ Firestore Offline";
+            badge.className = "badge-firestore badge-firestore-off";
+            badge.title = errorMsg || "Cloud Firestore Offline";
+            badge.style.display = "inline-flex";
+        }
+    }
+    // Atualiza o indicador na tela de login (se disponível)
+    if (typeof updateLoginFirestoreStatus === "function") {
+        updateLoginFirestoreStatus(connected, errorMsg);
     }
 }
 
@@ -200,20 +220,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             const cfg = await resp.json();
             if (cfg.apiKey) {
                 Object.assign(firebaseConfig, cfg);
-                initFirebase();
+                initFirebase(); // resolve ou rejeita firebaseReadyPromise internamente
             } else {
                 const msg = "Config do Firebase não disponível no backend. Sincronização com nuvem desativada.";
                 console.warn(msg);
                 updateFirestoreStatusUI(false, msg);
+                if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
             }
         } else {
             const msg = `Backend retornou status ${resp.status} ao carregar config do Firebase.`;
             console.warn(msg);
             updateFirestoreStatusUI(false, msg);
+            if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
         }
     } catch (e) {
         const msg = "Falha ao conectar ao backend para carregar config do Firebase. Sincronização com nuvem desativada.";
         console.warn(msg, e);
         updateFirestoreStatusUI(false, msg);
+        if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
     }
 });

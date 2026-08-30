@@ -8,22 +8,15 @@ import os
 
 from backend.database import get_nfe_detail, get_sync_state, XML_STORAGE_DIR
 from backend.services.danfe_service import generate_danfe_pdf, build_synthetic_nfe_xml
+from backend.constants import nome_empresa
 
 
 def gerar_link_whatsapp_nfe(chave: str, telefone: Optional[str] = None) -> str:
     """Gera o link de envio via WhatsApp Web/App com mensagem personalizada e chave de acesso."""
-    EMPRESAS_OFICIAIS = {
-        "34511185000110": "JACKCELL CELULARES E IMPORTADOS LTDA",
-        "13787408000105": "FERNANDES COMERCIO DE CELULARES E IMPORTACAO LTDA",
-        "44739622000101": "FILIPE ALMEIDA GIL DE SOUZA LTDA",
-        "58186781000130": "J DE A FERNANDES OPERACOES DE CREDITO",
-        "58495100000116": "MI PLACE AMPARO LTDA",
-    }
-
     doc = get_nfe_detail(chave) or {}
     dest_nome = doc.get("destinatario_nome", "Cliente")
     cnpj_emit = "".join(c for c in str(doc.get("emitente_cnpj") or doc.get("empresa_cnpj") or "") if c.isdigit())
-    emit_nome = doc.get("emitente_nome") or EMPRESAS_OFICIAIS.get(cnpj_emit, "JACKCELL CELULARES E IMPORTADOS LTDA")
+    emit_nome = doc.get("emitente_nome") or nome_empresa(cnpj_emit, "JACKCELL CELULARES E IMPORTADOS LTDA")
     num_nfe = doc.get("numero", "")
     valor = f"R$ {float(doc.get('valor_total') or 0):,.2f}"
 
@@ -55,14 +48,6 @@ def enviar_nfe_email_cliente(
     smtp_pass: Optional[str] = None
 ) -> Dict[str, Any]:
     """Envia o XML da NF-e e o DANFE em PDF anexados para o e-mail do cliente."""
-    EMPRESAS_OFICIAIS = {
-        "34511185000110": "JACKCELL CELULARES E IMPORTADOS LTDA",
-        "13787408000105": "FERNANDES COMERCIO DE CELULARES E IMPORTACAO LTDA",
-        "44739622000101": "FILIPE ALMEIDA GIL DE SOUZA LTDA",
-        "58186781000130": "J DE A FERNANDES OPERACOES DE CREDITO",
-        "58495100000116": "MI PLACE AMPARO LTDA",
-    }
-
     doc = get_nfe_detail(chave)
     if not doc:
         raise ValueError("NF-e não encontrada.")
@@ -70,7 +55,7 @@ def enviar_nfe_email_cliente(
     num_nfe = doc.get("numero", "")
     dest_nome = doc.get("destinatario_nome", "Cliente")
     cnpj_emit = "".join(c for c in str(doc.get("emitente_cnpj") or doc.get("empresa_cnpj") or "") if c.isdigit())
-    emit_nome = doc.get("emitente_nome") or EMPRESAS_OFICIAIS.get(cnpj_emit, "JACKCELL CELULARES E IMPORTADOS LTDA")
+    emit_nome = doc.get("emitente_nome") or nome_empresa(cnpj_emit, "JACKCELL CELULARES E IMPORTADOS LTDA")
     valor = f"R$ {float(doc.get('valor_total') or 0):,.2f}"
 
     # Recupera ou gera XML e PDF

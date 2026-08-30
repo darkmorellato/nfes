@@ -201,6 +201,56 @@ def _build_monthly_chart(data) -> str:
     return _create_temp_image(fig)
 
 
+def _make_title_style(styles):
+    return ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#007a55'),
+        spaceAfter=12,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+
+
+def _make_heading_style(styles):
+    return ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#007a55'),
+        spaceAfter=8,
+        spaceBefore=12,
+        fontName='Helvetica-Bold'
+    )
+
+
+def _make_body_style(styles):
+    return ParagraphStyle(
+        'CustomBody',
+        parent=styles['BodyText'],
+        fontSize=10,
+        leading=14,
+        alignment=TA_LEFT
+    )
+
+
+def _make_table_style():
+    return TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007a55')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
+    ])
+
+
 def generate_invoice_status_report(
     uf: Optional[str] = None,
     homologacao: Optional[bool] = None,
@@ -215,31 +265,9 @@ def generate_invoice_status_report(
                             topMargin=2*cm, bottomMargin=2*cm)
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=12,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=8,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    )
-    body_style = ParagraphStyle(
-        'CustomBody',
-        parent=styles['BodyText'],
-        fontSize=10,
-        leading=14,
-        alignment=TA_LEFT
-    )
+    title_style = _make_title_style(styles)
+    heading_style = _make_heading_style(styles)
+    body_style = _make_body_style(styles)
 
     story = []
     story.append(Paragraph("Relatório de Status de Documentos Fiscais", title_style))
@@ -255,19 +283,7 @@ def generate_invoice_status_report(
         table_data.append([status, str(count), f"{pct}%"])
 
     table = Table(table_data, colWidths=[8*cm, 4*cm, 4*cm])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007a55')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
-    ]))
+    table.setStyle(_make_table_style())
     story.append(table)
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph("Gráfico de Distribuição", heading_style))
@@ -300,31 +316,9 @@ def generate_monthly_volume_report(
                             topMargin=2*cm, bottomMargin=2*cm)
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=12,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=8,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    )
-    body_style = ParagraphStyle(
-        'CustomBody',
-        parent=styles['BodyText'],
-        fontSize=10,
-        leading=14,
-        alignment=TA_LEFT
-    )
+    title_style = _make_title_style(styles)
+    heading_style = _make_heading_style(styles)
+    body_style = _make_body_style(styles)
 
     story = []
     story.append(Paragraph("Relatório de Volume Mensal de Documentos", title_style))
@@ -338,19 +332,7 @@ def generate_monthly_volume_report(
         table_data.append([mes, str(valor)])
 
     table = Table(table_data, colWidths=[8*cm, 8*cm])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007a55')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
-    ]))
+    table.setStyle(_make_table_style())
     story.append(table)
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph("Gráfico de Volume Mensal", heading_style))
@@ -382,31 +364,9 @@ def generate_compliance_report(
                             topMargin=2*cm, bottomMargin=2*cm)
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=12,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=8,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    )
-    body_style = ParagraphStyle(
-        'CustomBody',
-        parent=styles['BodyText'],
-        fontSize=10,
-        leading=14,
-        alignment=TA_LEFT
-    )
+    title_style = _make_title_style(styles)
+    heading_style = _make_heading_style(styles)
+    body_style = _make_body_style(styles)
 
     story = []
     story.append(Paragraph("Relatório de Conformidade Fiscal", title_style))
@@ -426,19 +386,7 @@ def generate_compliance_report(
     ]
 
     table = Table(metrics, colWidths=[8*cm, 8*cm])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007a55')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
-    ]))
+    table.setStyle(_make_table_style())
     story.append(table)
     story.append(Spacer(1, 0.5*cm))
 
@@ -473,31 +421,9 @@ def generate_emitter_report(
                             topMargin=2*cm, bottomMargin=2*cm)
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=12,
-        textColor=colors.HexColor('#007a55'),
-        spaceAfter=8,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    )
-    body_style = ParagraphStyle(
-        'CustomBody',
-        parent=styles['BodyText'],
-        fontSize=10,
-        leading=14,
-        alignment=TA_LEFT
-    )
+    title_style = _make_title_style(styles)
+    heading_style = _make_heading_style(styles)
+    body_style = _make_body_style(styles)
 
     story = []
     story.append(Paragraph("Relatório de Emissores de Documentos Fiscais", title_style))
@@ -516,19 +442,7 @@ def generate_emitter_report(
         ])
 
     table = Table(table_data, colWidths=[6*cm, 5*cm, 3*cm, 3*cm])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007a55')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f9f9f9')),
-        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
-    ]))
+    table.setStyle(_make_table_style())
     story.append(table)
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph(f"<b>Total de Emissores:</b> {data['total_emissores']}", body_style))

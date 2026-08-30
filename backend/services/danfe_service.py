@@ -567,17 +567,10 @@ def build_synthetic_nfe_xml(doc: Dict[str, Any]) -> bytes:
     emit = etree.SubElement(inf_nfe, f"{{{ns}}}emit")
     cnpj_emit = re.sub(r"\D", "", str(doc.get("emitente_cnpj") or doc.get("empresa_cnpj") or "34511185000110"))
     
-    EMPRESAS_OFICIAIS = {
-        "34511185000110": "JACKCELL CELULARES E IMPORTADOS LTDA",
-        "13787408000105": "FERNANDES COMERCIO DE CELULARES E IMPORTACAO LTDA",
-        "44739622000101": "FILIPE ALMEIDA GIL DE SOUZA LTDA",
-        "58186781000130": "J DE A FERNANDES OPERACOES DE CREDITO",
-        "58495100000116": "MI PLACE AMPARO LTDA",
-    }
-    
+    from backend.constants import nome_empresa
     nome_emit = doc.get("emitente_nome")
     if not nome_emit or nome_emit in ("EMPRESA EMITENTE", "MI PLACE", "FILIAL"):
-        nome_emit = EMPRESAS_OFICIAIS.get(cnpj_emit, "JACKCELL CELULARES E IMPORTADOS LTDA")
+        nome_emit = nome_empresa(cnpj_emit, "JACKCELL CELULARES E IMPORTADOS LTDA")
 
     etree.SubElement(emit, f"{{{ns}}}CNPJ").text = cnpj_emit
     etree.SubElement(emit, f"{{{ns}}}xNome").text = str(nome_emit)

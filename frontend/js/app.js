@@ -1,104 +1,8 @@
-const UF_CODIGOS = {
-    RO: 11, AC: 12, AM: 13, RR: 14, PA: 15, AP: 16, TO: 17,
-    MA: 21, PI: 22, CE: 23, RN: 24, PB: 25, PE: 26, AL: 27, SE: 28, BA: 29,
-    MG: 31, ES: 32, RJ: 33, SP: 35,
-    PR: 41, SC: 42, RS: 43,
-    MS: 50, MT: 51, GO: 52, DF: 53,
-};
-window.UF_CODIGOS = UF_CODIGOS;
-
-function ufFromChave(chave) {
-    if (!chave) return null;
-    const d = String(chave).replace(/\D/g, "");
-    if (d.length < 2) return null;
-    const codigo = d.substring(0, 2);
-    const found = Object.entries(UF_CODIGOS).find(([, c]) => String(c) === codigo);
-    return found ? found[0] : null;
-}
-
-function renderAutoUfBadge(ufDetectada, ufConfig) {
-    if (!ufDetectada || ufDetectada === ufConfig) return "";
-    return `<div class="uf-auto-badge">
-        <b>UF auto-detectada da chave:</b> ${ufDetectada}
-        &nbsp;|&nbsp; <b>UF configurada:</b> ${ufConfig}
-        &nbsp;<small>(consulta será roteada automaticamente para a SEFAZ de ${ufDetectada})</small>
-    </div>`;
-}
-
 const AppState = {
     ambiente: "producao",
     uf: "SP",
     certLoaded: false,
 };
-
-const SECTION_TITLES = {
-    inicio: "Início",
-    "gestao-docs": "Gestão &gt; Minhas NF-e",
-    "gestao-sync": "Gestão &gt; Robô DF-e (Sincronização)",
-    "gestao-analytics": "Gestão &gt; Inteligência & Auditoria",
-    "gestao-intercompany": "Gestão &gt; Operações Intercompany",
-    "gestao-financeiro": "Gestão &gt; Contas a Pagar & Duplicatas",
-    "gestao-conferencia": "Gestão &gt; Conferência de Estoque",
-    "gestao-contabil": "Gestão &gt; Fechamento Contábil",
-    "emissor-rapido": "Serviços &gt; Emissão Rápida de NF-e",
-    consulta: "Serviços &gt; Consultas",
-    danfe: "Serviços &gt; Visualizar DANFE",
-    manifestacao: "Serviços &gt; Manifestação Destinatário",
-    inutilizacao: "Serviços &gt; Inutilização",
-    "carta-correcao": "Serviços &gt; Carta de Correção",
-    cancelamento: "Serviços &gt; Cancelamento",
-    distribuicao: "Serviços &gt; Distribuição DF-e",
-    epec: "Serviços &gt; EPEC Pendente",
-    certificado: "Certificado Digital",
-    relatorios: "Relatórios Fiscais",
-    config: "Configurações",
-    ncm: "Serviços &gt; Consulta NCM",
-    gtin: "Serviços &gt; Consulta GTIN",
-    ccc: "Serviços &gt; Consulta CCC",
-};
-
-const NCM_TABLE = [
-    ["84713012", "Máquinas automáticas para processamento de dados, portáteis, de peso ≤ 10 kg", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84713019", "Outras máquinas automáticas para processamento de dados, portáteis", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84714900", "Outras máquinas automáticas para processamento de dados, apresentadas sob a forma de sistemas", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84715010", "Unidades processadoras (CPU) de máquinas automáticas para processamento de dados", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84716052", "Teclados para máquinas automáticas para processamento de dados", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84716053", "Indicadores ou apontadores (mouse)", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84733000", "Partes e acessórios de máquinas automáticas para processamento de dados", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84717000", "Unidades de memória", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85285200", "Monitores capazes de serem conectados diretamente a uma máquina automática para processamento de dados da posição 84.71", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85176200", "Aparelhos para recepção, conversão e transmissão ou regeneração de voz, imagens ou outros dados", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85176230", "Aparelhos de comutação para telefonia", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85176290", "Outros aparelhos para recepção, conversão e transmissão de voz, imagens ou dados", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85177000", "Partes de aparelhos de telefonia/telegrafia", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85182100", "Alto-falantes (altifalantes) montados", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85183000", "Fones de ouvido (auscultadores), mesmo combinados com microfone", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85184000", "Amplificadores elétricos de audiofrequência", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85185000", "Aparelhos elétricos de amplificação de som", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85044000", "Conversores estáticos (fontes de alimentação, retificadores)", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85076000", "Acumuladores elétricos de íon de lítio (baterias de celular, notebook)", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85443000", "Jogos de fios para velas de ignição e outros jogos de fios para veículos", "20%", "5%", "2,10%", "9,65%", "18%"],
-    ["87032310", "Automóveis de passageiros, motor a explosão, cilindrada > 1.500 cm³ e ≤ 3.000 cm³", "35%", "25%", "2,10%", "9,65%", "12%"],
-    ["84073400", "Motores de pistão alternativo, de ignição por centelha (faísca), cilindrada > 1.000 cm³", "20%", "5%", "2,10%", "9,65%", "18%"],
-    ["84145100", "Ventiladores de mesa, de pé, de parede, de teto ou de janela, com motor elétrico", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84181000", "Refrigeradores (frios) combinados com congeladores, portas exteriores separadas", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85081100", "Aspiradores de pó com motor elétrico, de potência ≤ 1500 W e capacidade do reservatório ≤ 20 l", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85094000", "Liquidificadores e batedores de alimentos, com motor elétrico", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85165000", "Fornos de micro-ondas", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["85166000", "Outros fornos; fogões de cozinha, fogareiros (incluindo as chapas de cocção), grelhas e assadeiras", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84433200", "Outras máquinas que só permitem imprimir (impressoras)", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["84433900", "Outras máquinas copiadoras e reprográficas", "20%", "0%", "2,10%", "9,65%", "18%"],
-    ["49019900", "Outros livros, brochuras e impressos semelhantes", "0%", "0%", "0%", "0%", "0%"],
-    ["22042100", "Vinhos de uvas frescas, em recipientes de capacidade ≤ 2 l", "27%", "0%", "0%", "0%", "25%"],
-    ["09012100", "Café torrado, não descafeinado", "16%", "5%", "0%", "0%", "18%"],
-    ["27101921", "Óleos lubrificantes sem aditivos", "8%", "0%", "2,10%", "9,65%", "18%"],
-    ["30049099", "Outros medicamentos (preparações farmacêuticas) para uso humano", "8%", "0%", "2,10%", "9,65%", "12%"],
-    ["61091000", "Camisetas (T-shirts), de malha de algodão", "35%", "0%", "2,10%", "9,65%", "18%"],
-    ["64039900", "Outros calçados com sola exterior de borracha, plástico ou couro reconstituído", "35%", "0%", "2,10%", "9,65%", "18%"],
-    ["95045000", "Videogames (jogos de vídeo)", "50%", "0%", "2,10%", "9,65%", "18%"],
-    ["87082900", "Outras partes e acessórios de carroçarias (carrocerias) de veículos automóveis", "20%", "5%", "2,10%", "9,65%", "18%"],
-    ["39269090", "Outras obras de plásticos e obras de outras matérias das posições 39.01 a 39.14", "20%", "0%", "2,10%", "9,65%", "18%"],
-];
 
 function getSituacaoBadgeHtml(sit) {
     const s = String(sit || "Autorizada").trim();
@@ -440,6 +344,7 @@ function setupForms() {
     document.getElementById("btn-gestao-limpar")?.addEventListener("click", handleGestaoLimpar);
     document.getElementById("btn-sync-executar-agora")?.addEventListener("click", handleSyncExecutarAgora);
     document.getElementById("btn-sync-atualizar-status")?.addEventListener("click", loadSyncStatus);
+    document.getElementById("btn-debug-nfe")?.addEventListener("click", abrirDebugNfe);
     document.getElementById("form-sync-config")?.addEventListener("submit", handleSyncConfig);
     document.getElementById("form-analytics-periodo")?.addEventListener("submit", handleAnalyticsPeriodo);
     document.getElementById("form-analytics-precos")?.addEventListener("submit", handleAnalyticsPrecos);
@@ -780,16 +685,6 @@ function parseResumoXml(xmlString) {
         console.error("Erro ao parsear XML do resumo:", e);
     }
     return out;
-}
-
-
-function escapeHtml(s) {
-    return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
 }
 
 
@@ -2307,10 +2202,11 @@ async function handleCancelamento(e) {
 ================================================================ */
 
 let currentGestaoPage = 1;
+let currentSaidasPage = 1;
 
 async function loadGestaoDocs(page = 1) {
     currentGestaoPage = page;
-    const tipoDoc = document.getElementById("gestao-tipo-doc") ? document.getElementById("gestao-tipo-doc").value : "0";
+    const tipoDoc = document.getElementById("gestao-tipo-doc") ? document.getElementById("gestao-tipo-doc").value : "";
     const busca = (document.getElementById("gestao-busca")?.value || "").trim();
     const empresaCnpj = document.getElementById("gestao-empresa")?.value || "";
     const dtInicio = document.getElementById("gestao-data-inicio")?.value || "";
@@ -2520,11 +2416,11 @@ function handleGestaoFiltro(e) {
 }
 
 function handleGestaoLimpar() {
-    if (document.getElementById("gestao-tipo-doc")) document.getElementById("gestao-tipo-doc").value = "0";
+    if (document.getElementById("gestao-tipo-doc")) document.getElementById("gestao-tipo-doc").value = "";
     if (document.getElementById("gestao-busca")) document.getElementById("gestao-busca").value = "";
     if (document.getElementById("gestao-empresa")) document.getElementById("gestao-empresa").value = "";
-    if (document.getElementById("gestao-data-inicio")) document.getElementById("gestao-data-inicio").value = "2026-01-01";
-    if (document.getElementById("gestao-data-fim")) document.getElementById("gestao-data-fim").value = "2026-08-28";
+    if (document.getElementById("gestao-data-inicio")) document.getElementById("gestao-data-inicio").value = "";
+    if (document.getElementById("gestao-data-fim")) document.getElementById("gestao-data-fim").value = "";
     if (document.getElementById("gestao-situacao")) document.getElementById("gestao-situacao").value = "";
     loadGestaoDocs(1);
 }
@@ -2646,6 +2542,122 @@ async function loadSyncStatus() {
     }
 }
 
+async function abrirDebugNfe() {
+    const modal = document.getElementById("modal-debug-nfe");
+    const conteudo = document.getElementById("debug-conteudo");
+    if (!modal || !conteudo) return;
+    modal.style.display = "flex";
+    conteudo.innerHTML = `<div style="text-align:center;padding:30px;color:#666;">Carregando dados de debug...</div>`;
+
+    try {
+        const res = await apiGet("/api/gestao/debug/nfe-completo");
+        if (!res || !res.success) {
+            conteudo.innerHTML = `<div class="result error">Erro ao carregar debug: ${escapeHtml((res && res.data && res.data.detail) || "Falha na requisição")}</div>`;
+            return;
+        }
+
+        const docs = res.data.documentos || [];
+        const certs = res.data.certificados || [];
+        const sync = res.data.sync || {};
+        const total = res.data.total || 0;
+
+        let html = `
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px;">
+                <div class="card-kpi" style="border-left:4px solid #2980b9;"><b>Total no banco:</b> ${total}</div>
+                <div class="card-kpi" style="border-left:4px solid #27ae60;"><b>Sync automático:</b> ${sync.auto_sync_enabled ? "Ativado" : "Desativado"} (${sync.auto_sync_interval_mins || 5} min)</div>
+                <div class="card-kpi" style="border-left:4px solid #f39c12;"><b>Último sync:</b> ${sync.last_sync_finish || "Nunca"}</div>
+            </div>
+            <h3 style="margin-top:20px;">📋 Todas as NF-e (Entrada + Saída)</h3>
+            <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                    <tr style="background:#f8f9fa;">
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Chave</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Tipo</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Número/Série</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;">Emitente</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;">Destinatário</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Data Emissão</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:right;">Valor</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Status</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">NSU</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Check SEFAZ</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        docs.forEach((d, i) => {
+            const tipo = d.tipo_doc === 1 ? "Saída" : "Entrada";
+            const tipoCor = d.tipo_doc === 1 ? "#d4edda" : "#d1ecf1";
+            const dataEmi = d.data_emissao ? d.data_emissao.substring(0, 10).split("-").reverse().join("/") : "—";
+            const vTot = parseFloat(d.valor_total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const check = d.last_sefaz_check ? d.last_sefaz_check.substring(0, 19).replace("T", " ") : "Nunca";
+            html += `
+                <tr style="background:${i % 2 === 0 ? '#fff' : '#f8f9fa'};">
+                    <td style="padding:6px;border:1px solid #dee2e6;font-family:monospace;font-size:11px;">${d.chave || "—"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;background:${tipoCor};font-weight:bold;">${tipo}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;">${d.numero || "—"} / ${d.serie || "1"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;">${escapeHtml(d.emitente_nome || "—")}<br><small style="color:#666;">${d.emitente_cnpj || ""}</small></td>
+                    <td style="padding:6px;border:1px solid #dee2e6;">${escapeHtml(d.destinatario_nome || "—")}<br><small style="color:#666;">${d.destinatario_cnpj || ""}</small></td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;">${dataEmi}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:right;font-weight:bold;">R$ ${vTot}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;">${getSituacaoBadgeHtml(d.situacao || "Autorizada")}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;font-family:monospace;">${d.nsu || "0"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;font-size:11px;">${check}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table></div>`;
+
+        html += `<h3 style="margin-top:25px;">🔐 Certificados Cadastrados</h3>
+            <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                    <tr style="background:#f8f9fa;">
+                        <th style="padding:8px;border:1px solid #dee2e6;">CNPJ</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;">Razão Social</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Ativo</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Último NSU</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Max NSU</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;">Último Sync</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;">Status Sync</th>
+                        <th style="padding:8px;border:1px solid #dee2e6;text-align:center;">Validade</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        certs.forEach((c, i) => {
+            const val = c.status_validade || (c.days_remaining > 0 ? "ATIVO" : "VENCIDO");
+            const valCor = val === "VENCIDO" ? "#f8d7da" : (val === "EXPIRANDO" ? "#fff3cd" : "#d4edda");
+            html += `
+                <tr style="background:${i % 2 === 0 ? '#fff' : '#f8f9fa'};">
+                    <td style="padding:6px;border:1px solid #dee2e6;font-family:monospace;">${c.cnpj || "—"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;">${escapeHtml(c.razao_social || "—")}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;">${c.is_active ? "✅ Sim" : "❌ Não"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;font-family:monospace;">${c.last_nsu || "0"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;font-family:monospace;">${c.max_nsu || "0"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;font-size:11px;">${c.last_sync_time ? c.last_sync_time.substring(0, 19).replace("T", " ") : "—"}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;font-size:11px;max-width:250px;">${escapeHtml(c.last_sync_status || "—")}</td>
+                    <td style="padding:6px;border:1px solid #dee2e6;text-align:center;background:${valCor};">${val} (${c.days_remaining || 0}d)</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table></div>
+            <div style="margin-top:15px;text-align:right;">
+                <button onclick="document.getElementById('modal-debug-nfe').style.display='none'" class="botao">Fechar</button>
+            </div>
+        `;
+
+        conteudo.innerHTML = html;
+    } catch (err) {
+        conteudo.innerHTML = `<div class="result error">Erro: ${escapeHtml(err.message)}</div>`;
+        console.error("abrirDebugNfe error:", err);
+    }
+}
+
 async function handleSyncExecutarAgora() {
     const btn = document.getElementById("btn-sync-executar-agora");
     const resultBox = document.getElementById("sync-execucao-resultado");
@@ -2714,61 +2726,194 @@ async function handleSyncConfig(e) {
 async function loadAnalyticsDashboard(mesParam, anoParam) {
     const mes = mesParam || parseInt(document.getElementById("analytics-mes")?.value, 10) || (new Date().getMonth() + 1);
     const ano = anoParam || parseInt(document.getElementById("analytics-ano")?.value, 10) || new Date().getFullYear();
+    const empresa = document.getElementById("analytics-empresa")?.value || "";
 
     if (document.getElementById("analytics-mes")) document.getElementById("analytics-mes").value = mes;
     if (document.getElementById("analytics-ano")) document.getElementById("analytics-ano").value = ano;
 
+    // Popula select de empresas no BI se estiver vazio com as 5 empresas oficiais
+    const selEmp = document.getElementById("analytics-empresa");
+    if (selEmp && selEmp.options.length <= 1) {
+        try {
+            const resEmp = await apiGet("/api/gestao/financeiro/empresas");
+            const emps = (resEmp.success && resEmp.data) ? (resEmp.data.empresas || resEmp.data) : [];
+            selEmp.innerHTML = '<option value="">🏢 Todas as 5 Empresas (Consolidado)</option>';
+            emps.forEach(e => {
+                const cnpjLimpo = (e.cnpj || e.empresa_cnpj || "").replace(/\D/g, "");
+                const cnpjFmt = cnpjLimpo.length === 14 
+                    ? `${cnpjLimpo.slice(0,2)}.${cnpjLimpo.slice(2,5)}.${cnpjLimpo.slice(5,8)}/${cnpjLimpo.slice(8,12)}-${cnpjLimpo.slice(12,14)}`
+                    : cnpjLimpo;
+                const opt = document.createElement("option");
+                opt.value = cnpjLimpo;
+                opt.textContent = `📍 ${e.nome || e.emitente_nome || ""} — ${cnpjFmt}`;
+                selEmp.appendChild(opt);
+            });
+        } catch (_) {}
+    }
+
+    let urlDash = `/api/gestao/analytics/dashboard?mes=${mes}&ano=${ano}`;
+    let urlAbc = `/api/gestao/analytics/abc?mes=${mes}&ano=${ano}`;
+    if (empresa) {
+        urlDash += `&empresa_cnpj=${encodeURIComponent(empresa)}`;
+        urlAbc += `&empresa_cnpj=${encodeURIComponent(empresa)}`;
+    }
+
     const [dashRes, abcRes] = await Promise.all([
-        apiGet(`/api/gestao/analytics/dashboard?mes=${mes}&ano=${ano}`),
-        apiGet(`/api/gestao/analytics/abc?mes=${mes}&ano=${ano}`),
+        apiGet(urlDash),
+        apiGet(urlAbc),
     ]);
 
     const fmtMoney = (v) => (parseFloat(v) || 0.0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     if (dashRes.success && dashRes.data) {
         const d = dashRes.data;
-        const tot = d.totais_mes || {};
+        const kpi = d.kpis_executivos || {};
+        const totEnt = d.totais_entrada || {};
+        const totSai = d.totais_saida || {};
 
+        // KPIs Executivos
+        if (document.getElementById("analytics-kpi-vendas")) {
+            document.getElementById("analytics-kpi-vendas").textContent = "R$ " + fmtMoney(kpi.vendas_tot || totSai.total_vendas);
+        }
+        if (document.getElementById("analytics-kpi-qtd-vendas")) {
+            document.getElementById("analytics-kpi-qtd-vendas").textContent = `${kpi.qtd_vendas || 0} nota(s) emitida(s)`;
+        }
         if (document.getElementById("analytics-kpi-total")) {
-            document.getElementById("analytics-kpi-total").textContent = "R$ " + fmtMoney(tot.total_compras);
+            document.getElementById("analytics-kpi-total").textContent = "R$ " + fmtMoney(kpi.compras_tot || totEnt.total_compras);
         }
         if (document.getElementById("analytics-kpi-qtd")) {
-            document.getElementById("analytics-kpi-qtd").textContent = `${tot.total_notas || 0} nota(s) fiscal(is)`;
+            document.getElementById("analytics-kpi-qtd").textContent = `${kpi.qtd_compras || 0} nota(s) recebida(s)`;
         }
-        if (document.getElementById("analytics-kpi-icms")) {
-            document.getElementById("analytics-kpi-icms").textContent = "R$ " + fmtMoney(tot.total_icms);
+        if (document.getElementById("analytics-kpi-saldo")) {
+            const saldo = kpi.saldo_operacional || 0.0;
+            const elSaldo = document.getElementById("analytics-kpi-saldo");
+            elSaldo.textContent = "R$ " + fmtMoney(saldo);
+            elSaldo.style.color = saldo >= 0 ? "#27ae60" : "#c0392b";
         }
-        if (document.getElementById("analytics-kpi-piscofins")) {
-            document.getElementById("analytics-kpi-piscofins").textContent = "R$ " + fmtMoney((tot.total_pis || 0) + (tot.total_cofins || 0));
+        if (document.getElementById("analytics-kpi-margem")) {
+            document.getElementById("analytics-kpi-margem").textContent = `Margem Bruta: ${(kpi.margem_bruta_pct || 0).toFixed(1)}%`;
         }
-        if (document.getElementById("analytics-kpi-ipi")) {
-            document.getElementById("analytics-kpi-ipi").textContent = "R$ " + fmtMoney(tot.total_ipi);
+        if (document.getElementById("analytics-kpi-ticket")) {
+            document.getElementById("analytics-kpi-ticket").textContent = "R$ " + fmtMoney(kpi.ticket_medio_vendas);
+        }
+        if (document.getElementById("analytics-kpi-ticket-compras")) {
+            document.getElementById("analytics-kpi-ticket-compras").textContent = `Compras: R$ ${fmtMoney(kpi.ticket_medio_compras)}`;
         }
 
-        // Top 5 Fornecedores
-        const topFornEl = document.getElementById("analytics-top-fornecedores");
-        const fornList = d.top_fornecedores || [];
-        if (topFornEl) {
-            if (fornList.length === 0) {
-                topFornEl.innerHTML = `<div style="padding:15px;text-align:center;color:#666;">Nenhum fornecedor registrado no mês selecionado.</div>`;
+        // Impostos
+        if (document.getElementById("analytics-kpi-icms")) {
+            document.getElementById("analytics-kpi-icms").textContent = "R$ " + fmtMoney(totEnt.total_icms);
+        }
+        if (document.getElementById("analytics-kpi-piscofins")) {
+            document.getElementById("analytics-kpi-piscofins").textContent = "R$ " + fmtMoney((totEnt.total_pis || 0) + (totEnt.total_cofins || 0));
+        }
+        if (document.getElementById("analytics-kpi-ipi")) {
+            document.getElementById("analytics-kpi-ipi").textContent = "R$ " + fmtMoney(totEnt.total_ipi);
+        }
+
+        // Top 5 Clientes (Saídas)
+        const topCliEl = document.getElementById("analytics-top-clientes");
+        const cliList = d.top_clientes || [];
+        if (topCliEl) {
+            if (cliList.length === 0) {
+                topCliEl.innerHTML = `<div style="padding:15px;text-align:center;color:#666;">Nenhuma venda/saída registrada no mês selecionado.</div>`;
             } else {
-                const totalCompras = tot.total_compras || 1.0;
-                topFornEl.innerHTML = `
+                const totalVendas = kpi.vendas_tot || 1.0;
+                topCliEl.innerHTML = `
                     <table class="tabelaGrupo" style="width:100%;font-size:11px;">
-                        <tr class="linhaTitulo"><th>Fornecedor</th><th>Qtd</th><th style="text-align:right;">Total (R$)</th><th style="text-align:right;">%</th></tr>
-                        ${fornList.map(f => {
-                            const pct = ((f.valor_total / totalCompras) * 100).toFixed(1);
+                        <tr class="linhaTitulo" style="background:#e8f4fd;"><th>Cliente</th><th>Qtd</th><th style="text-align:right;">Total (R$)</th><th style="text-align:right;">%</th></tr>
+                        ${cliList.map(c => {
+                            const pct = ((c.valor_total / totalVendas) * 100).toFixed(1);
                             return `
                                 <tr>
-                                    <td><b>${escapeHtml(f.emitente_nome)}</b><br><small style="color:#666;">${escapeHtml(f.emitente_cnpj)}</small></td>
-                                    <td>${f.qtd_notas}</td>
-                                    <td style="text-align:right;font-weight:bold;">R$ ${fmtMoney(f.valor_total)}</td>
+                                    <td><b>${escapeHtml(c.destinatario_nome)}</b><br><small style="color:#666;">${escapeHtml(c.destinatario_cnpj)}</small></td>
+                                    <td>${c.qtd_notas}</td>
+                                    <td style="text-align:right;font-weight:bold;color:#2980b9;">R$ ${fmtMoney(c.valor_total)}</td>
                                     <td style="text-align:right;"><span style="background:#e8f4fd;padding:2px 5px;border-radius:3px;font-weight:bold;color:#2980b9;">${pct}%</span></td>
                                 </tr>
                             `;
                         }).join("")}
                     </table>
                 `;
+            }
+        }
+
+        // Top 5 Fornecedores (Entradas)
+        const topFornEl = document.getElementById("analytics-top-fornecedores");
+        const fornList = d.top_fornecedores || [];
+        if (topFornEl) {
+            if (fornList.length === 0) {
+                topFornEl.innerHTML = `<div style="padding:15px;text-align:center;color:#666;">Nenhum fornecedor registrado no mês selecionado.</div>`;
+            } else {
+                const totalCompras = kpi.compras_tot || 1.0;
+                topFornEl.innerHTML = `
+                    <table class="tabelaGrupo" style="width:100%;font-size:11px;">
+                        <tr class="linhaTitulo" style="background:#fef2f2;"><th>Fornecedor</th><th>Qtd</th><th style="text-align:right;">Total (R$)</th><th style="text-align:right;">%</th></tr>
+                        ${fornList.map(f => {
+                            const pct = ((f.valor_total / totalCompras) * 100).toFixed(1);
+                            return `
+                                <tr>
+                                    <td><b>${escapeHtml(f.emitente_nome)}</b><br><small style="color:#666;">${escapeHtml(f.emitente_cnpj)}</small></td>
+                                    <td>${f.qtd_notas}</td>
+                                    <td style="text-align:right;font-weight:bold;color:#e74c3c;">R$ ${fmtMoney(f.valor_total)}</td>
+                                    <td style="text-align:right;"><span style="background:#fee2e2;padding:2px 5px;border-radius:3px;font-weight:bold;color:#c0392b;">${pct}%</span></td>
+                                </tr>
+                            `;
+                        }).join("")}
+                    </table>
+                `;
+            }
+        }
+
+        // Gráfico de Evolução Mensal (Vendas vs Compras)
+        const evol = d.evolucao_mensal || [];
+        if (evol.length > 0 && typeof Chart !== "undefined") {
+            const chartContainer = document.getElementById("analytics-chart-container");
+            if (chartContainer) {
+                chartContainer.innerHTML = `<canvas id="chart-analytics-evolucao" style="max-height:280px;"></canvas>`;
+                const ctx = document.getElementById("chart-analytics-evolucao");
+                if (ctx) {
+                    new Chart(ctx, {
+                        type: "bar",
+                        data: {
+                            labels: evol.map(e => e.mes_ano),
+                            datasets: [
+                                {
+                                    label: "Vendas / Saídas (R$)",
+                                    data: evol.map(e => e.valor_saidas || 0.0),
+                                    backgroundColor: "rgba(41, 128, 185, 0.75)",
+                                    borderColor: "#2980b9",
+                                    borderWidth: 1,
+                                },
+                                {
+                                    label: "Compras / Entradas (R$)",
+                                    data: evol.map(e => e.valor_entradas || 0.0),
+                                    backgroundColor: "rgba(231, 76, 60, 0.75)",
+                                    borderColor: "#e74c3c",
+                                    borderWidth: 1,
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: { position: "top" },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => `${context.dataset.label}: R$ ${(context.parsed.y || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    ticks: {
+                                        callback: (v) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 0 })
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
             }
         }
     }
@@ -3439,6 +3584,20 @@ if (!notifIntervalId) {
 }
 setTimeout(carregarNotificacoes, 1500);
 
+// Auto-refresh das listagens de NF-e (documentos e saídas) a cada 30 segundos
+if (!window._gestaoDocsIntervalId) {
+    window._gestaoDocsIntervalId = setInterval(() => {
+        const container = document.getElementById("gestao-lista-resultado");
+        if (container) loadGestaoDocs(currentGestaoPage);
+    }, 30000);
+}
+if (!window._saidasIntervalId) {
+    window._saidasIntervalId = setInterval(() => {
+        const tbody = document.getElementById("tbody-saidas-nfe");
+        if (tbody) carregarNfeSaidas(currentSaidasPage);
+    }, 30000);
+}
+
 // Listener do form de notificações na aba de configurações
 document.addEventListener("DOMContentLoaded", () => {
     const formNotif = document.getElementById("form-config-notificacoes");
@@ -3503,11 +3662,15 @@ async function carregarEmpresas() {
         const empresas = (res.success && res.data) ? (res.data.empresas || res.data) : [];
         const sel = document.getElementById("fin-empresa");
         if (!sel) return;
-        sel.innerHTML = '<option value="">Todas</option>';
+        sel.innerHTML = '<option value="">🏢 Todas as 5 Empresas (Consolidado)</option>';
         empresas.forEach(e => {
+            const cnpjLimpo = (e.cnpj || e.empresa_cnpj || "").replace(/\D/g, "");
+            const cnpjFmt = cnpjLimpo.length === 14 
+                ? `${cnpjLimpo.slice(0,2)}.${cnpjLimpo.slice(2,5)}.${cnpjLimpo.slice(5,8)}/${cnpjLimpo.slice(8,12)}-${cnpjLimpo.slice(12,14)}`
+                : cnpjLimpo;
             const opt = document.createElement("option");
-            opt.value = e.cnpj || e.empresa_cnpj || "";
-            opt.textContent = `${e.nome || e.emitente_nome || ""} (${(e.cnpj || e.empresa_cnpj || "").slice(0, 3)}...)`;
+            opt.value = cnpjLimpo;
+            opt.textContent = `📍 ${e.nome || e.emitente_nome || ""} — ${cnpjFmt}`;
             sel.appendChild(opt);
         });
     } catch (err) { /* silencioso */ }
@@ -3708,14 +3871,22 @@ async function carregarImpostosInterestaduais(empresa) {
 }
 
 
-async function carregarDreConsolidado() {
+async function carregarDreConsolidado(ano, mes, empresa) {
     const container = document.getElementById("dre-consolidado-painel");
     if (!container) return;
 
     container.innerHTML = `<div style="padding:15px;text-align:center;color:#666;">Calculando DRE consolidado...</div>`;
 
     try {
-        const res = await apiGet("/api/gestao/financeiro/dre");
+        const a = ano || (document.getElementById("fin-mes")?.value ? document.getElementById("fin-mes").value.split("-")[0] : "");
+        const m = mes || (document.getElementById("fin-mes")?.value ? document.getElementById("fin-mes").value.split("-")[1] : "");
+        const emp = empresa || document.getElementById("fin-empresa")?.value || "";
+        let url = `/api/gestao/financeiro/dre?`;
+        if (a) url += `ano=${encodeURIComponent(a)}&`;
+        if (m) url += `mes=${encodeURIComponent(m)}&`;
+        if (emp) url += `empresa_cnpj=${encodeURIComponent(emp)}&`;
+
+        const res = await apiGet(url);
         if (!res || res.success === false) {
             container.innerHTML = `<div class="result error">Erro ao carregar DRE consolidado.</div>`;
             return;
@@ -5507,6 +5678,7 @@ async function executarTransmissaoSefazConfirmada() {
 // ====================================================================
 
 async function carregarNfeSaidas(page = 1) {
+    currentSaidasPage = page;
     const tbody = document.getElementById("tbody-saidas-nfe");
     const pagDiv = document.getElementById("paginacao-saidas");
     if (!tbody) return;
@@ -5626,8 +5798,8 @@ function limparFiltrosSaidas() {
     setVal("filtro-saidas-empresa", "");
     setVal("filtro-saidas-busca", "");
     setVal("filtro-saidas-situacao", "");
-    setVal("filtro-saidas-inicio", "2026-01-01");
-    setVal("filtro-saidas-fim", new Date().toISOString().substring(0, 10));
+    setVal("filtro-saidas-inicio", "");
+    setVal("filtro-saidas-fim", "");
     sincronizarAbaSituacao("");
     carregarNfeSaidas(1);
 }
@@ -7311,26 +7483,6 @@ async function enviarWhatsappNfe(chave, telefone = "") {
     }
 }
 
-async function abrirModalEmailNfe(chave, destNome = "") {
-    if (!chave) return;
-    const email = prompt(`Digite o e-mail de destino para envio do XML e DANFE PDF da nota:`, "");
-    if (!email || !email.includes("@")) {
-        if (email !== null) alert("E-mail inválido.");
-        return;
-    }
-
-    try {
-        const res = await apiPost("/api/emissao/enviar-email", { chave: chave, email: email.trim() });
-        if (res.success) {
-            alert(`✓ Sucesso! ${res.message || "E-mail enviado ao cliente com XML e DANFE anexados."}`);
-        } else {
-            alert(`Erro no envio: ${res.detail || res.message || "Falha"}`);
-        }
-    } catch (err) {
-        alert("Erro ao enviar e-mail: " + err.message);
-    }
-}
-
 // ====================================================================
 // CHECK-IN AUTOMÁTICO DE ESTOQUE (ENTRADA DE COMPRAS)
 // ====================================================================
@@ -7358,14 +7510,22 @@ async function executarCheckinEstoqueRapido(chave) {
 // APURAÇÃO DO SIMPLES NACIONAL (LEI 123/2006)
 // ====================================================================
 
-async function carregarApuracaoSimplesNacional() {
+async function carregarApuracaoSimplesNacional(ano, mes, empresa) {
     const container = document.getElementById("simples-nacional-painel");
     if (!container) return;
 
     container.innerHTML = `<div style="padding:15px;text-align:center;color:#666;">Calculando alíquotas do Simples Nacional...</div>`;
 
     try {
-        const res = await apiGet("/api/gestao/tributacao/simples-nacional");
+        const a = ano || (document.getElementById("fin-mes")?.value ? document.getElementById("fin-mes").value.split("-")[0] : "");
+        const m = mes || (document.getElementById("fin-mes")?.value ? document.getElementById("fin-mes").value.split("-")[1] : "");
+        const emp = empresa || document.getElementById("fin-empresa")?.value || "";
+        let url = `/api/gestao/tributacao/simples-nacional?`;
+        if (a) url += `ano=${encodeURIComponent(a)}&`;
+        if (m) url += `mes=${encodeURIComponent(m)}&`;
+        if (emp) url += `empresa_cnpj=${encodeURIComponent(emp)}&`;
+
+        const res = await apiGet(url);
         if (res) {
             const fmtR = (v) => "R$ " + parseFloat(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             container.innerHTML = `
@@ -7402,14 +7562,17 @@ async function carregarApuracaoSimplesNacional() {
 // DRE DE MARGEM REAL POR PRODUTO
 // ====================================================================
 
-async function carregarDreMargens() {
+async function carregarDreMargens(empresa) {
     const container = document.getElementById("dre-margens-painel");
     if (!container) return;
 
     container.innerHTML = `<div style="padding:15px;text-align:center;color:#666;">Carregando análise de margem de produtos...</div>`;
 
     try {
-        const res = await apiGet("/api/gestao/dre/margens?limit=50");
+        const emp = empresa || document.getElementById("fin-empresa")?.value || "";
+        let url = `/api/gestao/dre/margens?limit=50`;
+        if (emp) url += `&empresa_cnpj=${encodeURIComponent(emp)}`;
+        const res = await apiGet(url);
         const produtos = res.produtos || [];
 
         if (produtos.length === 0) {
@@ -7459,18 +7622,6 @@ async function carregarDreMargens() {
     } catch (err) {
         container.innerHTML = `<div style="color:#c0392b;padding:10px;">Erro ao carregar DRE de produtos: ${err.message}</div>`;
     }
-}
-
-// ====================================================================
-// PACOTE CONTÁBIL MENSAL & EXCEL
-// ====================================================================
-
-function baixarPlanilhaExcelContabil() {
-    const mes = document.getElementById("contabil-mes")?.value || "8";
-    const ano = document.getElementById("contabil-ano")?.value || "2026";
-    const empresa = document.getElementById("contabil-empresa")?.value || "";
-    const url = `/api/gestao/contabil/pacote-mensal?ano=${ano}&mes=${mes}&empresa_cnpj=${encodeURIComponent(empresa)}&incluir_pdfs=false`;
-    window.open(url, "_blank");
 }
 
 document.addEventListener("DOMContentLoaded", () => {

@@ -22,6 +22,10 @@
                 <a href="#" onclick="showSection('gestao-intercompany'); return false;" class="btn-header-pill">🔄 Intercompany</a>
                 <a href="#" onclick="showSection('certificado'); return false;" class="btn-header-pill">🏢 Certificados</a>
                 <a href="#" onclick="showSection('config'); return false;" class="btn-header-pill">⚙️ Configurações</a>
+                <span id="header-user-info" style="font-size:12px;color:#736f66;padding:4px 10px;background:#f7f5f0;border-radius:99px;border:1px solid #e6e1d8;display:none;align-items:center;gap:5px;">
+                    👤 <span id="header-user-nome">Usuário</span>
+                </span>
+                <a href="#" onclick="logout(); return false;" class="btn-header-pill" style="background:#faebec;color:#8b1a22;border-color:#edd2d4;" title="Sair do sistema">🚪 Sair</a>
             </div>
 
             <div id="imgHome">
@@ -257,7 +261,7 @@
                     <div class="tituloSessao">Minhas NF-e</div>
                     <div class="painel_info">
                         <div class="divMensagem">
-                            <p>Controle dedicado de <b>Notas Fiscais Recebidas (Entradas / Compras de Fornecedores)</b> para todas as suas empresas. Notas emitidas para clientes (saídas) ficam organizadas na aba <b>Emissão de NF-e</b>.</p>
+                            <p>Controle completo de <b>Todas as Notas Fiscais (Entradas / Compras e Saídas / Vendas)</b> de todas as suas empresas. Use os filtros abaixo para alternar entre Compras, Vendas ou visualização unificada.</p>
                         </div>
                     </div>
 
@@ -267,9 +271,9 @@
                             <div class="form-group" style="flex:1.5;min-width:180px;">
                                 <label for="gestao-tipo-doc">Tipo de Operação:</label>
                                 <select id="gestao-tipo-doc">
-                                    <option value="0" selected>📥 Entradas-(Compras)</option>
-                                    <option value="1">📤 Saídas-(Vendas)</option>
-                                    <option value="">📑 Todas NFes-(Compras/Vendas)</option>
+                                    <option value="" selected>📑 Todas NF-e (Entradas + Saídas)</option>
+                                    <option value="0">📥 Apenas Entradas (Compras)</option>
+                                    <option value="1">📤 Apenas Saídas (Vendas)</option>
                                 </select>
                             </div>
                             <div class="form-group" style="flex:2;min-width:200px;">
@@ -280,15 +284,15 @@
                             </div>
                             <div class="form-group" style="flex:2;min-width:180px;">
                                 <label for="gestao-busca">Buscar por Termo:</label>
-                                <input type="text" id="gestao-busca" placeholder="Fornecedor, CNPJ, Produto ou Chave">
+                                <input type="text" id="gestao-busca" placeholder="Fornecedor, Cliente, CNPJ, Produto ou Chave">
                             </div>
                             <div class="form-group" style="flex:1;min-width:130px;">
                                 <label for="gestao-data-inicio">Data Início:</label>
-                                <input type="date" id="gestao-data-inicio" value="2026-01-01">
+                                <input type="date" id="gestao-data-inicio" value="">
                             </div>
                             <div class="form-group" style="flex:1;min-width:130px;">
                                 <label for="gestao-data-fim">Data Fim:</label>
-                                <input type="date" id="gestao-data-fim" value="2026-08-28">
+                                <input type="date" id="gestao-data-fim" value="">
                             </div>
                             <div class="form-group" style="flex:1;min-width:130px;">
                                 <label for="gestao-situacao">Situação:</label>
@@ -383,6 +387,9 @@
                                 ⚡ Sincronizar Agora com a SEFAZ
                             </button>
                             <button type="button" class="botao" id="btn-sync-atualizar-status">🔄 Atualizar Status</button>
+                            <button type="button" class="botao" id="btn-debug-nfe" style="background:#2c3e50;border-color:#2c3e50;color:#fff;font-size:13px;padding:8px 16px;">
+                                🔍 Debug NF-e (Todas as Notas)
+                            </button>
                         </div>
                         <div id="sync-execucao-resultado" style="margin-top:12px;display:none;"></div>
                     </div>
@@ -416,17 +423,17 @@
 
                 <!-- ================= INTELIGÊNCIA DE COMPRAS ================= -->
                 <div id="section-gestao-analytics" class="content-section">
-                    <div class="tituloSessao">Inteligência de Compras & Gestão Tributária</div>
+                    <div class="tituloSessao">📈 Inteligência BI: Gestão Executiva de Entradas & Saídas</div>
                     <div class="painel_info">
                         <div class="divMensagem">
-                            <p>Análise de fornecedores, curva ABC de produtos comprados, histórico de preços pagos e resumo de impostos acumulados.</p>
+                            <p>Visão gerencial consolidada: acompanhe em tempo real o volume de <b>Vendas (Saídas)</b> vs. <b>Compras (Entradas)</b>, saldo operacional, margem bruta, impostos e desempenho de fornecedores e clientes.</p>
                         </div>
                     </div>
 
                     <div class="painelSessao">
-                        <div class="painelSessaoTitulo">Período de Análise</div>
-                        <form id="form-analytics-periodo" style="display:flex;gap:10px;align-items:flex-end;">
-                            <div class="form-group">
+                        <div class="painelSessaoTitulo">Filtros do Painel Executivo</div>
+                        <form id="form-analytics-periodo" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+                            <div class="form-group" style="flex:1;min-width:140px;margin-bottom:0;">
                                 <label for="analytics-mes">Mês:</label>
                                 <select id="analytics-mes">
                                     <option value="1">Janeiro</option><option value="2">Fevereiro</option>
@@ -437,48 +444,89 @@
                                     <option value="11">Novembro</option><option value="12">Dezembro</option>
                                 </select>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group" style="flex:1;min-width:100px;margin-bottom:0;">
                                 <label for="analytics-ano">Ano:</label>
-                                <input type="number" id="analytics-ano" value="2026" min="2020" max="2030" style="width:90px;">
+                                <input type="number" id="analytics-ano" value="2026" min="2020" max="2030">
                             </div>
-                            <div class="form-group">
-                                <button type="submit" class="botao botao-primario">Atualizar Indicadores</button>
+                            <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0;">
+                                <label for="analytics-empresa">Empresa / Unidade:</label>
+                                <select id="analytics-empresa">
+                                    <option value="">🏢 Todas as 5 Empresas</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom:0;">
+                                <button type="submit" class="botao botao-primario">🔍 Atualizar BI</button>
                             </div>
                         </form>
                     </div>
 
-                    <div class="grid-kpis">
-                        <div class="card-kpi" style="border-left:4px solid #27ae60;">
-                            <div style="font-size:11px;color:#666;font-weight:bold;">COMPRAS NO MÊS</div>
-                            <div id="analytics-kpi-total" style="font-size:22px;font-weight:bold;color:#27ae60;margin-top:4px;">R$ 0,00</div>
-                            <div id="analytics-kpi-qtd" style="font-size:11px;color:#666;margin-top:2px;">0 notas fiscais</div>
-                        </div>
+                    <!-- ============ KPIs: Visão Executiva Entradas vs Saídas ============ -->
+                    <div class="grid-kpis" style="margin-bottom:15px;">
                         <div class="card-kpi" style="border-left:4px solid #2980b9;">
-                            <div style="font-size:11px;color:#666;font-weight:bold;">ICMS DESTACADO</div>
-                            <div id="analytics-kpi-icms" style="font-size:22px;font-weight:bold;color:#2980b9;margin-top:4px;">R$ 0,00</div>
-                            <div style="font-size:11px;color:#666;margin-top:2px;">Crédito fiscal potencial</div>
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">📤 TOTAL VENDAS (SAÍDAS)</div>
+                            <div id="analytics-kpi-vendas" style="font-size:20px;font-weight:bold;color:#1e293b;margin-top:4px;">R$ 0,00</div>
+                            <div id="analytics-kpi-qtd-vendas" style="font-size:11px;color:#64748b;margin-top:2px;">0 notas emitidas</div>
                         </div>
-                        <div class="card-kpi" style="border-left:4px solid #e67e22;">
-                            <div style="font-size:11px;color:#666;font-weight:bold;">PIS + COFINS</div>
-                            <div id="analytics-kpi-piscofins" style="font-size:22px;font-weight:bold;color:#e67e22;margin-top:4px;">R$ 0,00</div>
-                            <div style="font-size:11px;color:#666;margin-top:2px;">Impostos federais</div>
+                        <div class="card-kpi" style="border-left:4px solid #e74c3c;">
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">📥 TOTAL COMPRAS (ENTRADAS)</div>
+                            <div id="analytics-kpi-total" style="font-size:20px;font-weight:bold;color:#e74c3c;margin-top:4px;">R$ 0,00</div>
+                            <div id="analytics-kpi-qtd" style="font-size:11px;color:#64748b;margin-top:2px;">0 notas recebidas</div>
+                        </div>
+                        <div class="card-kpi" style="border-left:4px solid #27ae60;">
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">💰 SALDO OPERACIONAL (BRUTO)</div>
+                            <div id="analytics-kpi-saldo" style="font-size:20px;font-weight:bold;color:#27ae60;margin-top:4px;">R$ 0,00</div>
+                            <div id="analytics-kpi-margem" style="font-size:11px;color:#27ae60;margin-top:2px;font-weight:bold;">Margem: 0.0%</div>
                         </div>
                         <div class="card-kpi" style="border-left:4px solid #8e44ad;">
-                            <div style="font-size:11px;color:#666;font-weight:bold;">IPI TOTAL</div>
-                            <div id="analytics-kpi-ipi" style="font-size:22px;font-weight:bold;color:#8e44ad;margin-top:4px;">R$ 0,00</div>
-                            <div style="font-size:11px;color:#666;margin-top:2px;">Produtos industrializados</div>
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">🏷️ TICKET MÉDIO (VENDAS)</div>
+                            <div id="analytics-kpi-ticket" style="font-size:20px;font-weight:bold;color:#8e44ad;margin-top:4px;">R$ 0,00</div>
+                            <div id="analytics-kpi-ticket-compras" style="font-size:11px;color:#64748b;margin-top:2px;">Compras: R$ 0,00</div>
+                        </div>
+                    </div>
+
+                    <!-- ============ KPIs: Gestão Tributária Acumulada ============ -->
+                    <div class="grid-kpis" style="margin-bottom:15px;">
+                        <div class="card-kpi" style="border-left:4px solid #3498db;background:#f8fafc;">
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;">ICMS DESTACADO (CRÉDITO ENTRADAS)</div>
+                            <div id="analytics-kpi-icms" style="font-size:18px;font-weight:bold;color:#2980b9;margin-top:4px;">R$ 0,00</div>
+                        </div>
+                        <div class="card-kpi" style="border-left:4px solid #e67e22;background:#f8fafc;">
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;">PIS + COFINS (ENTRADAS)</div>
+                            <div id="analytics-kpi-piscofins" style="font-size:18px;font-weight:bold;color:#d35400;margin-top:4px;">R$ 0,00</div>
+                        </div>
+                        <div class="card-kpi" style="border-left:4px solid #9b59b6;background:#f8fafc;">
+                            <div style="font-size:11px;color:#64748b;font-weight:bold;">IPI TOTAL (PRODUTOS INDUSTRIAIS)</div>
+                            <div id="analytics-kpi-ipi" style="font-size:18px;font-weight:bold;color:#8e44ad;margin-top:4px;">R$ 0,00</div>
+                        </div>
+                    </div>
+
+                    <!-- ============ GRÁFICO: EVOLUÇÃO COMPARATIVA MENSAL ============ -->
+                    <div class="painelSessao" style="margin-bottom:15px;">
+                        <div class="painelSessaoTitulo">📊 Evolução Mensal Comparativa (Vendas vs Compras - Últimos 12 Meses)</div>
+                        <div id="analytics-chart-container" style="max-height:300px;overflow-x:auto;">
+                            <canvas id="chart-analytics-evolucao" style="max-height:280px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- ============ TABELAS: TOP CLIENTES E TOP FORNECEDORES ============ -->
+                    <div style="display:flex;gap:15px;flex-wrap:wrap;margin-bottom:15px;">
+                        <div style="flex:1;min-width:300px;" class="painelSessao">
+                            <div class="painelSessaoTitulo" style="color:#2980b9;">🏆 Top 5 Clientes / Compradores (Saídas)</div>
+                            <div id="analytics-top-clientes">
+                                <div style="padding:15px;text-align:center;color:#666;">Nenhum cliente registrado no período.</div>
+                            </div>
+                        </div>
+                        <div style="flex:1;min-width:300px;" class="painelSessao">
+                            <div class="painelSessaoTitulo" style="color:#e74c3c;">🏭 Top 5 Fornecedores (Entradas)</div>
+                            <div id="analytics-top-fornecedores">
+                                <div style="padding:15px;text-align:center;color:#666;">Nenhum fornecedor registrado no período.</div>
+                            </div>
                         </div>
                     </div>
 
                     <div style="display:flex;gap:15px;flex-wrap:wrap;">
                         <div style="flex:1;min-width:300px;" class="painelSessao">
-                            <div class="painelSessaoTitulo">Top 5 Fornecedores do Mês</div>
-                            <div id="analytics-top-fornecedores">
-                                <div style="padding:15px;text-align:center;color:#666;">Nenhum dado encontrado para o mês selecionado.</div>
-                            </div>
-                        </div>
-                        <div style="flex:1;min-width:300px;" class="painelSessao">
-                            <div class="painelSessaoTitulo">Curva ABC de Gastos por Produto</div>
+                            <div class="painelSessaoTitulo">📦 Curva ABC de Gastos por Produto Comprado</div>
                             <div id="analytics-curva-abc">
                                 <div style="padding:15px;text-align:center;color:#666;">Nenhum produto cadastrado para o período.</div>
                             </div>
@@ -1283,11 +1331,11 @@
                                 </div>
                                 <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0;">
                                     <label for="filtro-saidas-inicio">Data Início:</label>
-                                    <input type="date" id="filtro-saidas-inicio" value="2026-01-01">
+                                    <input type="date" id="filtro-saidas-inicio" value="">
                                 </div>
                                 <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0;">
                                     <label for="filtro-saidas-fim">Data Fim:</label>
-                                    <input type="date" id="filtro-saidas-fim" value="2026-08-28">
+                                    <input type="date" id="filtro-saidas-fim" value="">
                                 </div>
                                 <div style="margin-bottom:0;display:flex;gap:6px;">
                                     <button type="button" class="botao botao-primario" onclick="carregarNfeSaidas(1);">🔍 Filtrar</button>
@@ -3002,13 +3050,29 @@
         </div>
     </div>
 
+    <!-- Modal Debug NF-e -->
+    <div id="modal-debug-nfe" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:#fff; width:95%; max-width:1200px; max-height:90vh; overflow:auto; border-radius:8px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h2 style="margin:0; color:#1a1a1a;">🔍 Debug NF-e - Monitoramento Completo</h2>
+                <button onclick="document.getElementById('modal-debug-nfe').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer;">✕</button>
+            </div>
+            <div id="debug-conteudo">Carregando dados de debug...</div>
+        </div>
+    </div>
+
     <!-- Google Firebase & Cloud Firestore SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="/static/js/firebase-config.js"></script>
     <script src="/static/js/api.js"></script>
+    <script src="/static/js/constants.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/auth.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
+

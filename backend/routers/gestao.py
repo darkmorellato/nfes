@@ -396,7 +396,8 @@ async def backup_fiscal_nuvem():
 
 @router.post("/sync/run")
 async def disparar_sincronizacao(payload: dict = Body(default={})):
-    """Dispara sincronização manual com a SEFAZ para uma empresa específica ou para todas as cadastradas."""
+    """Dispara sincronização manual com a SEFAZ (NF-e entrada e saída) para uma empresa
+    específica ou para todas as cadastradas."""
     import asyncio
     cnpj = payload.get("cnpj")
     uf = payload.get("uf")
@@ -409,8 +410,119 @@ async def disparar_sincronizacao(payload: dict = Body(default={})):
 
 @router.get("/sync/status")
 async def status_sincronizacao():
-    """Retorna o status atual do robô de sincronização multi-empresa."""
+    """Retorna o status atual do robô de sincronização multi-empresa (NF-e entrada + saída)."""
     return get_sync_status()
+
+
+@router.post("/sync/config")
+async def configurar_sync(payload: dict = Body(...)):
+    """Configura o intervalo de sincronização automática (padrão: 30 minutos) e ativa/desativa o robô."""
+    interval_mins = payload.get("interval_mins")
+    enabled = payload.get("enabled")
+
+    if interval_mins is not None:
+        mins = max(5, int(interval_mins))  # mínimo 5 minutos
+        set_sync_state("auto_sync_interval_mins", str(mins))
+
+    if enabled is not None:
+        set_sync_state("auto_sync_enabled", "true" if enabled else "false")
+
+    return {
+        "success": True,
+        "auto_sync_interval_mins": int(get_sync_state("auto_sync_interval_mins", "30") or "30"),
+        "auto_sync_enabled": get_sync_state("auto_sync_enabled", "true") == "true",
+        "message": "Configuração de sincronização atualizada com sucesso.",
+    }
+
+
+@router.post("/sync/verificar-status")
+async def verificar_status_nfe():
+    """Verifica o status de NF-e de ENTRADA e SAÍDA na SEFAZ para todos os certificados.
+    Atualiza registros cancelados, inutilizados ou denegados imediatamente."""
+    import asyncio
+    from backend.services.sync_service import check_all_nfe_status
+    loop = asyncio.get_event_loop()
+    res = await loop.run_in_executor(None, check_all_nfe_status, 50)
+    return {"success": True, "data": res}
+
+
+@router.get("/debug/nfe-completo")
+async def debug_nfe_completo(
+    empresa_cnpj: Optional[str] = Query(None),
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    tipo_doc: Optional[int] = Query(None),
+):
+    """Endpoint de debug: retorna TODAS as NF-e sem paginação, com filtros opcionais,
+    para investigar e monitorar o que está ocorrendo com cada certificado/empresa."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        conditions = []
+        params: List[Any] = []
+
+        if tipo_doc is not None:
+            conditions.append("nfe_docs.tipo_doc = ?")
+            params.append(int(tipo_doc))
+        if empresa_cnpj:
+            emp_digits = "".join(c for c in str(empresa_cnpj) if c.isdigit())
+            if emp_digits:
+                conditions.append("(nfe_docs.empresa_cnpj = ? OR nfe_docs.emitente_cnpj LIKE ? OR nfe_docs.destinatario_cnpj LIKE ?)")
+                params.extend([emp_digits, f"%{emp_digits}%", f"%{emp_digits}%"])
+        if data_inicio:
+            conditions.append("nfe_docs.data_emissao >= ?")
+            params.append(data_inicio)
+        if data_fim:
+            conditions.append("nfe_docs.data_emissao <= ?")
+            params.append(data_fim + "T23:59:59")
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params_with_limit = params + [1000]
+
+        cursor.execute(f"""
+            SELECT chave, empresa_cnpj, tipo_doc, numero, serie, modelo,
+                   emitente_cnpj, emitente_nome, emitente_uf,
+                   destinatario_cnpj, destinatario_nome,
+                   data_emissao, data_autorizacao,
+                   valor_total, valor_icms, valor_pis, valor_cofins, valor_ipi,
+                   situacao, nsu, has_xml, created_at, updated_at, last_sefaz_check
+            FROM nfe_docs
+            {where_clause}
+            ORDER BY data_emissao DESC, created_at DESC
+            LIMIT ? OFFSET 0
+        """, params_with_limit)
+        docs = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute(f"SELECT COUNT(*) as total FROM nfe_docs {where_clause}", params)
+        total = cursor.fetchone()["total"]
+
+    certs = list_certificates_db()
+    sync_state = get_sync_state("last_sync_finish", "")
+
+    return {
+        "success": True,
+        "total": total,
+        "documentos": docs,
+        "certificados": [
+            {
+                "cnpj": c.get("cnpj"),
+                "razao_social": c.get("razao_social"),
+                "is_active": c.get("is_active"),
+                "last_nsu": c.get("last_nsu"),
+                "max_nsu": c.get("max_nsu"),
+                "last_sync_time": c.get("last_sync_time"),
+                "last_sync_status": c.get("last_sync_status"),
+                "valid_to": c.get("valid_to"),
+                "days_remaining": c.get("days_remaining"),
+                "status_validade": c.get("status_validade"),
+            }
+            for c in certs
+        ],
+        "sync": {
+            "last_sync_finish": sync_state,
+            "auto_sync_enabled": get_sync_state("auto_sync_enabled", "true") == "true",
+            "auto_sync_interval_mins": int(get_sync_state("auto_sync_interval_mins", "5") or "5"),
+        },
+    }
 
 
 @router.post("/sync/config")
@@ -420,8 +532,8 @@ async def configurar_sincronizacao(payload: dict = Body(default={})):
         set_sync_state("auto_sync_enabled", "true" if payload["auto_sync_enabled"] else "false")
     if "auto_sync_interval_mins" in payload:
         val = int(payload["auto_sync_interval_mins"])
-        if val < 5:
-            val = 5
+        if val < 1:
+            val = 1
         set_sync_state("auto_sync_interval_mins", str(val))
     return get_sync_status()
 

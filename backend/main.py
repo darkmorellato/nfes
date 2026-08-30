@@ -1,4 +1,5 @@
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -7,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import nfe, nfce, mdfe, nfse, cert, status, reports, danfe, gestao, emissao
+from backend.routers.auth import router as auth_router
 from backend.database import init_db
 from backend.config import settings, allowed_origins_list
 from backend.services.sync_service import start_background_sync, stop_background_sync
@@ -16,6 +18,11 @@ from backend.services.sync_service import start_background_sync, stop_background
 async def lifespan(app: FastAPI):
     # Inicializa banco de dados SQLite
     init_db()
+    # Define intervalo padrão de sincronização: 60 minutos / 1 hora (respeita janela oficial da SEFAZ)
+    from backend.database import get_sync_state, set_sync_state
+    set_sync_state("auto_sync_interval_mins", "60")
+    if not get_sync_state("auto_sync_enabled", ""):
+        set_sync_state("auto_sync_enabled", "true")
     # Inicia robô de sincronização em segundo plano
     start_background_sync()
     yield
@@ -50,7 +57,18 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+
+def _frontend_dir() -> str:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        cand = os.path.join(meipass, "frontend")
+        if os.path.isdir(cand):
+            return cand
+    return os.path.join(BASE_DIR, "frontend")
+
+
+FRONTEND_DIR = _frontend_dir()
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 app.include_router(status.router, prefix="/api", tags=["Status"])
@@ -63,6 +81,7 @@ app.include_router(nfe.router, prefix="/api/nfe", tags=["NF-e"])
 app.include_router(nfce.router, prefix="/api/nfce", tags=["NFC-e"])
 app.include_router(mdfe.router, prefix="/api/mdfe", tags=["MDF-e"])
 app.include_router(nfse.router, prefix="/api/nfse", tags=["NFS-e"])
+app.include_router(auth_router, prefix="/api", tags=["Autenticação"])
 
 
 @app.get("/", response_class=HTMLResponse)
