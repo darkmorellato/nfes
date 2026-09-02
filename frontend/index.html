@@ -26,6 +26,9 @@
                     🔍 <span>Busca Rápida</span> <span style="font-size:9.5px;padding:1px 5px;border:1px solid currentColor;border-radius:4px;opacity:0.8;font-family:monospace;">Ctrl+K</span>
                 </a>
                 <a href="#" onclick="toggleNotificationsModal(); return false;" id="btn-notif-bell" class="btn-header-pill">🔔 Alertas <span id="notif-unread-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;display:none;font-weight:bold;">0</span></a>
+                <a href="#" onclick="abrirModalAtualizacao(); return false;" id="btn-header-update" class="btn-header-pill" title="Atualizar sistema via GitHub" style="display:inline-flex;align-items:center;gap:5px;">
+                    🔄 <span>Atualizar</span> <span id="badge-update-available" style="display:none;background:#22c55e;color:#fff;font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:bold;">NOVO</span>
+                </a>
                 <a href="#" onclick="showSection('gestao-intercompany'); return false;" class="btn-header-pill">🔄 Intercompany</a>
                 <a href="#" onclick="showSection('certificado'); return false;" class="btn-header-pill">🏢 Certificados</a>
                 <a href="#" onclick="showSection('config'); return false;" class="btn-header-pill">⚙️ Configurações</a>
@@ -2220,6 +2223,7 @@
                     <div class="abasConsultaCompleta">
                         <div class="ajax__tab_header">
                             <div class="ajax__tab_tab active" data-tab="tab-cfg-conta">👤 Conta</div>
+                            <div class="ajax__tab_tab" data-tab="tab-cfg-atualizacao">🔄 Atualização do Sistema</div>
                             <div class="ajax__tab_tab" data-tab="tab-cfg-geral">⚙️ Geral & Alertas</div>
                             <div class="ajax__tab_tab" data-tab="tab-cfg-gaps">🔍 Auditoria de Saltos (Gaps)</div>
                             <div class="ajax__tab_tab" data-tab="tab-cfg-limpeza">🧹 Limpeza de NF-es de Teste</div>
@@ -2287,6 +2291,49 @@
                                         <div><b>Nome:</b> <span id="conta-nome-atual">—</span></div>
                                         <div><b>Perfil:</b> <span id="conta-perfil-atual">—</span></div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- SUBABA: ATUALIZAÇÃO DO SISTEMA -->
+                            <div id="tab-cfg-atualizacao" class="tab-content">
+                                <div class="painelSessao">
+                                    <div class="painelSessaoTitulo">🔄 Atualização do Sistema via Repositório GitHub</div>
+                                    <p style="font-size:13px;color:#475569;margin-bottom:15px;">
+                                        Mantenha o seu sistema sempre com as últimas correções fiscais, melhorias de layout do DANFE e recursos do Robô DF-e com apenas 1 clique.
+                                    </p>
+
+                                    <div id="painel-update-status-container" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:15px;">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                                            <div>
+                                                <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;">Status da Versão</div>
+                                                <div id="cfg-update-status-text" style="font-size:15px;font-weight:bold;color:#0f172a;margin-top:2px;">
+                                                    ⏳ Verificando...
+                                                </div>
+                                            </div>
+                                            <div style="display:flex;gap:8px;">
+                                                <button type="button" class="botao" onclick="verificarAtualizacoes(true)">
+                                                    🔍 Verificar no GitHub
+                                                </button>
+                                                <button type="button" id="btn-cfg-executar-update" class="botao botao-primario" onclick="executarAtualizacaoSistema()" style="background:#16a34a;border-color:#16a34a;color:#fff;display:none;">
+                                                    🚀 Atualizar Agora
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div id="cfg-update-details-box" style="margin-top:15px;padding-top:15px;border-top:1px solid #e2e8f0;font-size:12.5px;">
+                                            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;">
+                                                <div><b>Versão Local:</b> <span id="cfg-update-local-commit" style="font-family:monospace;">--</span></div>
+                                                <div><b>Data da Versão:</b> <span id="cfg-update-local-date">--</span></div>
+                                                <div><b>Branch:</b> <span id="cfg-update-branch" style="font-family:monospace;">--</span></div>
+                                            </div>
+                                            <div id="cfg-update-pending-section" style="display:none;margin-top:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;">
+                                                <div style="font-weight:bold;color:#1e40af;margin-bottom:6px;">Novidades da Nova Versão:</div>
+                                                <ul id="cfg-update-commits-list" style="margin:0;padding-left:20px;font-size:12px;color:#1e293b;"></ul>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="cfg-update-log-terminal" style="display:none;background:#0f172a;color:#38bdf8;font-family:monospace;font-size:12px;padding:12px;border-radius:6px;max-height:220px;overflow-y:auto;white-space:pre-wrap;margin-top:10px;"></div>
                                 </div>
                             </div>
 
@@ -3491,6 +3538,65 @@
                                 📥 Baixar Pacote ZIP (.zip)
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Atualização do Sistema (1-Clique) -->
+    <div id="modal-atualizacao-sistema" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10000; align-items:center; justify-content:center; backdrop-filter:blur(2px);">
+        <div style="background:var(--bg-surface, #fff); width:95%; max-width:640px; max-height:90vh; overflow:auto; border-radius:10px; padding:22px; box-shadow:0 15px 50px rgba(0,0,0,0.4); border:1px solid var(--border-main, #cbd5e1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:22px;">🔄</span>
+                    <h3 style="margin:0; font-size:17px; color:var(--text-main, #0f172a);">Atualização do Sistema (GitHub)</h3>
+                </div>
+                <button type="button" onclick="fecharModalAtualizacao()" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-muted, #64748b);">✕</button>
+            </div>
+
+            <div id="modal-update-loading" style="text-align:center; padding:30px 10px;">
+                <div style="font-size:32px; animation:spin 1s infinite linear; display:inline-block; margin-bottom:10px;">⏳</div>
+                <div style="font-size:14px; color:#475569; font-weight:600;">Consultando atualizações no GitHub...</div>
+            </div>
+
+            <div id="modal-update-content" style="display:none;">
+                <div id="modal-update-banner" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:14px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                        <div>
+                            <div style="font-size:11px; color:#64748b; font-weight:bold; text-transform:uppercase;">Status do Repositório</div>
+                            <div id="modal-update-status-title" style="font-size:15px; font-weight:bold; margin-top:2px;">--</div>
+                        </div>
+                        <span id="modal-update-badge" style="padding:3px 10px; border-radius:99px; font-size:11px; font-weight:bold;">--</span>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12.5px; background:#f1f5f9; padding:12px; border-radius:6px; margin-bottom:14px;">
+                    <div><b>Versão Local:</b> <span id="modal-update-local-hash" style="font-family:monospace; font-weight:bold;">--</span></div>
+                    <div><b>Data da Versão:</b> <span id="modal-update-local-date">--</span></div>
+                    <div><b>Branch:</b> <span id="modal-update-branch" style="font-family:monospace;">--</span></div>
+                    <div><b>Repositório:</b> <span id="modal-update-repo" style="font-size:11px; word-break:break-all;">--</span></div>
+                </div>
+
+                <div id="modal-update-pending-box" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:12px; margin-bottom:14px;">
+                    <div style="font-weight:bold; color:#1e40af; font-size:13px; margin-bottom:6px;">🚀 O que há de novo no GitHub:</div>
+                    <ul id="modal-update-commits" style="margin:0; padding-left:20px; font-size:12px; color:#1e293b; max-height:140px; overflow-y:auto;"></ul>
+                </div>
+
+                <div id="modal-update-terminal" style="display:none; background:#0f172a; color:#38bdf8; font-family:monospace; font-size:12px; padding:12px; border-radius:6px; max-height:200px; overflow-y:auto; white-space:pre-wrap; margin-bottom:14px;"></div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:15px; border-top:1px solid #e2e8f0; padding-top:14px;">
+                    <button type="button" class="botao" onclick="verificarAtualizacoes(true)">
+                        🔄 Checar Novamente
+                    </button>
+                    <div style="display:flex; gap:8px;">
+                        <button type="button" class="botao" onclick="fecharModalAtualizacao()">Fechar</button>
+                        <button type="button" id="btn-modal-executar-update" class="botao botao-primario" onclick="executarAtualizacaoSistema()" style="background:#16a34a; border-color:#16a34a; color:#fff; font-weight:bold;">
+                            🚀 Atualizar Agora (1-Clique)
+                        </button>
+                        <button type="button" id="btn-modal-recarregar" class="botao botao-primario" onclick="location.reload()" style="background:#2563eb; border-color:#2563eb; color:#fff; display:none;">
+                            🔄 Recarregar Página
+                        </button>
                     </div>
                 </div>
             </div>

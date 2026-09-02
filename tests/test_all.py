@@ -458,6 +458,14 @@ class TestNFEManager(unittest.TestCase):
         self.assertEqual(dados["identificacao"]["finalidade_texto"], "Devolução")
         self.assertIn("35260868926641000105550000003169911103169910", dados["identificacao"]["notas_referenciadas"])
 
+    def test_updater_service(self):
+        from backend.services.updater_service import check_update_status
+        status = check_update_status()
+        self.assertIn("is_git", status)
+        self.assertTrue(status["is_git"])
+        self.assertIn("has_update", status)
+        self.assertIn("local_commit", status)
+
 
 if __name__ == "__main__":
     unittest.main()

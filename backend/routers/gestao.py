@@ -1305,3 +1305,17 @@ async def rota_auditoria_gaps(
         logger.error(f"[Auditoria] Erro ao auditar gaps de numeração: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao auditar saltos de numeração: {str(e)}")
 
+
+@router.get("/sistema/atualizacao/status")
+async def rota_status_atualizacao():
+    """Verifica se há novas atualizações disponíveis no GitHub."""
+    from backend.services.updater_service import check_update_status
+    return check_update_status()
+
+
+@router.post("/sistema/atualizacao/executar")
+async def rota_executar_atualizacao():
+    """Executa a atualização automática do sistema via git pull + pip."""
+    from backend.services.updater_service import execute_update
+    return execute_update()
+
