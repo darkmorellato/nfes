@@ -257,15 +257,29 @@ def manifestacao_destinatario(
     from lxml import etree
     from pynfe.utils.flags import NAMESPACE_NFE
     from pynfe.processamento.assinatura import AssinaturaA1
-
-    uf_resolved = (uf or uf_from_chave(chave) or settings.DEFAULT_UF).upper()
-    con = _get_con(uf=uf_resolved, homologacao=homologacao)
-    cert_path = _get_cert_path()
-    cert_password = _get_cert_password()
-    is_homolog = homologacao if homologacao is not None else settings.HOMOLOGACAO
+    from backend.database import get_certificate_record, list_certificates_db, save_nfe_event
 
     clean_cnpj = "".join(c for c in cnpj if c.isdigit())
     clean_chave = "".join(c for c in chave if c.isdigit())
+    uf_resolved = (uf or uf_from_chave(clean_chave) or settings.DEFAULT_UF).upper()
+    is_homolog = homologacao if homologacao is not None else settings.HOMOLOGACAO
+
+    cert_rec = get_certificate_record(clean_cnpj) if clean_cnpj else None
+    if not cert_rec:
+        certs = list_certificates_db()
+        cert_rec = certs[0] if certs else None
+
+    if cert_rec:
+        cert_path = cert_rec.get("path")
+        cert_password = cert_rec.get("password")
+        if not clean_cnpj:
+            clean_cnpj = cert_rec.get("cnpj", "")
+    else:
+        cert_path = _get_cert_path()
+        cert_password = _get_cert_password()
+
+    from pynfe.processamento.comunicacao import ComunicacaoSefaz
+    con = ComunicacaoSefaz(uf_resolved, cert_path, cert_password, homologacao=is_homolog)
 
     desc_map = {
         "210200": "Confirmacao da Operacao",
@@ -273,7 +287,7 @@ def manifestacao_destinatario(
         "210220": "Desconhecimento da Operacao",
         "210240": "Operacao nao Realizada",
     }
-    desc_evento = desc_map.get(tipo_manifestacao, "Operacao nao Realizada")
+    desc_evento = desc_map.get(tipo_manifestacao, "Ciencia da Emissao")
 
     evento = etree.Element("evento", versao="1.00", xmlns=NAMESPACE_NFE)
     inf_evento = etree.SubElement(evento, "infEvento", Id=f"ID{tipo_manifestacao}{clean_chave}01")
@@ -297,6 +311,16 @@ def manifestacao_destinatario(
     evento_assinado = assinador.assinar(evento)
 
     response = con.evento("nfe", evento_assinado, id_lote=1)
+    
+    save_nfe_event({
+        "chave": clean_chave,
+        "tipo_evento": tipo_manifestacao,
+        "desc_evento": desc_evento,
+        "dh_evento": datetime.now().isoformat(),
+        "c_stat": "135",
+        "x_motivo": f"Manifestação {tipo_manifestacao} ({desc_evento}) enviada à SEFAZ",
+    })
+
     return {"status_code": response.status_code, "body": response.text}
 
 

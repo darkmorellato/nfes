@@ -297,9 +297,15 @@ def _parse_resumo_doc(root, root_tag: str, ns: dict) -> Dict[str, Any]:
             "data_emissao": dh_emi,
             "modelo": "55",
             "natureza": "",
+            "natureza_operacao": "",
             "tipo": "1",
+            "tipo_operacao": "1",
+            "tipo_operacao_texto": "1 - SAÍDA",
+            "finalidade": "1",
+            "finalidade_texto": "Normal",
             "ambiente": "1",
             "uf_emitente": chNFe[:2] if chNFe else "",
+            "notas_referenciadas": [],
         },
         "emitente": {
             "nome": nome_emit,
@@ -371,12 +377,14 @@ def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
     }
     if emit is not None:
         emitente["nome"] = emit.findtext("nfe:xNome", default="", namespaces=ns)
-        emitente["cnpj"] = emit.findtext("nfe:CNPJ", default="", namespaces=ns)
+        emitente["cnpj"] = _format_cnpj(emit.findtext("nfe:CNPJ", default="", namespaces=ns))
+        emitente["cpf"] = _format_cnpj(emit.findtext("nfe:CPF", default="", namespaces=ns))
         ender_emit = emit.find("nfe:enderEmit", ns)
         if ender_emit is not None:
             emitente["endereco"] = {
                 "logradouro": ender_emit.findtext("nfe:xLgr", default="", namespaces=ns),
                 "numero": ender_emit.findtext("nfe:nro", default="", namespaces=ns),
+                "complemento": ender_emit.findtext("nfe:xCpl", default="", namespaces=ns),
                 "bairro": ender_emit.findtext("nfe:xBairro", default="", namespaces=ns),
                 "municipio": ender_emit.findtext("nfe:xMun", default="", namespaces=ns),
                 "uf": ender_emit.findtext("nfe:UF", default="", namespaces=ns),
@@ -384,6 +392,9 @@ def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
                 "fone": _format_fone(ender_emit.findtext("nfe:fone", default="", namespaces=ns)),
             }
         emitente["ie"] = emit.findtext("nfe:IE", default="", namespaces=ns)
+        emitente["im"] = emit.findtext("nfe:IM", default="", namespaces=ns)
+        emitente["iest"] = emit.findtext("nfe:IEST", default="", namespaces=ns)
+        emitente["crt"] = emit.findtext("nfe:CRT", default="", namespaces=ns)
 
     destinatario: Dict[str, Any] = {}
     if dest is not None:
@@ -399,24 +410,45 @@ def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
             destinatario["endereco"] = {
                 "logradouro": ender_dest.findtext("nfe:xLgr", default="", namespaces=ns),
                 "numero": ender_dest.findtext("nfe:nro", default="", namespaces=ns),
+                "complemento": ender_dest.findtext("nfe:xCpl", default="", namespaces=ns),
                 "bairro": ender_dest.findtext("nfe:xBairro", default="", namespaces=ns),
                 "municipio": ender_dest.findtext("nfe:xMun", default="", namespaces=ns),
                 "uf": ender_dest.findtext("nfe:UF", default="", namespaces=ns),
                 "cep": _format_cep(ender_dest.findtext("nfe:CEP", default="", namespaces=ns)),
+                "fone": _format_fone(ender_dest.findtext("nfe:fone", default="", namespaces=ns)),
             }
 
     identificacao: Dict[str, Any] = {}
     if ide is not None:
+        nat_op = (ide.findtext("nfe:natOp", default="", namespaces=ns) or "").strip()
+        tp_nf = (ide.findtext("nfe:tpNF", default="", namespaces=ns) or "").strip()
+        fin_nfe = (ide.findtext("nfe:finNFe", default="1", namespaces=ns) or "1").strip()
+        
+        ref_nfes: list[str] = []
+        for ref_node in ide.findall(".//nfe:NFref", ns):
+            r_nfe = (ref_node.findtext("nfe:refNFe", default="", namespaces=ns) or "").strip()
+            if r_nfe:
+                ref_nfes.append(r_nfe)
+
+        fin_map = {"1": "Normal", "2": "Complementar", "3": "Ajuste", "4": "Devolução"}
+        tp_map = {"0": "0 - ENTRADA", "1": "1 - SAÍDA"}
+
         identificacao = {
-            "numero": ide.findtext("nfe:nNF", default="", namespaces=ns),
-            "serie": ide.findtext("nfe:serie", default="", namespaces=ns),
-            "data_emissao": ide.findtext("nfe:dhEmi", default="", namespaces=ns),
-            "data_saida": ide.findtext("nfe:dhSaiEnt", default="", namespaces=ns),
-            "modelo": ide.findtext("nfe:mod", default="", namespaces=ns),
-            "natureza": ide.findtext("nfe:natOp", default="", namespaces=ns),
-            "tipo": ide.findtext("nfe:tpNF", default="", namespaces=ns),
-            "ambiente": ide.findtext("nfe:tpAmb", default="", namespaces=ns),
-            "uf_emitente": ide.findtext("nfe:cUF", default="", namespaces=ns),
+            "numero": (ide.findtext("nfe:nNF", default="", namespaces=ns) or "").strip(),
+            "serie": (ide.findtext("nfe:serie", default="", namespaces=ns) or "").strip(),
+            "data_emissao": (ide.findtext("nfe:dhEmi", default="", namespaces=ns) or "").strip(),
+            "data_saida": (ide.findtext("nfe:dhSaiEnt", default="", namespaces=ns) or "").strip(),
+            "modelo": (ide.findtext("nfe:mod", default="", namespaces=ns) or "").strip(),
+            "natureza": nat_op,
+            "natureza_operacao": nat_op,
+            "tipo": tp_nf,
+            "tipo_operacao": tp_nf,
+            "tipo_operacao_texto": tp_map.get(tp_nf, "1 - SAÍDA" if tp_nf != "0" else "0 - ENTRADA"),
+            "finalidade": fin_nfe,
+            "finalidade_texto": fin_map.get(fin_nfe, "Normal"),
+            "ambiente": (ide.findtext("nfe:tpAmb", default="", namespaces=ns) or "").strip(),
+            "uf_emitente": (ide.findtext("nfe:cUF", default="", namespaces=ns) or "").strip(),
+            "notas_referenciadas": ref_nfes,
         }
 
     totais: Dict[str, Any] = {}
@@ -436,6 +468,7 @@ def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
                 "v_ipi": icms_tot.findtext("nfe:vIPI", default="0.00", namespaces=ns),
                 "v_pis": icms_tot.findtext("nfe:vPIS", default="0.00", namespaces=ns),
                 "v_cofins": icms_tot.findtext("nfe:vCOFINS", default="0.00", namespaces=ns),
+                "v_outro": icms_tot.findtext("nfe:vOutro", default="0.00", namespaces=ns),
                 "v_nf": icms_tot.findtext("nfe:vNF", default="0.00", namespaces=ns),
             }
 
@@ -456,17 +489,29 @@ def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
                 "quantidade": prod.findtext("nfe:qCom", default="0", namespaces=ns),
                 "valor_unitario": prod.findtext("nfe:vUnCom", default="0.00", namespaces=ns),
                 "valor_total": prod.findtext("nfe:vProd", default="0.00", namespaces=ns),
+                "valor_desconto": prod.findtext("nfe:vDesc", default="0.00", namespaces=ns),
+                "cst": "",
+                "v_bc_icms": "0.00",
+                "v_icms": "0.00",
+                "aliquota_icms": "0.00",
+                "v_ipi": "0.00",
+                "aliquota_ipi": "0.00",
             }
         if imposto is not None:
             icms = imposto.find(".//nfe:ICMS", ns)
             if icms is not None:
                 for child in icms:
-                    item["cst"] = child.findtext("nfe:orig", default="", namespaces=ns) + "/" + \
-                                  child.findtext("nfe:CST", default=child.findtext("nfe:CSOSN", default="", namespaces=ns), namespaces=ns)
-                    item["v_bc_icms"] = child.findtext("nfe:vBC", default="", namespaces=ns)
-                    item["v_icms"] = child.findtext("nfe:vICMS", default="", namespaces=ns)
-                    item["aliquota_icms"] = child.findtext("nfe:pICMS", default="", namespaces=ns)
+                    orig = child.findtext("nfe:orig", default="", namespaces=ns)
+                    cst_val = child.findtext("nfe:CST", default=child.findtext("nfe:CSOSN", default="", namespaces=ns), namespaces=ns)
+                    item["cst"] = f"{orig}/{cst_val}" if orig and cst_val else (orig or cst_val)
+                    item["v_bc_icms"] = child.findtext("nfe:vBC", default="0.00", namespaces=ns)
+                    item["v_icms"] = child.findtext("nfe:vICMS", default="0.00", namespaces=ns)
+                    item["aliquota_icms"] = child.findtext("nfe:pICMS", default="0.00", namespaces=ns)
                     break
+            ipi = imposto.find(".//nfe:IPI", ns)
+            if ipi is not None:
+                item["v_ipi"] = ipi.findtext(".//nfe:vIPI", default="0.00", namespaces=ns)
+                item["aliquota_ipi"] = ipi.findtext(".//nfe:pIPI", default="0.00", namespaces=ns)
         produtos.append(item)
 
     transportadora: Dict[str, Any] = {}
@@ -638,7 +683,15 @@ def build_synthetic_nfe_xml(doc: Dict[str, Any]) -> bytes:
     ide = etree.SubElement(inf_nfe, f"{{{ns}}}ide")
     etree.SubElement(ide, f"{{{ns}}}cUF").text = chave[:2] if len(chave) >= 2 else "35"
     etree.SubElement(ide, f"{{{ns}}}cNF").text = chave[35:43] if len(chave) == 44 else "00000001"
-    etree.SubElement(ide, f"{{{ns}}}natOp").text = "VENDA DE MERCADORIA / PRESTACAO"
+    
+    nat_op_val = (
+        doc.get("natureza_operacao")
+        or doc.get("natureza")
+        or doc.get("identificacao", {}).get("natureza_operacao")
+        or doc.get("identificacao", {}).get("natureza")
+        or "VENDA DE MERCADORIA / PRESTACAO"
+    )
+    etree.SubElement(ide, f"{{{ns}}}natOp").text = nat_op_val
     etree.SubElement(ide, f"{{{ns}}}mod").text = str(doc.get("modelo") or "55")
     etree.SubElement(ide, f"{{{ns}}}serie").text = str(doc.get("serie") or "1")
     etree.SubElement(ide, f"{{{ns}}}nNF").text = str(doc.get("numero") or "1")
@@ -649,15 +702,18 @@ def build_synthetic_nfe_xml(doc: Dict[str, Any]) -> bytes:
     elif not ("+" in d_emi or "-" in d_emi[10:] or "Z" in d_emi):
         d_emi = f"{d_emi}-03:00"
 
+    tp_nf_val = str(doc.get("tipo_doc") if doc.get("tipo_doc") is not None else doc.get("tipo", "1"))
     etree.SubElement(ide, f"{{{ns}}}dhEmi").text = d_emi
-    etree.SubElement(ide, f"{{{ns}}}tpNF").text = str(doc.get("tipo_doc", 1))
+    etree.SubElement(ide, f"{{{ns}}}tpNF").text = tp_nf_val
     etree.SubElement(ide, f"{{{ns}}}idDest").text = "1"
     etree.SubElement(ide, f"{{{ns}}}cMunFG").text = "3550308"
     etree.SubElement(ide, f"{{{ns}}}tpImp").text = "1"
     etree.SubElement(ide, f"{{{ns}}}tpEmis").text = "1"
     etree.SubElement(ide, f"{{{ns}}}cDV").text = chave[43] if len(chave) == 44 else "0"
     etree.SubElement(ide, f"{{{ns}}}tpAmb").text = "1"
-    etree.SubElement(ide, f"{{{ns}}}finNFe").text = "1"
+    
+    fin_val = str(doc.get("finalidade") or doc.get("finNFe") or ("4" if "DEVOLU" in nat_op_val.upper() else "1"))
+    etree.SubElement(ide, f"{{{ns}}}finNFe").text = fin_val
     etree.SubElement(ide, f"{{{ns}}}indFinal").text = "1"
     etree.SubElement(ide, f"{{{ns}}}indPres").text = "1"
     etree.SubElement(ide, f"{{{ns}}}procEmi").text = "0"

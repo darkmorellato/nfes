@@ -414,6 +414,50 @@ class TestNFEManager(unittest.TestCase):
             try: os.remove(pdf_p)
             except: pass
 
+    def test_danfe_parse_devolucao_nfe(self):
+        devolucao_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+            <protNFe><infProt><nProt>135263649838054</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo><chNFe>35260968926641000105550000003182771103182776</chNFe><dhRecbto>2026-09-02T15:17:55-03:00</dhRecbto></infProt></protNFe>
+            <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+                <infNFe Id="NFe35260968926641000105550000003182771103182776" versao="4.00">
+                    <ide>
+                        <cUF>35</cUF>
+                        <cNF>10318277</cNF>
+                        <natOp>DEVOLUCAO DE VENDA</natOp>
+                        <mod>55</mod>
+                        <serie>0</serie>
+                        <nNF>318277</nNF>
+                        <dhEmi>2026-09-02T15:17:00-03:00</dhEmi>
+                        <tpNF>0</tpNF>
+                        <idDest>1</idDest>
+                        <cMunFG>3550308</cMunFG>
+                        <tpImp>1</tpImp>
+                        <tpEmis>1</tpEmis>
+                        <cDV>6</cDV>
+                        <tpAmb>1</tpAmb>
+                        <finNFe>4</finNFe>
+                        <indFinal>0</indFinal>
+                        <indPres>9</indPres>
+                        <procEmi>0</procEmi>
+                        <verProc>1</verProc>
+                        <NFref><refNFe>35260868926641000105550000003169911103169910</refNFe></NFref>
+                    </ide>
+                    <emit><CNPJ>68926641000105</CNPJ><xNome>OPECO - OPERACOES COM. IMP. EXP. LTDA</xNome></emit>
+                    <dest><CNPJ>34511185000110</CNPJ><xNome>DARK MORELLATO</xNome></dest>
+                    <total><ICMSTot><vNF>268.90</vNF><vProd>268.90</vProd></ICMSTot></total>
+                </infNFe>
+            </NFe>
+        </nfeProc>"""
+        dados = parse_nfe_xml(devolucao_xml)
+        self.assertEqual(dados["identificacao"]["natureza_operacao"], "DEVOLUCAO DE VENDA")
+        self.assertEqual(dados["identificacao"]["natureza"], "DEVOLUCAO DE VENDA")
+        self.assertEqual(dados["identificacao"]["tipo"], "0")
+        self.assertEqual(dados["identificacao"]["tipo_operacao"], "0")
+        self.assertEqual(dados["identificacao"]["tipo_operacao_texto"], "0 - ENTRADA")
+        self.assertEqual(dados["identificacao"]["finalidade"], "4")
+        self.assertEqual(dados["identificacao"]["finalidade_texto"], "Devolução")
+        self.assertIn("35260868926641000105550000003169911103169910", dados["identificacao"]["notas_referenciadas"])
+
 
 if __name__ == "__main__":
     unittest.main()

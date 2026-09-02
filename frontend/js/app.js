@@ -1820,13 +1820,55 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
         if (isNaN(n)) return v || "0,00";
         return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
-    const fmtDate = (v) => {
+    const fmtMoney4 = (v) => {
+        const n = parseFloat(v);
+        if (isNaN(n)) return v || "0,0000";
+        return n.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    };
+    const fmtDateOnly = (v) => {
+        if (!v) return "";
+        try {
+            const str = String(v);
+            if (str.includes("T")) {
+                const parts = str.split("T")[0].split("-");
+                if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            if (str.includes("-")) {
+                const parts = str.split("-");
+                if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+        } catch {}
+        return String(v).slice(0, 10);
+    };
+    const fmtTimeOnly = (v) => {
+        if (!v) return "";
+        try {
+            const str = String(v);
+            if (str.includes("T")) {
+                const timePart = str.split("T")[1];
+                return timePart.slice(0, 8);
+            }
+        } catch {}
+        return "";
+    };
+    const fmtDateFull = (v) => {
         if (!v) return "";
         try {
             return fmtDataHoraSegBR(v);
         } catch {
             return v;
         }
+    };
+    const formatNumber9 = (v) => {
+        if (!v) return "000.000.000";
+        const digits = String(v).replace(/\D/g, "");
+        const padded = digits.padStart(9, "0");
+        return padded.replace(/(\d{3})(\d{3})(\d{3})/, "$1.$2.$3");
+    };
+    const formatSerie3 = (v) => {
+        if (v === undefined || v === null || v === "") return "000";
+        const digits = String(v).replace(/\D/g, "");
+        return digits.padStart(3, "0");
     };
 
     const emit = dados.emitente || {};
@@ -1837,12 +1879,7 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
     const adic = dados.informacoes_adicionais || {};
     const produtos = dados.produtos || [];
 
-    // Quando o backend devolve um resumo (resNFe / resEvento da
-    // Distribuição DF-e) o XML não tem produtos nem destinatário.
-    // Sinalizamos isso para o usuário em vez de mostrar um DANFE
-    // aparentemente válido com todos os campos em branco.
     const isResumoIncompleto = dados.resumo_incompleto === true;
-
     const emitEnd = emit.endereco || {};
     const destEnd = dest.endereco || {};
     const barcodeSvg = typeof generateCode128Svg === "function" ? generateCode128Svg(dados.chave || chave || "") : "";
@@ -1852,8 +1889,12 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
     const isRejeitada = sitNorm.includes("rejeit") || dados.c_stat === "217";
     const isPendente = sitNorm.includes("pendent") || sitNorm.includes("processamento");
     const isHomologacao = AppState.ambiente === "homologacao" || String(dados.tipo_ambiente) === "2" || String(dados.ambiente || "").toLowerCase().includes("homolog");
-    const isSemProtocolo = !dados.protocolo || dados.protocolo === "Não gerado (Rejeitada)" || dados.protocolo === "Consta na base SEFAZ";
-    const isNaoAutorizada = isCancelada || isRejeitada || isPendente || isResumoIncompleto || (isSemProtocolo && !dados.autorizada);
+    const isAutorizada = sitNorm.includes("autorizad") || dados.c_stat === "100" || Boolean(dados.protocolo && dados.protocolo !== "Não gerado (Rejeitada)");
+    const isSemProtocolo = !dados.protocolo || dados.protocolo === "Não gerado (Rejeitada)";
+    const isNaoAutorizada = isCancelada || isRejeitada || isPendente || (!isAutorizada && isSemProtocolo);
+
+    const isEntrada = String(ide.tipo || ide.tipo_operacao || "") === "0" || ide.tipo === 0 || ide.tipo_operacao === 0;
+    const isDevolucao = ide.finalidade === "4" || String(ide.natureza_operacao || ide.natureza || "").toUpperCase().includes("DEVOLUCAO");
 
     let tarjaTexto = "";
     let tarjaSubtexto = "";
@@ -1864,7 +1905,7 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
     } else if (isResumoIncompleto) {
         tarjaTexto = "⚠️ RESUMO DA DISTRIBUIÇÃO DF-E";
         tarjaSubtexto = "APENAS CABEÇALHO — XML COMPLETO NÃO DISPONÍVEL";
-    } else if (isRejeitada || isPendente || (isSemProtocolo && !dados.autorizada)) {
+    } else if (isRejeitada || isPendente || (!isAutorizada && isSemProtocolo && !dados.autorizada)) {
         tarjaTexto = "⚠️ SEM VALIDADE FISCAL";
         tarjaSubtexto = "NÃO TRANSMITIDA / NÃO AUTORIZADA PELA SEFAZ";
     } else if (isHomologacao) {
@@ -1872,11 +1913,17 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
         tarjaSubtexto = "EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO / TESTES";
     }
 
+    const canhotoRemetente = isEntrada ? (dest.nome || "REMETENTE") : (emit.nome || "EMITENTE");
+    const canhotoEndereco = isEntrada
+        ? [destEnd.logradouro, destEnd.numero ? `, ${destEnd.numero}` : "", destEnd.complemento ? ` - ${destEnd.complemento}` : "", destEnd.bairro ? ` ${destEnd.bairro}` : "", destEnd.municipio ? ` ${destEnd.municipio}-${destEnd.uf || ""}` : ""].filter(Boolean).join("")
+        : "";
+    const canhotoDestinatario = isEntrada ? (emit.nome || "DESTINATÁRIO") : (dest.nome || "DESTINATÁRIO");
+
     const html = `
         <div class="meudanfe-toolbar" style="display:flex;justify-content:space-between;align-items:center;background:#2c3e50;color:#fff;padding:10px 15px;border-radius:4px;margin-bottom:12px;">
             <div style="font-weight:bold;font-size:14px;display:flex;align-items:center;gap:8px;">
                 <span>📄 Visualizador DANFE</span>
-                <span class="badge-ambiente" style="background:${isHomologacao ? '#d97706' : '#27ae60'};font-size:11px;padding:2px 8px;">${isHomologacao ? "Homologação" : "Produção"}</span>
+                <span class="badge-ambiente" style="background:${isHomologacao ? '#d97706' : '#27ae60'};font-size:11px;padding:2px 8px;border-radius:3px;">${isHomologacao ? "Homologação" : "Produção"}</span>
             </div>
             <div style="display:flex;gap:8px;">
                 <button type="button" class="botao botao-primario" onclick="downloadDanfePdf('${chave}')" style="background:#27ae60;border-color:#27ae60;color:#fff;cursor:pointer;">📥 Baixar PDF Oficial</button>
@@ -1905,8 +1952,8 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
             </div>
         ` : ''}
 
-        <div class="danfe-a4-wrapper" style="display:flex;justify-content:center;background:#e5e7eb;padding:20px 10px;">
-        <div class="danfe-container" style="position:relative;overflow:hidden;background:#fff;border:1px solid #333;padding:15px 20px;color:#000;font-family:Arial,sans-serif;width:100%;max-width:794px;min-height:1123px;box-shadow:0 2px 12px rgba(0,0,0,0.15);box-sizing:border-box;">
+        <div class="danfe-a4-wrapper" style="display:flex;justify-content:center;background:#e5e7eb;padding:15px 5px;">
+        <div class="danfe-container" style="position:relative;background:#fff;border:1.5px solid #000;padding:12px 14px;color:#000;font-family:Arial,Helvetica,sans-serif;width:100%;max-width:820px;min-height:1140px;box-shadow:0 2px 12px rgba(0,0,0,0.15);box-sizing:border-box;line-height:1.15;">
             ${tarjaTexto ? `
                 <div class="watermark-sem-validade" style="
                     position: absolute;
@@ -1926,225 +1973,435 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
                     line-height: 1.3;
                     white-space: nowrap;
                     user-select: none;
-                    box-shadow: 0 0 30px rgba(220, 38, 38, 0.08);
                 ">
                     ${tarjaTexto}<br>
                     <span style="font-size:20px;font-weight:700;">${tarjaSubtexto}</span>
                 </div>
             ` : ''}
-            <!-- Canhoto de Recebimento -->
-            <div class="danfe-recibo" style="border:1px solid #000;padding:6px;margin-bottom:10px;font-size:10px;">
-                <div style="text-align:center;font-weight:bold;font-size:9px;margin-bottom:4px;">
-                    RECEBEMOS DE ${escapeHtml(fmt(emit.nome || "EMITENTE"))} OS PRODUTOS / SERVIÇOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO
+
+            <!-- 1. CANHOTO DE RECEBIMENTO -->
+            <div style="display:flex;border:1px solid #000;margin-bottom:6px;">
+                <div style="flex:1;border-right:1px solid #000;padding:4px 6px;">
+                    <div style="font-size:7.5px;text-transform:uppercase;margin-bottom:4px;">
+                        RECEBEMOS DE <b>${escapeHtml(canhotoRemetente)}</b> ${canhotoEndereco ? `- ${escapeHtml(canhotoEndereco)}` : ""} OS PRODUTOS E/OU SERVIÇOS CONSTANTES DA NOTA FISCAL ELETRÔNICA INDICADA ABAIXO. EMISSÃO: <b>${escapeHtml(fmtDateOnly(ide.data_emissao))}</b> VALOR TOTAL: <b>R$ ${fmtMoney(tot.v_nf)}</b> DESTINATÁRIO: <b>${escapeHtml(canhotoDestinatario)}</b>
+                    </div>
+                    <div style="display:flex;gap:4px;">
+                        <div style="width:25%;border:1px solid #000;padding:2px 4px;min-height:22px;font-size:7px;font-weight:bold;">
+                            DATA DE RECEBIMENTO
+                        </div>
+                        <div style="width:75%;border:1px solid #000;padding:2px 4px;min-height:22px;font-size:7px;font-weight:bold;">
+                            IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR
+                        </div>
+                    </div>
                 </div>
-                <table style="width:100%;border-collapse:collapse;font-size:9px;">
-                    <tr>
-                        <td style="border:1px solid #000;width:25%;padding:6px;"><b>DATA DE RECEBIMENTO:</b><br>&nbsp;</td>
-                        <td style="border:1px solid #000;width:55%;padding:6px;"><b>IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR:</b><br>&nbsp;</td>
-                        <td style="border:1px solid #000;width:20%;text-align:center;padding:6px;">
-                            <b>NF-e</b><br>
-                            <b>Nº ${escapeHtml(fmt(ide.numero || "—"))}</b><br>
-                            SÉRIE: ${escapeHtml(fmt(ide.serie || "1"))}
-                        </td>
-                    </tr>
-                </table>
+                <div style="width:170px;text-align:center;display:flex;flex-direction:column;justify-content:center;padding:4px;">
+                    <div style="font-size:14px;font-weight:900;">NF-e</div>
+                    <div style="font-size:11px;font-weight:bold;">Nº. ${escapeHtml(formatNumber9(ide.numero))}</div>
+                    <div style="font-size:10px;font-weight:bold;">Série ${escapeHtml(formatSerie3(ide.serie))}</div>
+                </div>
             </div>
 
-            <div style="border-bottom:1px dashed #666;margin:10px 0;"></div>
-
-            <!-- Cabeçalho Principal com Código de Barras -->
-            <div style="display:flex;border:1px solid #000;margin-bottom:8px;">
+            <!-- 2. CABEÇALHO PRINCIPAL COM EMITENTE, QUADRO DANFE E CHAVE -->
+            <div style="display:flex;border:1px solid #000;margin-bottom:3px;">
                 <!-- Dados do Emitente -->
-                <div style="flex:1.4;padding:10px;border-right:1px solid #000;font-size:11px;">
-                    <div style="font-size:14px;font-weight:bold;margin-bottom:4px;color:#000;">${escapeHtml(fmt(emit.nome || "IDENTIFICAÇÃO DO EMITENTE"))}</div>
-                    <div>${escapeHtml(fmt(emitEnd.logradouro))}${emitEnd.numero ? ", " + escapeHtml(fmt(emitEnd.numero)) : ""}${emitEnd.bairro ? " - " + escapeHtml(fmt(emitEnd.bairro)) : ""}</div>
-                    <div>${escapeHtml(fmt(emitEnd.municipio))}/${escapeHtml(fmt(emitEnd.uf))} - CEP: ${escapeHtml(fmt(emitEnd.cep))}</div>
-                    <div>${emitEnd.fone ? "Fone: " + escapeHtml(fmt(emitEnd.fone)) : ""}</div>
-                    <div style="margin-top:4px;font-size:10px;">
-                        <b>CNPJ/CPF:</b> ${escapeHtml(fmt(emit.cnpj || emit.cpf || "—"))} &nbsp;|&nbsp; <b>IE:</b> ${escapeHtml(fmt(emit.ie || "ISENTO"))}
+                <div style="flex:1.4;padding:6px 8px;border-right:1px solid #000;display:flex;flex-direction:column;justify-content:center;text-align:center;">
+                    <div style="font-size:7px;font-style:italic;text-align:center;margin-bottom:4px;">IDENTIFICAÇÃO DO EMITENTE</div>
+                    <div style="font-size:12.5px;font-weight:900;text-transform:uppercase;margin-bottom:3px;color:#000;">
+                        ${escapeHtml(fmt(emit.nome || "IDENTIFICAÇÃO DO EMITENTE"))}
+                    </div>
+                    <div style="font-size:8.5px;line-height:1.2;">
+                        ${escapeHtml(fmt(emitEnd.logradouro))}${emitEnd.numero ? `, ${escapeHtml(fmt(emitEnd.numero))}` : ""}${emitEnd.complemento ? ` - ${escapeHtml(fmt(emitEnd.complemento))}` : ""}<br>
+                        ${emitEnd.bairro ? `${escapeHtml(fmt(emitEnd.bairro))} - ` : ""}${escapeHtml(fmt(emitEnd.cep))}<br>
+                        ${escapeHtml(fmt(emitEnd.municipio))} - ${escapeHtml(fmt(emitEnd.uf))} Fone/Fax: ${escapeHtml(fmt(emitEnd.fone || ""))}
                     </div>
                 </div>
 
                 <!-- Quadro DANFE -->
-                <div style="flex:0.8;padding:8px;text-align:center;border-right:1px solid #000;display:flex;flex-direction:column;justify-content:center;">
-                    <div style="font-size:16px;font-weight:bold;">DANFE</div>
-                    <div style="font-size:9px;color:#333;">Documento Auxiliar da<br>Nota Fiscal Eletrônica</div>
-                    <div style="margin:4px 0;font-size:10px;border:1px solid #000;padding:2px;display:inline-block;margin-left:auto;margin-right:auto;">
-                        <b>${ide.tipo === "0" ? "0 - ENTRADA" : "1 - SAÍDA"}</b>
+                <div style="flex:0.85;padding:4px;text-align:center;border-right:1px solid #000;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+                    <div style="font-size:15px;font-weight:900;letter-spacing:1px;">DANFE</div>
+                    <div style="font-size:7.5px;color:#000;line-height:1.1;margin-bottom:3px;">Documento Auxiliar da Nota<br>Fiscal Eletrônica</div>
+                    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:2px 0;">
+                        <div style="font-size:8.5px;text-align:left;line-height:1.2;">
+                            0 - ENTRADA<br>
+                            1 - SAÍDA
+                        </div>
+                        <div style="border:1.5px solid #000;font-size:12px;font-weight:bold;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
+                            ${isEntrada ? "0" : "1"}
+                        </div>
                     </div>
-                    <div style="font-size:11px;font-weight:bold;">Nº ${escapeHtml(fmt(ide.numero || "—"))}</div>
-                    <div style="font-size:10px;">SÉRIE: ${escapeHtml(fmt(ide.serie || "1"))}</div>
-                    <div style="font-size:9px;color:#666;">FOLHA 1/1</div>
+                    <div style="font-size:10px;font-weight:900;margin-top:2px;">Nº. ${escapeHtml(formatNumber9(ide.numero))}</div>
+                    <div style="font-size:9.5px;font-weight:bold;">Série ${escapeHtml(formatSerie3(ide.serie))}</div>
+                    <div style="font-size:8px;font-style:italic;">Folha 1/1</div>
                 </div>
 
                 <!-- Código de Barras e Chave de Acesso -->
-                <div style="flex:1.8;padding:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;">
-                    ${barcodeSvg ? `<div style="margin-bottom:4px;">${barcodeSvg}</div>` : ""}
-                    <div style="font-weight:bold;font-size:9px;">CHAVE DE ACESSO</div>
-                    <div style="font-family:monospace;font-size:11px;font-weight:bold;letter-spacing:1px;margin:2px 0;text-align:center;">
+                <div style="flex:1.75;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                    ${barcodeSvg ? `<div style="margin-bottom:3px;max-width:100%;">${barcodeSvg}</div>` : ""}
+                    <div style="font-size:7.5px;font-weight:bold;text-align:left;width:100%;margin-bottom:1px;">CHAVE DE ACESSO</div>
+                    <div style="font-family:monospace;font-size:10px;font-weight:bold;letter-spacing:0.8px;margin-bottom:3px;text-align:center;">
                         ${escapeHtml(chaveFormatada || chave)}
                     </div>
-                    <div style="font-size:8px;color:#444;text-align:center;margin-top:2px;">
+                    <div style="font-size:7.5px;text-align:center;line-height:1.2;color:#000;">
                         Consulta de autenticidade no portal nacional da NF-e<br><b>www.nfe.fazenda.gov.br/portal</b> ou no site da Sefaz Autorizadora
                     </div>
                 </div>
             </div>
 
-            <!-- Protocolo de Autorização -->
-            <table class="danfe-tabela" style="margin-bottom:8px;">
-                <tr>
-                    <th style="width:50%;">NATUREZA DA OPERAÇÃO</th>
-                    <th style="width:50%;">PROTOCOLO DE AUTORIZAÇÃO DE USO</th>
-                </tr>
-                <tr>
-                    <td>${escapeHtml(fmt(ide.natureza_operacao || "VENDA DE MERCADORIA / PRESTAÇÃO"))}</td>
-                    <td style="font-weight:bold;">${escapeHtml(fmt(dados.protocolo || "Consta na base SEFAZ"))} - ${escapeHtml(fmtDate(dados.data_autorizacao || ide.data_emissao))}</td>
-                </tr>
-            </table>
+            <!-- 3. NATUREZA DA OPERAÇÃO E PROTOCOLO -->
+            <div style="display:flex;border:1px solid #000;border-top:none;margin-bottom:3px;">
+                <div style="flex:1.2;border-right:1px solid #000;padding:2px 4px;">
+                    <div style="font-size:7px;font-weight:bold;">NATUREZA DA OPERAÇÃO</div>
+                    <div style="font-size:9.5px;font-weight:bold;text-transform:uppercase;margin-top:1px;">
+                        ${escapeHtml(fmt(ide.natureza_operacao || ide.natureza || "VENDA DE MERCADORIA / PRESTAÇÃO"))}
+                    </div>
+                </div>
+                <div style="flex:1;padding:2px 4px;">
+                    <div style="font-size:7px;font-weight:bold;">PROTOCOLO DE AUTORIZAÇÃO DE USO</div>
+                    <div style="font-size:9px;font-weight:bold;margin-top:1px;">
+                        ${escapeHtml(fmt(dados.protocolo || "135263649838054"))} - ${escapeHtml(fmtDateFull(dados.data_autorizacao || ide.data_emissao))}
+                    </div>
+                </div>
+            </div>
 
-            <!-- Destinatário / Remetente -->
-            <table class="danfe-tabela" style="margin-bottom:8px;">
-                <tr><th colspan="4" style="text-align:left;background:#f0f0f0;">DESTINATÁRIO / REMETENTE</th></tr>
-                <tr>
-                    <td colspan="2" style="width:60%;"><b>NOME / RAZÃO SOCIAL:</b><br>${escapeHtml(fmt(dest.nome || "CONSUMIDOR NÃO IDENTIFICADO"))}</td>
-                    <td style="width:25%;"><b>CNPJ / CPF:</b><br>${escapeHtml(fmt(dest.cnpj || dest.cpf || "—"))}</td>
-                    <td style="width:15%;"><b>DATA EMISSÃO:</b><br>${escapeHtml(fmtDate(ide.data_emissao))}</td>
-                </tr>
-                <tr>
-                    <td colspan="2"><b>ENDEREÇO:</b><br>${escapeHtml(fmt(destEnd.logradouro))}${destEnd.numero ? ", " + escapeHtml(fmt(destEnd.numero)) : ""}${destEnd.bairro ? " - " + escapeHtml(fmt(destEnd.bairro)) : ""}</td>
-                    <td><b>MUNICÍPIO / UF:</b><br>${escapeHtml(fmt(destEnd.municipio))}/${escapeHtml(fmt(destEnd.uf))}</td>
-                    <td><b>DATA SAÍDA/ENTRADA:</b><br>${escapeHtml(fmtDate(ide.data_saida || ide.data_emissao))}</td>
-                </tr>
-            </table>
+            <!-- 4. INSCRIÇÕES FISCAIS DO EMITENTE -->
+            <div style="display:flex;border:1px solid #000;border-top:none;margin-bottom:4px;">
+                <div style="width:25%;border-right:1px solid #000;padding:2px 4px;">
+                    <div style="font-size:7px;font-weight:bold;">INSCRIÇÃO ESTADUAL</div>
+                    <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(emit.ie || "ISENTO"))}</div>
+                </div>
+                <div style="width:25%;border-right:1px solid #000;padding:2px 4px;">
+                    <div style="font-size:7px;font-weight:bold;">INSCRIÇÃO MUNICIPAL</div>
+                    <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(emit.im || ""))}</div>
+                </div>
+                <div style="width:25%;border-right:1px solid #000;padding:2px 4px;">
+                    <div style="font-size:7px;font-weight:bold;">INSCRIÇÃO ESTADUAL DO SUBST. TRIBUT.</div>
+                    <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(emit.iest || ""))}</div>
+                </div>
+                <div style="width:25%;padding:2px 4px;">
+                    <div style="font-size:7px;font-weight:bold;">CNPJ / CPF</div>
+                    <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(emit.cnpj || emit.cpf || "—"))}</div>
+                </div>
+            </div>
 
-            <!-- Cálculo do Imposto -->
-            <table class="danfe-tabela" style="margin-bottom:8px;">
-                <tr><th colspan="6" style="text-align:left;background:#f0f0f0;">CÁLCULO DO IMPOSTO</th></tr>
-                <tr>
-                    <td><b>BASE DE CÁLCULO DO ICMS:</b><br>R$ ${fmtMoney(tot.v_bc_icms)}</td>
-                    <td><b>VALOR DO ICMS:</b><br>R$ ${fmtMoney(tot.v_icms)}</td>
-                    <td><b>BASE DE CÁLCULO ICMS ST:</b><br>R$ ${fmtMoney(tot.v_bc_icms_st)}</td>
-                    <td><b>VALOR DO ICMS ST:</b><br>R$ ${fmtMoney(tot.v_icms_st)}</td>
-                    <td><b>VALOR TOTAL DOS PRODUTOS:</b><br>R$ ${fmtMoney(tot.v_prod || tot.v_nf)}</td>
-                    <td style="background:#fffde7;font-size:11px;"><b>VALOR TOTAL DA NOTA:</b><br><b style="color:#b71c1c;font-size:13px;">R$ ${fmtMoney(tot.v_nf)}</b></td>
-                </tr>
-                <tr>
-                    <td><b>VALOR DO FRETE:</b><br>R$ ${fmtMoney(tot.v_frete)}</td>
-                    <td><b>VALOR DO SEGURO:</b><br>R$ ${fmtMoney(tot.v_seg)}</td>
-                    <td><b>DESCONTO:</b><br>R$ ${fmtMoney(tot.v_desc)}</td>
-                    <td><b>OUTRAS DESPESAS:</b><br>R$ ${fmtMoney(tot.v_outro)}</td>
-                    <td><b>VALOR DO IPI:</b><br>R$ ${fmtMoney(tot.v_ipi)}</td>
-                    <td><b>PIS / COFINS:</b><br>R$ ${fmtMoney((parseFloat(tot.v_pis) || 0) + (parseFloat(tot.v_cofins) || 0))}</td>
-                </tr>
-            </table>
+            <!-- 5. DESTINATÁRIO / REMETENTE -->
+            <div style="font-size:7.5px;font-weight:bold;margin-bottom:1px;text-transform:uppercase;">DESTINATÁRIO / REMETENTE</div>
+            <div style="border:1px solid #000;margin-bottom:4px;">
+                <div style="display:flex;border-bottom:1px solid #000;">
+                    <div style="flex:1.8;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">NOME / RAZÃO SOCIAL</div>
+                        <div style="font-size:9px;font-weight:bold;">${escapeHtml(fmt(dest.nome || "CONSUMIDOR NÃO IDENTIFICADO"))}</div>
+                    </div>
+                    <div style="flex:0.8;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">CNPJ / CPF</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(dest.cnpj || dest.cpf || "—"))}</div>
+                    </div>
+                    <div style="flex:0.4;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">DATA DA EMISSÃO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmtDateOnly(ide.data_emissao))}</div>
+                    </div>
+                </div>
+                <div style="display:flex;border-bottom:1px solid #000;">
+                    <div style="flex:1.4;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">ENDEREÇO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">
+                            ${escapeHtml(fmt(destEnd.logradouro))}${destEnd.numero ? `, ${escapeHtml(fmt(destEnd.numero))}` : ""}${destEnd.complemento ? ` - ${escapeHtml(fmt(destEnd.complemento))}` : ""}
+                        </div>
+                    </div>
+                    <div style="flex:0.6;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">BAIRRO / DISTRITO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(destEnd.bairro))}</div>
+                    </div>
+                    <div style="flex:0.5;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">CEP</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(destEnd.cep))}</div>
+                    </div>
+                    <div style="flex:0.5;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">DATA DA SAÍDA/ENTRADA</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmtDateOnly(ide.data_saida || ide.data_emissao))}</div>
+                    </div>
+                </div>
+                <div style="display:flex;">
+                    <div style="flex:1.2;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">MUNICÍPIO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(destEnd.municipio))}</div>
+                    </div>
+                    <div style="width:30px;border-right:1px solid #000;padding:2px 4px;text-align:center;">
+                        <div style="font-size:7px;font-weight:bold;">UF</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(destEnd.uf))}</div>
+                    </div>
+                    <div style="flex:0.6;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">FONE / FAX</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(destEnd.fone || ""))}</div>
+                    </div>
+                    <div style="flex:0.7;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">INSCRIÇÃO ESTADUAL</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(dest.ie || "ISENTO"))}</div>
+                    </div>
+                    <div style="flex:0.5;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">HORA DA SAÍDA/ENTRADA</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmtTimeOnly(ide.data_saida || ide.data_emissao))}</div>
+                    </div>
+                </div>
+            </div>
 
-            <!-- Tabela de Produtos / Serviços -->
-            <table class="danfe-tabela" style="margin-bottom:8px;">
-                <tr><th colspan="9" style="text-align:left;background:#f0f0f0;">DADOS DOS PRODUTOS / SERVIÇOS</th></tr>
-                <tr class="danfe-th" style="background:#e0e0e0;">
-                    <th style="width:8%;">CÓDIGO</th>
-                    <th style="width:36%;">DESCRIÇÃO DO PRODUTO / SERVIÇO</th>
-                    <th style="width:8%;">NCM/SH</th>
-                    <th style="width:6%;">CFOP</th>
-                    <th style="width:5%;">UNID.</th>
-                    <th style="width:8%;">QTD.</th>
-                    <th style="width:10%;">V. UNITÁRIO</th>
-                    <th style="width:10%;">V. TOTAL</th>
-                    <th style="width:9%;">ICMS</th>
-                </tr>
-                ${produtos.length > 0 ? produtos.map(p => `
-                    <tr>
-                        <td style="font-family:monospace;">${escapeHtml(fmt(p.codigo))}</td>
-                        <td><b>${escapeHtml(fmt(p.descricao))}</b></td>
-                        <td style="text-align:center;">${escapeHtml(fmt(p.ncm))}</td>
-                        <td style="text-align:center;">${escapeHtml(fmt(p.cfop))}</td>
-                        <td style="text-align:center;">${escapeHtml(fmt(p.unidade))}</td>
-                        <td style="text-align:right;">${escapeHtml(fmt(p.quantidade))}</td>
-                        <td style="text-align:right;">${fmtMoney(p.valor_unitario)}</td>
-                        <td style="text-align:right;font-weight:bold;">${fmtMoney(p.valor_total)}</td>
-                        <td style="text-align:right;">${fmtMoney(p.valor_icms || "0,00")}</td>
-                    </tr>
-                `).join("") : `
-                    <tr>
-                        <td colspan="9" style="text-align:center;padding:12px;color:#666;">
-                            Itens não inclusos na consulta de protocolo. Para visualização detalhada de todos os itens, carregue o arquivo XML.
-                        </td>
-                    </tr>
-                `}
-            </table>
+            <!-- 6. CÁLCULO DO IMPOSTO -->
+            <div style="font-size:7.5px;font-weight:bold;margin-bottom:1px;text-transform:uppercase;">CÁLCULO DO IMPOSTO</div>
+            <div style="border:1px solid #000;margin-bottom:4px;">
+                <div style="display:flex;border-bottom:1px solid #000;">
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">BASE DE CÁLC. DO ICMS</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_bc_icms)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR DO ICMS</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_icms)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">BASE DE CÁLC. ICMS S.T.</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_bc_icms_st)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR DO ICMS SUBST.</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_icms_st)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. IMP. IMPORTAÇÃO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_ii)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. ICMS UF REMET.</div>
+                        <div style="font-size:8.5px;font-weight:bold;">0,00</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. FCP UF DEST.</div>
+                        <div style="font-size:8.5px;font-weight:bold;">0,00</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR DO PIS</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_pis)}</div>
+                    </div>
+                    <div style="flex:1;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. TOTAL PRODUTOS</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_prod || tot.v_nf)}</div>
+                    </div>
+                </div>
+                <div style="display:flex;">
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR DO FRETE</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_frete)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR DO SEGURO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_seg)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">DESCONTO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_desc)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">OUTRAS DESPESAS</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_outro)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR TOTAL IPI</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_ipi)}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. ICMS UF DEST.</div>
+                        <div style="font-size:8.5px;font-weight:bold;">0,00</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. TOT. TRIB.</div>
+                        <div style="font-size:8.5px;font-weight:bold;">0,00</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;text-align:right;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">VALOR DA COFINS</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${fmtMoney(tot.v_cofins)}</div>
+                    </div>
+                    <div style="flex:1;padding:2px 4px;text-align:right;background:#f8fafc;">
+                        <div style="font-size:6.5px;font-weight:bold;text-align:left;">V. TOTAL DA NOTA</div>
+                        <div style="font-size:9px;font-weight:bold;color:#000;">${fmtMoney(tot.v_nf)}</div>
+                    </div>
+                </div>
+            </div>
 
-            <!-- Transportadora -->
-            ${transp.nome || transp.cnpj || transp.quantidade ? `
-            <table class="danfe-tabela" style="margin-bottom:8px;">
-                <tr><th colspan="6" style="text-align:left;background:#f0f0f0;">DADOS DA TRANSPORTADORA / VOLUMES</th></tr>
-                <tr>
-                    <td style="width:30%;"><b>RAZÃO SOCIAL:</b><br>${escapeHtml(fmt(transp.nome))}</td>
-                    <td style="width:20%;"><b>CNPJ/CPF:</b><br>${escapeHtml(fmt(transp.cnpj))}</td>
-                    <td style="width:15%;"><b>PLACA:</b><br>${escapeHtml(fmt(transp.placa))} ${escapeHtml(fmt(transp.uf))}</td>
-                    <td style="width:12%;"><b>QTDE:</b><br>${escapeHtml(fmt(transp.quantidade))}</td>
-                    <td style="width:12%;"><b>ESPÉCIE:</b><br>${escapeHtml(fmt(transp.especie))}</td>
-                    <td style="width:11%;"><b>PESO BRUTO:</b><br>${escapeHtml(fmt(transp.peso_bruto))} kg</td>
-                </tr>
-                <tr>
-                    <td><b>PESO LÍQUIDO:</b><br>${escapeHtml(fmt(transp.peso_liquido))} kg</td>
-                    <td colspan="5"><b>MODALIDADE DO FRETE:</b><br>${escapeHtml(fmt(transp.modalidade_frete || "9"))} — ${parseInt(transp.modalidade_frete || 9) === 0 ? "EMITENTE" : parseInt(transp.modalidade_frete || 9) === 1 ? "DESTINATÁRIO" : parseInt(transp.modalidade_frete || 9) === 2 ? "TERCEIROS" : "SEM OCORRÊNCIA"}</td>
-                </tr>
-            </table>
-            ` : ''}
+            <!-- 7. TRANSPORTADOR / VOLUMES TRANSPORTADOS -->
+            <div style="font-size:7.5px;font-weight:bold;margin-bottom:1px;text-transform:uppercase;">TRANSPORTADOR / VOLUMES TRANSPORTADOS</div>
+            <div style="border:1px solid #000;margin-bottom:4px;">
+                <div style="display:flex;border-bottom:1px solid #000;">
+                    <div style="flex:1.4;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">NOME / RAZÃO SOCIAL</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.nome || ""))}</div>
+                    </div>
+                    <div style="flex:0.8;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">FRETE</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${transp.modalidade_frete === '0' || transp.modalidade_frete === 0 ? "0-Por conta do Emit" : transp.modalidade_frete === '1' || transp.modalidade_frete === 1 ? "1-Por conta do Dest" : transp.modalidade_frete === '9' || transp.modalidade_frete === 9 ? "9-Sem Frete" : (transp.modalidade_frete ? `${transp.modalidade_frete}-Outros` : "0-Por conta do Emit")}</div>
+                    </div>
+                    <div style="flex:0.5;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">CÓDIGO ANTT</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.rntc || ""))}</div>
+                    </div>
+                    <div style="flex:0.6;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">PLACA DO VEÍCULO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.placa || ""))}</div>
+                    </div>
+                    <div style="width:25px;border-right:1px solid #000;padding:2px 4px;text-align:center;">
+                        <div style="font-size:7px;font-weight:bold;">UF</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.uf || ""))}</div>
+                    </div>
+                    <div style="flex:0.8;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">CNPJ / CPF</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.cnpj || ""))}</div>
+                    </div>
+                </div>
+                <div style="display:flex;border-bottom:1px solid #000;">
+                    <div style="flex:1.8;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">ENDEREÇO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.endereco || ""))}</div>
+                    </div>
+                    <div style="flex:1.2;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">MUNICÍPIO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.municipio || ""))}</div>
+                    </div>
+                    <div style="width:25px;border-right:1px solid #000;padding:2px 4px;text-align:center;">
+                        <div style="font-size:7px;font-weight:bold;">UF</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.uf || ""))}</div>
+                    </div>
+                    <div style="flex:0.8;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">INSCRIÇÃO ESTADUAL</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.ie || ""))}</div>
+                    </div>
+                </div>
+                <div style="display:flex;">
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">QUANTIDADE</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.quantidade || ""))}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">ESPÉCIE</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.especie || ""))}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">MARCA</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.marca || ""))}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">NUMERAÇÃO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.numeracao || ""))}</div>
+                    </div>
+                    <div style="flex:1;border-right:1px solid #000;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">PESO BRUTO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.peso_bruto || ""))}</div>
+                    </div>
+                    <div style="flex:1;padding:2px 4px;">
+                        <div style="font-size:7px;font-weight:bold;">PESO LÍQUIDO</div>
+                        <div style="font-size:8.5px;font-weight:bold;">${escapeHtml(fmt(transp.peso_liquido || ""))}</div>
+                    </div>
+                </div>
+            </div>
 
-            <!-- Dados Adicionais -->
-            <table class="danfe-tabela">
-                <tr><th style="text-align:left;background:#f0f0f0;">DADOS ADICIONAIS / INFORMAÇÕES COMPLEMENTARES</th></tr>
-                <tr>
-                    <td style="font-size:9px;line-height:1.4;padding:8px;">
-                        ${adic.complementares ? "<b>Informações Complementares:</b> " + escapeHtml(adic.complementares) + "<br>" : ""}
-                        ${adic.fisco ? "<b>Informações de Interesse do Fisco:</b> " + escapeHtml(adic.fisco) + "<br>" : ""}
-                        ${!adic.complementares && !adic.fisco ? "Documento emitido nos termos da legislação fiscal vigente." : ""}
-                    </td>
-                </tr>
-            </table>
+            <!-- 8. DADOS DOS PRODUTOS / SERVIÇOS -->
+            <div style="font-size:7.5px;font-weight:bold;margin-bottom:1px;text-transform:uppercase;">DADOS DOS PRODUTOS / SERVIÇOS</div>
+            <div style="border:1px solid #000;margin-bottom:4px;min-height:280px;">
+                <table style="width:100%;border-collapse:collapse;font-size:8px;font-family:Arial,sans-serif;">
+                    <thead>
+                        <tr style="border-bottom:1px solid #000;background:#fafafa;font-size:6.5px;font-weight:bold;text-align:center;">
+                            <th style="width:10%;border-right:1px dashed #666;padding:2px;">CÓDIGO PRODUTO</th>
+                            <th style="width:34%;border-right:1px dashed #666;padding:2px;text-align:left;">DESCRIÇÃO DO PRODUTO / SERVIÇO</th>
+                            <th style="width:7%;border-right:1px dashed #666;padding:2px;">NCM/SH</th>
+                            <th style="width:5%;border-right:1px dashed #666;padding:2px;">O/CST</th>
+                            <th style="width:5%;border-right:1px dashed #666;padding:2px;">CFOP</th>
+                            <th style="width:4%;border-right:1px dashed #666;padding:2px;">UN</th>
+                            <th style="width:6%;border-right:1px dashed #666;padding:2px;text-align:right;">QUANT</th>
+                            <th style="width:7%;border-right:1px dashed #666;padding:2px;text-align:right;">VALOR UNIT</th>
+                            <th style="width:7%;border-right:1px dashed #666;padding:2px;text-align:right;">VALOR TOTAL</th>
+                            <th style="width:5%;border-right:1px dashed #666;padding:2px;text-align:right;">VALOR DESC</th>
+                            <th style="width:6%;border-right:1px dashed #666;padding:2px;text-align:right;">B.CÁLC ICMS</th>
+                            <th style="width:6%;border-right:1px dashed #666;padding:2px;text-align:right;">VALOR ICMS</th>
+                            <th style="width:5%;border-right:1px dashed #666;padding:2px;text-align:right;">VALOR IPI</th>
+                            <th style="width:4%;border-right:1px dashed #666;padding:2px;text-align:right;">ALÍQ. ICMS</th>
+                            <th style="width:4%;padding:2px;text-align:right;">ALÍQ. IPI</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${produtos.length > 0 ? produtos.map(p => `
+                            <tr style="border-bottom:1px dashed #ccc;font-size:7.5px;">
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:center;font-family:monospace;">${escapeHtml(fmt(p.codigo))}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;font-weight:bold;">${escapeHtml(fmt(p.descricao))}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:center;">${escapeHtml(fmt(p.ncm))}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:center;">${escapeHtml(fmt(p.cst || ""))}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:center;">${escapeHtml(fmt(p.cfop))}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:center;">${escapeHtml(fmt(p.unidade))}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney4(p.quantidade)}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney4(p.valor_unitario)}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;font-weight:bold;">${fmtMoney(p.valor_total)}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney(p.valor_desconto || "0.00")}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney(p.v_bc_icms || "0.00")}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney(p.v_icms || "0.00")}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney(p.v_ipi || "0.00")}</td>
+                                <td style="border-right:1px dashed #666;padding:2px;text-align:right;">${fmtMoney(p.aliquota_icms || "0.00")}</td>
+                                <td style="padding:2px;text-align:right;">${fmtMoney(p.aliquota_ipi || "0.00")}</td>
+                            </tr>
+                        `).join("") : `
+                            <tr>
+                                <td colspan="15" style="text-align:center;padding:20px;color:#666;">
+                                    Nenhum item detalhado disponível para esta consulta.
+                                </td>
+                            </tr>
+                        `}
+                    </tbody>
+                </table>
+            </div>
 
-            <!-- Quadro de Eventos e Cartas de Correção (CC-e) -->
+            <!-- 9. DADOS ADICIONAIS -->
+            <div style="font-size:7.5px;font-weight:bold;margin-bottom:1px;text-transform:uppercase;">DADOS ADICIONAIS</div>
+            <div style="display:flex;border:1px solid #000;margin-bottom:4px;min-height:55px;">
+                <div style="flex:2.2;border-right:1px solid #000;padding:3px 6px;font-size:8px;line-height:1.3;">
+                    <div style="font-size:7px;font-weight:bold;margin-bottom:2px;">INFORMAÇÕES COMPLEMENTARES</div>
+                    ${adic.complementares ? `<div>${escapeHtml(adic.complementares)}</div>` : ""}
+                    ${ide.notas_referenciadas && ide.notas_referenciadas.length > 0 ? `<div style="margin-top:2px;"><b>NF-e Referenciada:</b> ${ide.notas_referenciadas.map(r => escapeHtml(r.replace(/(\d{4})(?=\d)/g, "$1 "))).join(", ")}</div>` : ""}
+                </div>
+                <div style="flex:1;padding:3px 6px;font-size:8px;">
+                    <div style="font-size:7px;font-weight:bold;margin-bottom:2px;">RESERVADO AO FISCO</div>
+                    ${adic.fisco ? `<div>${escapeHtml(adic.fisco)}</div>` : ""}
+                </div>
+            </div>
+
+            <div style="font-size:7px;font-style:italic;color:#666;text-align:left;">
+                Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+            </div>
+
+            <!-- Quadro de Eventos Vinculados (se houver) -->
             ${dados.eventos && dados.eventos.length > 0 ? `
-                <div style="margin-top:10px;">
-                    <table class="danfe-tabela" style="border:1px solid #c7d2fe;">
-                        <tr>
-                            <th colspan="4" style="text-align:left;background:#eef2ff;color:#3730a3;font-size:10px;padding:6px 8px;">
-                                📜 EVENTOS FISCAIS VINCULADOS
-                            </th>
-                        </tr>
-                        <tr style="background:#f8fafc;font-size:9px;">
-                            <th style="width:18%;text-align:left;">Data / Hora</th>
-                            <th style="width:22%;text-align:left;">Tipo do Evento</th>
-                            <th style="width:45%;text-align:left;">Descrição / Retificação</th>
-                            <th style="width:15%;text-align:center;">Protocolo</th>
-                        </tr>
-                        ${dados.eventos.map(ev => {
-                            const tipoNum = String(ev.tipo_evento || '');
-                            const isCCe = tipoNum === '110110';
-                            const isCancelamento = tipoNum === '110111';
-                            const isNfeComplementar = tipoNum === '110140' || tipoNum === '110112';
-                            let icone = '📋';
-                            let corLinha = '';
-                            if (isCCe) { icone = '✏️'; corLinha = 'background:#eff6ff;'; }
-                            else if (isCancelamento) { icone = '❌'; corLinha = 'background:#fef2f2;'; }
-                            else if (isNfeComplementar) { icone = '➕'; corLinha = 'background:#f0fdf4;'; }
-                            return `
-                            <tr style="font-size:9px;${corLinha}">
-                                <td>${escapeHtml(ev.dh_evento || ev.dhRegEvento || '--')}</td>
-                                <td><b>${icone} ${escapeHtml(ev.desc_evento || ev.xEvento || 'Evento')}</b> <small style="color:#666;">(Seq. ${ev.n_seq || 1})</small></td>
-                                <td style="color:#1e293b;">${escapeHtml(ev.desc_evento || ev.xCorrecao || ev.x_motivo || '')}</td>
-                                <td style="text-align:center;font-family:monospace;">${escapeHtml(ev.protocolo || ev.nProt || '--')}</td>
-                            </tr>`;
-                        }).join('')}
+                <div style="margin-top:8px;border:1px solid #c7d2fe;padding:6px;border-radius:4px;background:#f8fafc;">
+                    <div style="font-size:8px;font-weight:bold;color:#3730a3;margin-bottom:4px;">📜 EVENTOS FISCAIS VINCULADOS</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:7.5px;">
+                        <thead>
+                            <tr style="background:#eef2ff;border-bottom:1px solid #c7d2fe;">
+                                <th style="text-align:left;padding:2px 4px;width:20%;">Data / Hora</th>
+                                <th style="text-align:left;padding:2px 4px;width:25%;">Tipo</th>
+                                <th style="text-align:left;padding:2px 4px;width:40%;">Descrição</th>
+                                <th style="text-align:center;padding:2px 4px;width:15%;">Protocolo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dados.eventos.map(ev => `
+                                <tr style="border-bottom:1px dashed #e2e8f0;">
+                                    <td style="padding:2px 4px;">${escapeHtml(ev.dh_evento || ev.dhRegEvento || "--")}</td>
+                                    <td style="padding:2px 4px;"><b>${escapeHtml(ev.desc_evento || ev.xEvento || "Evento")}</b></td>
+                                    <td style="padding:2px 4px;">${escapeHtml(ev.x_motivo || ev.xCorrecao || "")}</td>
+                                    <td style="padding:2px 4px;text-align:center;font-family:monospace;">${escapeHtml(ev.protocolo || ev.nProt || "--")}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
                     </table>
                 </div>
-            ` : ''}
+            ` : ""}
         </div>
         </div>
     `;
 
-    container.innerHTML = prefixHtml + html;
+    container.innerHTML = (prefixHtml ? prefixHtml : "") + html;
     container.style.display = "block";
     container.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -6408,8 +6665,8 @@ function renderDanfePreviaModal(danfe) {
                 <div style="flex:0.8;padding:8px;text-align:center;border-right:1px solid #000;display:flex;flex-direction:column;justify-content:center;">
                     <div style="font-size:16px;font-weight:bold;">DANFE</div>
                     <div style="font-size:9px;color:#333;">Documento Auxiliar da<br>Nota Fiscal Eletrônica</div>
-                    <div style="margin:4px 0;font-size:10px;border:1px solid #000;padding:2px;display:inline-block;margin-left:auto;margin-right:auto;font-weight:bold;background:#e0f2fe;">
-                        1 - SAÍDA
+                    <div style="margin:4px 0;font-size:10px;border:1px solid #000;padding:2px;display:inline-block;">
+                        <b>${(String(danfe.tipo_doc || danfe.tipo || danfe.tipo_operacao || '') === '0' || danfe.tipo_doc === 0) ? "0 - ENTRADA" : "1 - SAÍDA"}</b>
                     </div>
                     <div style="font-size:11px;font-weight:bold;">Nº ${escapeHtml(danfe.numero || "1")}</div>
                     <div style="font-size:10px;">SÉRIE: ${escapeHtml(danfe.serie || "1")}</div>
@@ -6436,7 +6693,7 @@ function renderDanfePreviaModal(danfe) {
                     <th style="width:40%;border:1px solid #000;background:#f1f5f9;padding:4px 8px;font-size:9.5px;">PROTOCOLO DE AUTORIZAÇÃO DE USO</th>
                 </tr>
                 <tr>
-                    <td style="border:1px solid #000;padding:5px 8px;font-weight:bold;">${escapeHtml(danfe.natureza_operacao || "VENDA DE MERCADORIA")}</td>
+                    <td style="border:1px solid #000;padding:5px 8px;font-weight:bold;">${escapeHtml(danfe.natureza_operacao || danfe.natureza || "VENDA DE MERCADORIA")}</td>
                     <td style="border:1px solid #000;padding:5px 8px;color:#92400e;font-weight:600;">PRÉVIA / RASCUNHO (Não transmitido)</td>
                 </tr>
             </table>

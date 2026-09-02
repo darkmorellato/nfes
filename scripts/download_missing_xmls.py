@@ -193,7 +193,6 @@ def main():
 
                 dados_doc["nsu"] = "0"
                 dados_doc["empresa_cnpj"] = emp_cnpj
-                dados_doc["tipo_doc"] = 1
                 dados_doc["data_autorizacao"] = dados_doc.get("data_autorizacao") or ""
                 dados_doc["situacao"] = dados_doc.get("situacao") or "Autorizada"
 

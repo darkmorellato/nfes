@@ -212,11 +212,47 @@ def run_sync_single_company(
                     if save_nfe_doc(doc, xml_raw=xml_raw, empresa_cnpj=clean_cnpj):
                         total_docs_saved += 1
                         dispatch_notification(
-                            title=f"Resumo de NF-e ({cert_rec.get('razao_social', clean_cnpj)})",
+                            title=f"Nova NF-e Identificada ({cert_rec.get('razao_social', clean_cnpj)})",
                             message=f"Emitente: {doc.get('nome_emitente', '')} | Valor: R$ {float(doc.get('valor_total', 0)):,.2f}",
                             tipo="nfe_nova",
                             chave=doc.get("chave"),
                         )
+                    # Auto-Ciência da Emissão para liberar o download do XML completo na SEFAZ
+                    chave_nfe = doc.get("chave")
+                    if chave_nfe and len(chave_nfe) == 44:
+                        try:
+                            con.manifestacao_destinatario(
+                                chave=chave_nfe,
+                                cnpj=clean_cnpj,
+                                tipo_evento="210210",
+                                justificativa="Ciencia da Emissao automatica para download do XML",
+                            )
+                            save_nfe_event({
+                                "chave": chave_nfe,
+                                "tipo_evento": "210210",
+                                "desc_evento": "Ciência da Emissão",
+                                "dh_evento": datetime.now().isoformat(),
+                                "c_stat": "135",
+                                "x_motivo": "Ciência da Emissão registrada na SEFAZ para liberação do XML",
+                            })
+                            # Tenta obter o XML completo imediatamente
+                            try:
+                                dl_resp = con.consulta_distribuicao(cnpj=clean_cnpj, chave=chave_nfe)
+                                if dl_resp.status_code == 200:
+                                    dl_parsed = parse_distribuicao_xml(dl_resp.text)
+                                    for dl_doc in dl_parsed.get("documentos", []):
+                                        dl_tag = dl_doc.get("tag", "")
+                                        dl_raw = dl_doc.get("xml_raw", "")
+                                        if dl_tag in ("nfeProc", "NFe") and dl_raw:
+                                            dl_dados = parse_nfe_xml(dl_raw.encode("utf-8"))
+                                            dl_dados["nsu"] = nsu_doc
+                                            dl_dados["empresa_cnpj"] = clean_cnpj
+                                            save_nfe_doc(dl_dados, xml_raw=dl_raw, empresa_cnpj=clean_cnpj)
+                                            break
+                            except Exception:
+                                pass
+                        except Exception as m_err:
+                            logger.debug(f"Auto-ciência na sync para {chave_nfe}: {m_err}")
                 elif tag in ("resEvento", "procEventoNFe", "evento"):
                     event_data = {
                         "chave": doc.get("chave"),

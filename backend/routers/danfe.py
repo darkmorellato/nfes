@@ -92,8 +92,12 @@ def _get_local_xml(chave: str) -> Optional[bytes]:
 
 
 def _fetch_nfe_from_sefaz(chave: str, uf: Optional[str] = None, homologacao: Optional[bool] = None) -> Optional[bytes]:
-    """Tenta obter o XML da NF-e na SEFAZ testando os certificados das 5 empresas cadastradas."""
+    """Tenta obter o XML da NF-e na SEFAZ testando os certificados das empresas cadastradas.
+    Se a NF-e foi recebida apenas como resumo (resNFe), envia automaticamente a Ciência da Emissão
+    (tpEvento 210210) para que a SEFAZ libere o download do XML completo (nfeProc).
+    """
     from pynfe.processamento.comunicacao import ComunicacaoSefaz
+    from backend.database import save_nfe_event
 
     chave_clean = "".join(c for c in chave if c.isdigit())
     uf = (uf or ("SP" if chave_clean.startswith("35") else "RJ" if chave_clean.startswith("33") else "SP")).upper()
@@ -115,9 +119,11 @@ def _fetch_nfe_from_sefaz(chave: str, uf: Optional[str] = None, homologacao: Opt
             dist_resp = con.consulta_distribuicao(cnpj=c["cnpj"], chave=chave_clean)
             if dist_resp.status_code == 200:
                 parsed_dist = parse_distribuicao_xml(dist_resp.text)
+                tem_apenas_resumo = False
                 for doc in parsed_dist.get("documentos", []):
+                    tag = doc.get("tag", "")
                     xml_raw = doc.get("xml_raw", "")
-                    if xml_raw and ("<infNFe" in xml_raw or "<nfeProc" in xml_raw or "<NFe" in xml_raw):
+                    if tag in ("nfeProc", "NFe") and xml_raw:
                         xml_bytes = xml_raw.encode("utf-8")
                         try:
                             dados = parse_nfe_xml(xml_bytes)
@@ -126,6 +132,44 @@ def _fetch_nfe_from_sefaz(chave: str, uf: Optional[str] = None, homologacao: Opt
                         except Exception:
                             pass
                         return xml_bytes
+                    elif tag == "resNFe":
+                        tem_apenas_resumo = True
+
+                # Se a SEFAZ devolveu apenas o resumo (resNFe), envia Ciência da Emissão para liberar o XML completo
+                if tem_apenas_resumo:
+                    try:
+                        m_resp = con.manifestacao_destinatario(
+                            chave=chave_clean,
+                            cnpj=c["cnpj"],
+                            tipo_evento="210210",
+                            justificativa="Ciencia da Emissao automatica para download do XML",
+                        )
+                        save_nfe_event({
+                            "chave": chave_clean,
+                            "tipo_evento": "210210",
+                            "desc_evento": "Ciência da Emissão",
+                            "dh_evento": datetime.now().isoformat(),
+                            "c_stat": "135",
+                            "x_motivo": "Ciência da Emissão registrada na SEFAZ para liberação do XML",
+                        })
+                        # Nova tentativa de consulta após ciência
+                        retry_resp = con.consulta_distribuicao(cnpj=c["cnpj"], chave=chave_clean)
+                        if retry_resp.status_code == 200:
+                            retry_parsed = parse_distribuicao_xml(retry_resp.text)
+                            for r_doc in retry_parsed.get("documentos", []):
+                                r_tag = r_doc.get("tag", "")
+                                r_raw = r_doc.get("xml_raw", "")
+                                if r_tag in ("nfeProc", "NFe") and r_raw:
+                                    r_bytes = r_raw.encode("utf-8")
+                                    try:
+                                        dados = parse_nfe_xml(r_bytes)
+                                        dados["empresa_cnpj"] = c["cnpj"]
+                                        save_nfe_doc(dados, xml_raw=r_raw, empresa_cnpj=c["cnpj"])
+                                    except Exception:
+                                        pass
+                                    return r_bytes
+                    except Exception:
+                        pass
 
             # 2. Tenta consulta_nota padrão de protocolo
             resp = con.consulta_nota("nfe", chave_clean)
@@ -157,7 +201,7 @@ async def parse_danfe(chave: str, uf: Optional[str] = Query(None), homologacao: 
     # 1. Primeiro verifica no banco de dados local e disco
     xml_bytes = _get_local_xml(chave_clean)
 
-    # 2. Se não estiver no banco, busca na SEFAZ usando o certificado da empresa correta
+    # 2. Se não estiver no banco, busca na SEFAZ usando o certificado da empresa correta (com auto-manifestação)
     if not xml_bytes:
         xml_bytes = _fetch_nfe_from_sefaz(chave_clean, uf=uf, homologacao=homologacao)
 
@@ -165,20 +209,34 @@ async def parse_danfe(chave: str, uf: Optional[str] = Query(None), homologacao: 
         # Se mesmo assim não achar o XML completo, monta a resposta com os dados parciais do banco
         doc = get_nfe_detail(chave_clean)
         if doc:
+            nat_op = (
+                doc.get("natureza_operacao")
+                or doc.get("natureza")
+                or ("DEVOLUCAO DE MERCADORIA" if "DEVOLU" in str(doc.get("emitente_nome", "")).upper() else "VENDA DE MERCADORIA / PRESTACAO")
+            )
+            tp_doc = str(doc.get("tipo_doc", 0) if doc.get("tipo_doc") is not None else 0)
+            fin_doc = "4" if "DEVOLU" in nat_op.upper() else "1"
             dados_fallback = {
                 "chave": doc["chave"],
                 "numero": doc.get("numero", ""),
                 "serie": doc.get("serie", "1"),
                 "modelo": doc.get("modelo", "55"),
                 "situacao": doc.get("situacao", "Autorizada"),
+                "protocolo": doc.get("numero", "") or "Consta na base SEFAZ",
                 "data_emissao": doc.get("data_emissao", ""),
+                "data_autorizacao": doc.get("data_autorizacao", "") or doc.get("data_emissao", ""),
                 "identificacao": {
                     "numero": doc.get("numero", ""),
                     "serie": doc.get("serie", "1"),
                     "modelo": doc.get("modelo", "55"),
                     "data_emissao": doc.get("data_emissao", ""),
-                    "natureza_operacao": "VENDA DE MERCADORIA / PRESTACAO",
-                    "tipo": "1",
+                    "natureza": nat_op,
+                    "natureza_operacao": nat_op,
+                    "tipo": tp_doc,
+                    "tipo_operacao": tp_doc,
+                    "tipo_operacao_texto": "0 - ENTRADA" if tp_doc == "0" else "1 - SAÍDA",
+                    "finalidade": fin_doc,
+                    "finalidade_texto": "Devolução" if fin_doc == "4" else "Normal",
                 },
                 "emitente": {
                     "cnpj": doc.get("emitente_cnpj", ""),
@@ -196,6 +254,7 @@ async def parse_danfe(chave: str, uf: Optional[str] = Query(None), homologacao: 
                     "v_pis": doc.get("valor_pis", 0.0),
                     "v_cofins": doc.get("valor_cofins", 0.0),
                     "v_ipi": doc.get("valor_ipi", 0.0),
+                    "v_outro": 0.0,
                 },
                 "produtos": doc.get("produtos", []),
             }
@@ -214,9 +273,8 @@ async def parse_danfe(chave: str, uf: Optional[str] = Query(None), homologacao: 
                 dados["eventos"] = doc["eventos"]
             if not dados.get("situacao") and doc.get("situacao"):
                 dados["situacao"] = doc["situacao"]
-        # Se o XML lido é um resumo (resNFe/resEvento), a UI precisa saber
-        # para mostrar a marca d'água "sem validade fiscal" e o aviso
-        # apropriado. A flag é setada em _parse_resumo_doc.
+            if not dados.get("protocolo") and doc.get("numero"):
+                dados["protocolo"] = doc.get("numero")
         return JSONResponse(content=dados)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar estrutura XML do DANFE: {str(e)}")
