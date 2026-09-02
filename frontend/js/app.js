@@ -9698,9 +9698,22 @@ async function verificarAtualizacoes(showFeedback = false) {
     }
 
     try {
-        const resp = await fetchWithAuth("/api/gestao/sistema/atualizacao/status");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        let data = null;
+        if (typeof apiGet === "function") {
+            const resp = await apiGet("/api/gestao/sistema/atualizacao/status");
+            if (!resp.success) {
+                throw new Error(resp.data?.error || resp.data?.detail || `HTTP ${resp.status}`);
+            }
+            data = resp.data;
+        } else {
+            const token = (typeof AuthSession !== "undefined" && AuthSession?.token) || "";
+            const headers = token ? { "X-Session-Token": token } : {};
+            const resp = await fetch("/api/gestao/sistema/atualizacao/status", { headers });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            data = await resp.json();
+        }
+
+        if (!data) throw new Error("Resposta vazia do servidor.");
 
         // 1. Atualiza Badge no Header
         if (badgeHeader) {
@@ -9794,7 +9807,7 @@ async function verificarAtualizacoes(showFeedback = false) {
             modalLoading.style.display = "none";
             modalContent.style.display = "block";
             const statusTitle = document.getElementById("modal-update-status-title");
-            if (statusTitle) statusTitle.textContent = "Não foi possível verificar atualizações no momento.";
+            if (statusTitle) statusTitle.textContent = `Não foi possível verificar atualizações: ${err.message}`;
         }
     }
 }
@@ -9836,14 +9849,27 @@ async function executarAtualizacaoSistema() {
     }
 
     try {
-        const resp = await fetchWithAuth("/api/gestao/sistema/atualizacao/executar", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" }
-        });
-        const data = await resp.json();
+        let data = null;
+        if (typeof apiPost === "function") {
+            const resp = await apiPost("/api/gestao/sistema/atualizacao/executar", {});
+            data = resp.data || {};
+            if (!resp.success && !data.message) {
+                data.message = data.error || data.detail || `HTTP ${resp.status}`;
+            }
+        } else {
+            const token = (typeof AuthSession !== "undefined" && AuthSession?.token) || "";
+            const headers = { "Content-Type": "application/json" };
+            if (token) headers["X-Session-Token"] = token;
+            const resp = await fetch("/api/gestao/sistema/atualizacao/executar", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({})
+            });
+            data = await resp.json();
+        }
 
-        if (terminalModal) terminalModal.textContent = data.logs || (data.success ? "Atualização concluída!" : "Erro ao atualizar.");
-        if (terminalCfg) terminalCfg.textContent = data.logs || (data.success ? "Atualização concluída!" : "Erro ao atualizar.");
+        if (terminalModal) terminalModal.textContent = data.logs || (data.success ? "Atualização concluída!" : `Erro: ${data.message}`);
+        if (terminalCfg) terminalCfg.textContent = data.logs || (data.success ? "Atualização concluída!" : `Erro: ${data.message}`);
 
         if (data.success) {
             if (typeof showToast === "function") showToast("🎉 Sistema atualizado com sucesso!", "success");
