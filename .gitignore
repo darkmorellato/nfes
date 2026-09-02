@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+.venv
+*.egg-info/
+dist/
+build/
+
+# Certificados (NUNCA commitar)
+certs/
+*.pfx
+*.p12
+*.pem
+cert_meta.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testes
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Empacotamento (AppImage / PyInstaller)
+*.AppImage
+appimagetool-x86_64.AppImage
+# Cache do Playwright (Chromium baixado para o bundle)
+.playwright/
+# Binários gerados DENTRO do AppDir (não versionar: ~90MB + ~390MB)
+AppDir/usr/bin/NFE-Manager
+AppDir/usr/lib/playwright/
+
+# Segredos / chaves persistidas
+.secret_key
+*.secret_key
+
+# Agentes e caches locais
+.jan/
+
+# Arquivos de desenvolvimento /scratch
+scratch/
+
+# Banco de dados local (dados sensíveis do usuário — nunca versionar)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.db.bak_*
+data/.secret_key
+data/danfe_pdfs/

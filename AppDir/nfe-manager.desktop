@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=NFE Manager
+Comment=Portal NF-e local (SEFAZ) sem Java
+Exec=NFE-Manager
+Icon=nfe-manager
+Type=Application
+Categories=Office;Finance;
+Terminal=false
+StartupWMClass=nfe-manager
