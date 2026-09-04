@@ -5,13 +5,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
 from backend.config import settings
-from backend.services.cert_service import (
-    get_cert_path,
-    get_cert_password,
-    get_cert_cnpj,
-    list_all_certificates,
-)
 from backend.services.danfe_service import parse_nfe_xml, parse_distribuicao_xml, parse_resumo_sefaz
+from backend.services.pynfe_service import manifestacao_destinatario
 from backend.services.notification_service import dispatch_notification
 from backend.database import (
     get_db_connection,
@@ -217,26 +212,24 @@ def run_sync_single_company(
                             tipo="nfe_nova",
                             chave=doc.get("chave"),
                         )
-                    # Auto-Ciência da Emissão para liberar o download do XML completo na SEFAZ
+                    # Auto-Ciência da Operação para liberar o download do XML completo na SEFAZ
                     chave_nfe = doc.get("chave")
                     if chave_nfe and len(chave_nfe) == 44:
                         try:
-                            con.manifestacao_destinatario(
+                            m_res = manifestacao_destinatario(
                                 chave=chave_nfe,
                                 cnpj=clean_cnpj,
-                                tipo_evento="210210",
-                                justificativa="Ciencia da Emissao automatica para download do XML",
+                                tipo_manifestacao="210210",
+                                justificativa="Ciencia da Operacao automatica para download do XML",
+                                uf=uf,
+                                homologacao=homolog,
                             )
-                            save_nfe_event({
-                                "chave": chave_nfe,
-                                "tipo_evento": "210210",
-                                "desc_evento": "Ciência da Emissão",
-                                "dh_evento": datetime.now().isoformat(),
-                                "c_stat": "135",
-                                "x_motivo": "Ciência da Emissão registrada na SEFAZ para liberação do XML",
-                            })
-                            # Tenta obter o XML completo imediatamente
+                            logger.info(f"Auto-ciência registrada na SEFAZ para chave {chave_nfe}: cStat {m_res.get('c_stat')}")
+
+                            # Tenta obter o XML completo imediatamente (com pequeno delay para replicação da SEFAZ)
                             try:
+                                import time
+                                time.sleep(0.6)
                                 dl_resp = con.consulta_distribuicao(cnpj=clean_cnpj, chave=chave_nfe)
                                 if dl_resp.status_code == 200:
                                     dl_parsed = parse_distribuicao_xml(dl_resp.text)
@@ -248,11 +241,12 @@ def run_sync_single_company(
                                             dl_dados["nsu"] = nsu_doc
                                             dl_dados["empresa_cnpj"] = clean_cnpj
                                             save_nfe_doc(dl_dados, xml_raw=dl_raw, empresa_cnpj=clean_cnpj)
+                                            logger.info(f"XML completo obtido imediatamente para {chave_nfe} após auto-ciência!")
                                             break
-                            except Exception:
-                                pass
+                            except Exception as dl_err:
+                                logger.debug(f"Download imediato pós-ciência para {chave_nfe}: {dl_err}")
                         except Exception as m_err:
-                            logger.debug(f"Auto-ciência na sync para {chave_nfe}: {m_err}")
+                            logger.warning(f"Auto-ciência na sync para {chave_nfe}: {m_err}")
                 elif tag in ("resEvento", "procEventoNFe", "evento"):
                     event_data = {
                         "chave": doc.get("chave"),
@@ -331,6 +325,53 @@ def run_sync_single_company(
             logger.error(f"Erro na sincronização de {clean_cnpj}: {loop_err}")
             break
 
+    # Auto-resolução de resumos (resNFe) pendentes de XML completo
+    if final_cstat != "656":
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT chave, nsu FROM nfe_docs
+                    WHERE empresa_cnpj = ?
+                      AND tipo_doc = 0
+                      AND (xml_raw LIKE '%<resNFe%' OR NOT EXISTS (SELECT 1 FROM nfe_items WHERE nfe_items.chave = nfe_docs.chave))
+                      AND situacao NOT IN ('Cancelada', 'Denegada')
+                    ORDER BY data_emissao DESC
+                    LIMIT 3
+                """, (clean_cnpj,))
+                resumos_pendentes = cursor.fetchall()
+
+            for rp in resumos_pendentes:
+                rp_chave = rp["chave"]
+                rp_nsu = rp["nsu"]
+                try:
+                    import time
+                    manifestacao_destinatario(
+                        chave=rp_chave,
+                        cnpj=clean_cnpj,
+                        tipo_manifestacao="210210",
+                        justificativa="Ciencia da Operacao automatica para download do XML",
+                        uf=uf,
+                        homologacao=homolog,
+                    )
+                    time.sleep(0.5)
+                    dl_resp = con.consulta_distribuicao(cnpj=clean_cnpj, chave=rp_chave)
+                    if dl_resp.status_code == 200:
+                        dl_parsed = parse_distribuicao_xml(dl_resp.text)
+                        for dl_doc in dl_parsed.get("documentos", []):
+                            if dl_doc.get("tag") in ("nfeProc", "NFe") and dl_doc.get("xml_raw"):
+                                dl_dados = parse_nfe_xml(dl_doc["xml_raw"].encode("utf-8"))
+                                dl_dados["nsu"] = rp_nsu
+                                dl_dados["empresa_cnpj"] = clean_cnpj
+                                save_nfe_doc(dl_dados, xml_raw=dl_doc["xml_raw"], empresa_cnpj=clean_cnpj)
+                                total_docs_saved += 1
+                                logger.info(f"[Auto-Cura] XML completo recuperado para NF-e {rp_chave}")
+                                break
+                except Exception as rec_err:
+                    logger.debug(f"[Auto-Cura] Tentativa para {rp_chave}: {rec_err}")
+        except Exception:
+            pass
+
     status_str = f"cStat {final_cstat} - {total_docs_saved} notas baixadas" if final_cstat else f"{total_docs_saved} notas baixadas"
     update_cert_sync_state(clean_cnpj, str(ult_nsu_retornado), str(max_nsu_retornado), status_str)
 
@@ -407,6 +448,13 @@ def get_sync_status() -> Dict[str, Any]:
     from backend.database import get_db_connection
 
     certs = list_certificates_db()
+    for c in certs:
+        block_info = get_sefaz_block_status(c["cnpj"])
+        c["blocked_by_sefaz"] = block_info.get("blocked", False)
+        c["retry_at"] = block_info.get("retry_at")
+        c["cooldown_minutes"] = block_info.get("cooldown_minutes", 0)
+        c["tentativa_656"] = block_info.get("tentativa", 0)
+
     first_nsu = certs[0].get("last_nsu", "0") if certs else "0"
     first_max = certs[0].get("max_nsu", "0") if certs else "0"
 
@@ -575,11 +623,27 @@ async def _background_worker_loop():
             interval_mins = int(get_sync_state("auto_sync_interval_mins", "60") or "60")
 
             if enabled:
-                logger.info(f"[Robô DF-e] Iniciando ciclo de sincronização para todos os certificados...")
+                logger.info("[Robô DF-e] Iniciando ciclo de sincronização para todos os certificados...")
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(None, run_sync_iteration)
                 logger.info("[Robô DF-e] Verificando status de NF-e de entrada e saída na SEFAZ...")
                 await loop.run_in_executor(None, check_all_nfe_status)
+
+                # Rotina diária de backup automático (executa se o último backup foi há mais de 24h)
+                try:
+                    last_backup_str = get_sync_state("last_backup_time", "")
+                    deve_fazer_backup = True
+                    if last_backup_str:
+                        last_b_dt = datetime.fromisoformat(last_backup_str)
+                        if datetime.now() - last_b_dt < timedelta(hours=24):
+                            deve_fazer_backup = False
+                    if deve_fazer_backup:
+                        logger.info("[Robô DF-e] Executando rotina diária de backup fiscal (DB + XMLs)...")
+                        from backend.services.backup_service import create_fiscal_backup
+                        await loop.run_in_executor(None, create_fiscal_backup, 30)
+                except Exception as bkp_err:
+                    logger.warning(f"[Robô DF-e] Rotina de backup automático falhou: {bkp_err}")
+
                 logger.info(f"[Robô DF-e] Ciclo concluído. Próxima execução em {interval_mins} minutos.")
 
             await asyncio.sleep(max(3600, interval_mins * 60))  # mínimo 60 minutos (1 hora)
@@ -740,15 +804,38 @@ def importar_saidas_por_chaves(
                         dados_doc = None
                     break
                 elif tag == "resNFe":
-                    # resNFe tem apenas resumo (sem XML completo). Usa o resumo.
-                    dados_doc = {
-                        "chave": doc.get("chave") or chave,
-                        "nome_emitente": doc.get("nome_emitente", ""),
-                        "cnpj_emitente": doc.get("cnpj_emitente", ""),
-                        "valor_total": doc.get("valor_total", 0),
-                        "data_emissao": doc.get("data_emissao", ""),
-                        "situacao": doc.get("situacao", "Autorizada"),
-                    }
+                    # resNFe tem apenas resumo (sem produtos). Envia auto-ciência e tenta obter o XML completo
+                    try:
+                        manifestacao_destinatario(
+                            chave=chave,
+                            cnpj=clean_cnpj,
+                            tipo_manifestacao="210210",
+                            justificativa="Ciencia da Operacao automatica para download do XML",
+                            uf=uf_chave,
+                            homologacao=homolog,
+                        )
+                        import time
+                        time.sleep(0.6)
+                        retry_resp = con.consulta_distribuicao(cnpj=clean_cnpj, chave=chave)
+                        if retry_resp.status_code == 200:
+                            retry_parsed = parse_distribuicao_xml(retry_resp.text)
+                            for r_doc in retry_parsed.get("documentos", []):
+                                if r_doc.get("tag") in ("nfeProc", "NFe") and r_doc.get("xml_raw"):
+                                    xml_encontrado = r_doc["xml_raw"]
+                                    dados_doc = parse_nfe_xml(xml_encontrado.encode("utf-8"))
+                                    break
+                    except Exception as m_err:
+                        logger.debug(f"Auto-manifestação na consulta de chave {chave}: {m_err}")
+
+                    if not dados_doc:
+                        dados_doc = {
+                            "chave": doc.get("chave") or chave,
+                            "nome_emitente": doc.get("nome_emitente", ""),
+                            "cnpj_emitente": doc.get("cnpj_emitente", ""),
+                            "valor_total": doc.get("valor_total", 0),
+                            "data_emissao": doc.get("data_emissao", ""),
+                            "situacao": doc.get("situacao", "Autorizada"),
+                        }
                     break
 
             if not dados_doc:

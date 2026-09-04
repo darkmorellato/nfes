@@ -1,9 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends, Request
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional
 from backend.services.cert_service import (
     save_certificate,
-    load_certificate,
     get_cert_info,
     list_all_certificates,
     delete_certificate as delete_cert_service,
@@ -62,17 +61,21 @@ async def load_certificate_endpoint(file: UploadFile = File(...), password: str 
 
 
 @router.delete("/certificado/{cnpj}")
-async def delete_single_certificate(cnpj: str):
+async def delete_single_certificate(cnpj: str, request: Request):
     """Exclui um certificado específico pelo CNPJ."""
     ok = delete_cert_service(cnpj)
     if not ok:
         raise HTTPException(status_code=404, detail="Certificado não encontrado")
+    from backend.services.audit_service import record_audit
+    record_audit("EXCLUSAO_CERTIFICADO", "CERTIFICADO", cnpj, detalhe=f"Certificado da empresa {cnpj} excluído", request=request)
     return {"status": "ok", "message": f"Certificado {cnpj} excluído com sucesso"}
 
 
 @router.delete("/certificado")
-async def delete_all_certificates():
+async def delete_all_certificates(request: Request):
     certs = list_all_certificates()
     for c in certs:
         delete_cert_service(c["cnpj"])
+    from backend.services.audit_service import record_audit
+    record_audit("EXCLUSAO_TODOS_CERTIFICADOS", "CERTIFICADO", "TODOS", detalhe=f"{len(certs)} certificados excluídos", request=request)
     return {"status": "ok", "message": "Todos os certificados foram removidos"}

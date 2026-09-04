@@ -1,12 +1,10 @@
 import os
-import io
-from typing import Optional, Dict, Any, List
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Body, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 from lxml import etree
 
 from backend.services.danfe_service import parse_nfe_xml, generate_danfe_pdf, parse_distribuicao_xml, build_synthetic_nfe_xml
-from backend.services.cert_service import get_cert_path, get_cert_password, list_all_certificates
 from backend.database import get_nfe_detail, save_nfe_doc, list_certificates_db, XML_STORAGE_DIR
 from backend.config import settings
 from backend.dependencies import require_session
@@ -97,7 +95,6 @@ def _fetch_nfe_from_sefaz(chave: str, uf: Optional[str] = None, homologacao: Opt
     (tpEvento 210210) para que a SEFAZ libere o download do XML completo (nfeProc).
     """
     from pynfe.processamento.comunicacao import ComunicacaoSefaz
-    from backend.database import save_nfe_event
 
     chave_clean = "".join(c for c in chave if c.isdigit())
     uf = (uf or ("SP" if chave_clean.startswith("35") else "RJ" if chave_clean.startswith("33") else "SP")).upper()
@@ -138,21 +135,18 @@ def _fetch_nfe_from_sefaz(chave: str, uf: Optional[str] = None, homologacao: Opt
                 # Se a SEFAZ devolveu apenas o resumo (resNFe), envia Ciência da Emissão para liberar o XML completo
                 if tem_apenas_resumo:
                     try:
-                        m_resp = con.manifestacao_destinatario(
+                        from backend.services.pynfe_service import manifestacao_destinatario
+                        manifestacao_destinatario(
                             chave=chave_clean,
                             cnpj=c["cnpj"],
-                            tipo_evento="210210",
-                            justificativa="Ciencia da Emissao automatica para download do XML",
+                            tipo_manifestacao="210210",
+                            justificativa="Ciencia da Operacao automatica para download do XML",
+                            uf=uf,
+                            homologacao=homolog,
                         )
-                        save_nfe_event({
-                            "chave": chave_clean,
-                            "tipo_evento": "210210",
-                            "desc_evento": "Ciência da Emissão",
-                            "dh_evento": datetime.now().isoformat(),
-                            "c_stat": "135",
-                            "x_motivo": "Ciência da Emissão registrada na SEFAZ para liberação do XML",
-                        })
-                        # Nova tentativa de consulta após ciência
+                        # Nova tentativa de consulta após ciência (com pequeno delay para o barramento SEFAZ)
+                        import time
+                        time.sleep(0.5)
                         retry_resp = con.consulta_distribuicao(cnpj=c["cnpj"], chave=chave_clean)
                         if retry_resp.status_code == 200:
                             retry_parsed = parse_distribuicao_xml(retry_resp.text)

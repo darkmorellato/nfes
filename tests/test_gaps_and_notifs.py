@@ -1,10 +1,10 @@
-import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.database.gap_detector import auditar_saltos_numeracao
 from backend.services.notification_service import gerar_link_whatsapp_alerta, get_whatsapp_alert_numbers
 from backend.routers.auth import _sessions
-import uuid, datetime
+import uuid
+import datetime
 
 token = str(uuid.uuid4())
 _sessions[token] = {'email': 'contasgeraljack@gmail.com', 'perfil': 'admin', 'expires_at': datetime.datetime.now() + datetime.timedelta(hours=1)}

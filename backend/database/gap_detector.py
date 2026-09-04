@@ -24,7 +24,7 @@ def auditar_saltos_numeracao(
     pelas empresas cadastradas e identifica lacunas/gaps na numeração.
     """
     clean_cnpj = ''.join(c for c in str(empresa_cnpj) if c.isdigit()) if empresa_cnpj else None
-    
+
     todas_empresas = list_certificates_db()
     if clean_cnpj:
         empresas_alvo = [e for e in todas_empresas if e['cnpj'] == clean_cnpj]

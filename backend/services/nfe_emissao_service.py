@@ -1,7 +1,6 @@
 import os
 import io
 import zipfile
-import random
 import logging
 from datetime import datetime, date, timedelta
 from decimal import Decimal
@@ -134,7 +133,7 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
     e transmite uma Nota Fiscal Eletrônica (Modelo 55 - Saída / Venda / Devolução) para a SEFAZ.
     """
     logger.info(f"[NFE EMISSAO] Iniciando emissão para CNPJ {payload.get('emitente_cnpj')} | destino={payload.get('destinatario', {}).get('razao_social')}")
-    
+
     emit_cnpj_clean = "".join(c for c in str(payload.get("emitente_cnpj", "")) if c.isdigit())
     if not emit_cnpj_clean:
         raise ValueError("CNPJ da empresa emitente é obrigatório.")
@@ -324,7 +323,7 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         cfop_sugerido = "6102" if is_interestadual else "5102"
         if "DEVOLUCAO" in natureza_op or finalidade == 4:
             cfop_sugerido = "6202" if is_interestadual else "5202"
-        
+
         cfop_inf = str(prod_raw.get("cfop") or cfop_sugerido).strip()
         # Validação cruzada CFOP x Destino Interestadual para prevenir Rejeição 525 da SEFAZ
         if is_interestadual and cfop_inf.startswith("5"):
@@ -1395,7 +1394,7 @@ def gerar_pacote_fechamento_contabil(
         )
 
     query += " ORDER BY emitente_cnpj ASC, CAST(numero AS INTEGER) ASC"
-    
+
     with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute(query, params)
@@ -1494,21 +1493,21 @@ def gerar_pacote_fechamento_contabil(
                 z.writestr(f"{prefix_emp}/Relatorio_Faturamento_{c_cnpj}_{competencia.replace('-', '_')}.csv", emp_csv_buf.getvalue().encode("utf-8-sig"))
 
         # Adiciona Resumo Executivo em TXT para a Contabilidade
-        txt_resumo = f"===========================================================\n"
+        txt_resumo = "===========================================================\n"
         txt_resumo += f"FECHAMENTO FISCAL & CONTÁBIL MENSAL - COMPETÊNCIA {mes:02d}/{ano}\n"
-        txt_resumo += f"===========================================================\n\n"
+        txt_resumo += "===========================================================\n\n"
         txt_resumo += f"Data de Geração: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
         txt_resumo += f"Total de NF-e Emitidas no Período: {len(rows)}\n"
         txt_resumo += f"  • Autorizadas: {total_autorizadas}\n"
         txt_resumo += f"  • Canceladas: {total_canceladas}\n"
         txt_resumo += f"Faturamento Total Consolidado: R$ {faturamento_total:,.2f}\n\n"
-        txt_resumo += f"DETALHAMENTO POR CERTIFICADO / EMPRESA:\n"
-        txt_resumo += f"-----------------------------------------------------------\n"
+        txt_resumo += "DETALHAMENTO POR CERTIFICADO / EMPRESA:\n"
+        txt_resumo += "-----------------------------------------------------------\n"
         for c_cnpj, emp_info in por_empresa.items():
             txt_resumo += f"• CNPJ: {c_cnpj} - {emp_info['nome']}\n"
             txt_resumo += f"  Qtd Notas: {emp_info['qtd']} | Faturamento: R$ {emp_info['valor']:,.2f}\n\n"
-        txt_resumo += f"-----------------------------------------------------------\n"
-        txt_resumo += f"Pacote gerado automaticamente pelo Sistema de Gestão Fiscal NF-e."
+        txt_resumo += "-----------------------------------------------------------\n"
+        txt_resumo += "Pacote gerado automaticamente pelo Sistema de Gestão Fiscal NF-e."
 
         z.writestr(f"RESUMO_EXECUTIVO_FECHAMENTO_{competencia.replace('-', '_')}.txt", txt_resumo.encode("utf-8-sig"))
 
@@ -1603,7 +1602,7 @@ def consultar_status_servico_sefaz(
             "uf": uf,
             "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         }
-    except Exception as e:
+    except Exception:
         elapsed_ms = int((time.time() - start_time) * 1000)
         # Se for erro transitório de SSL em ambiente local sem internet, simula resposta positiva
         return {

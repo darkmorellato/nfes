@@ -73,8 +73,21 @@ def _safe_firestore_auto_sync_cadastros() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicializa banco de dados SQLite
-    init_db()
+    # Executa migrações versionadas do Alembic e inicializa SQLite
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_ini_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "alembic.ini")
+        if os.path.exists(alembic_ini_path):
+            cfg = Config(alembic_ini_path)
+            command.upgrade(cfg, "head")
+            logger.info("[DB] Migrações Alembic aplicadas com sucesso (HEAD).")
+        else:
+            init_db()
+    except Exception as e:
+        logger.warning(f"[DB] Aviso ao rodar migrações Alembic: {e}")
+        init_db()
+
     # Define intervalo padrão de sincronização: 60 minutos / 1 hora (respeita janela oficial da SEFAZ)
     from backend.database import get_sync_state, set_sync_state
     set_sync_state("auto_sync_interval_mins", "60")
@@ -123,6 +136,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Correlation ID & Request Tracing middleware
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    import secrets
+    req_id = request.headers.get("X-Request-ID")
+    if not req_id:
+        req_id = f"req_{secrets.token_hex(6)}"
+    request.state.request_id = req_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
 # Security headers middleware
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -133,6 +158,21 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    from fastapi.responses import JSONResponse
+    req_id = getattr(request.state, "request_id", "req_unknown")
+    logger.error(f"[Erro Interno][{req_id}] {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erro interno do servidor.",
+            "request_id": req_id,
+        },
+        headers={"X-Request-ID": req_id},
+    )
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

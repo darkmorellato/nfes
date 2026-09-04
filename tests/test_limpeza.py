@@ -1,8 +1,6 @@
 import os
 import pytest
-from fastapi.testclient import TestClient
 
-from backend.main import app
 from backend.database import get_db_connection, XML_STORAGE_DIR
 from backend.database.limpeza import (
     preview_limpeza_nfes,

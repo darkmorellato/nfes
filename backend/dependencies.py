@@ -10,8 +10,6 @@ valida que o token existe e não expirou.
 """
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -26,6 +24,7 @@ def require_session(request: Request) -> dict:
     """
     Valida o header ``X-Session-Token`` e devolve os dados da sessão.
 
+    Verifica o cache em memória e o banco SQLite (para persistir pós-restart).
     Lança ``HTTP 401`` se o token estiver ausente, inválido ou expirado.
     """
     token = request.headers.get("X-Session-Token", "").strip()
@@ -35,11 +34,9 @@ def require_session(request: Request) -> dict:
             detail="Sessão não informada. Faça login em /api/auth/login.",
         )
 
-    sessions = _get_sessions()
-    session = sessions.get(token)
-    if not session or session.get("expires_at", datetime.min) < datetime.now():
-        # Limpa o token expirado do dict para não acumular lixo.
-        sessions.pop(token, None)
+    from backend.routers.auth import get_session
+    session = get_session(token)
+    if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessão inválida ou expirada. Faça login novamente.",
@@ -60,3 +57,43 @@ def require_admin(session: dict = Depends(require_session)) -> dict:
             detail="Operação restrita ao perfil administrador.",
         )
     return session
+
+
+class RateLimiter:
+    """Rate limiter por endereço IP utilizando janela deslizante em memória."""
+
+    def __init__(self, requests: int = 5, window_seconds: int = 60, action_name: str = "requisições"):
+        self.max_requests = requests
+        self.window_seconds = window_seconds
+        self.action_name = action_name
+        self._history: dict[str, list[float]] = {}
+
+    def __call__(self, request: Request) -> None:
+        import time
+        now = time.time()
+        # Identifica IP (considerando cabeçalho X-Forwarded-For caso haja proxy reverso)
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            ip = forwarded.split(",")[0].strip()
+        else:
+            ip = request.client.host if request.client else "127.0.0.1"
+
+        # Limpa entradas com mais de window_seconds
+        cutoff = now - self.window_seconds
+        timestamps = [t for t in self._history.get(ip, []) if t > cutoff]
+
+        if len(timestamps) >= self.max_requests:
+            oldest = timestamps[0]
+            retry_after = max(1, int(self.window_seconds - (now - oldest)))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Limite de {self.max_requests} {self.action_name} excedido. Tente novamente em {retry_after} segundos.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        timestamps.append(now)
+        self._history[ip] = timestamps
+
+
+# Instâncias reutilizáveis de rate limit
+login_rate_limiter = RateLimiter(requests=10, window_seconds=60, action_name="tentativas de login")

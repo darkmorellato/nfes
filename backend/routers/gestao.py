@@ -1,12 +1,11 @@
 import io
 import csv
-import zipfile
 import logging
 import re
-from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Form, Depends
-from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Form, Depends, Request
+from fastapi.responses import StreamingResponse, FileResponse
 
 logger = logging.getLogger("nfe.gestao")
 
@@ -29,7 +28,6 @@ from backend.database import (
     set_sync_state,
     get_sync_state,
     save_nfe_doc,
-    save_nfe_event,
     list_certificates_db,
     get_certificate_record,
     get_db_connection,
@@ -57,12 +55,12 @@ from backend.database import (
     auditar_saltos_numeracao,
 )
 from backend.services.sync_service import run_sync_iteration, get_sync_status, get_sefaz_block_status, importar_saidas_por_chaves
-from backend.services.danfe_service import generate_danfe_pdf, parse_nfe_xml
+from backend.services.danfe_service import parse_nfe_xml
 from backend.services.excel_service import generate_fiscal_excel
 from backend.services.notification_service import dispatch_notification
 from backend.services.label_service import generate_labels_html
 from backend.config import settings
-from backend.dependencies import require_session, require_admin
+from backend.dependencies import require_session
 
 router = APIRouter(
     prefix="/gestao",
@@ -353,25 +351,43 @@ async def manifestar_em_lote(payload: dict = Body(...)):
 
         try:
             uf = "SP" if ch_clean.startswith("35") else "RJ" if ch_clean.startswith("33") else "SP"
-            con = ComunicacaoSefaz(uf, cert_rec["path"], cert_rec["password"], homologacao=homologacao)
-            resp = con.manifestacao_destinatario(
+            from backend.services.pynfe_service import manifestacao_destinatario
+            from backend.services.danfe_service import parse_distribuicao_xml, parse_nfe_xml
+
+            resp = manifestacao_destinatario(
                 chave=ch_clean,
                 cnpj=cert_rec["cnpj"],
-                tipo_evento=tipo_evento,
+                tipo_manifestacao=tipo_evento,
                 justificativa=justificativa,
+                uf=uf,
+                homologacao=homologacao,
             )
 
-            # Registra evento local
-            save_nfe_event({
-                "chave": ch_clean,
-                "tipo_evento": tipo_evento,
-                "desc_evento": "Ciência da Emissão" if tipo_evento == "210210" else "Confirmação da Operação",
-                "dh_evento": datetime.now().isoformat(),
-                "c_stat": "135",
-                "x_motivo": f"Manifestação {tipo_evento} registrada na SEFAZ",
-            })
+            # Se manifestou com sucesso (ou já constava), tenta baixar o XML completo imediatamente
+            if resp.get("success") or resp.get("c_stat") in ("135", "136", "573"):
+                try:
+                    con = ComunicacaoSefaz(uf, cert_rec["path"], cert_rec["password"], homologacao=homologacao)
+                    dl_resp = con.consulta_distribuicao(cnpj=cert_rec["cnpj"], chave=ch_clean)
+                    if dl_resp.status_code == 200:
+                        dl_parsed = parse_distribuicao_xml(dl_resp.text)
+                        for dl_doc in dl_parsed.get("documentos", []):
+                            if dl_doc.get("tag") in ("nfeProc", "NFe") and dl_doc.get("xml_raw"):
+                                dl_dados = parse_nfe_xml(dl_doc["xml_raw"].encode("utf-8"))
+                                dl_dados["empresa_cnpj"] = cert_rec["cnpj"]
+                                save_nfe_doc(dl_dados, xml_raw=dl_doc["xml_raw"], empresa_cnpj=cert_rec["cnpj"])
+                                break
+                except Exception:
+                    pass
+
             sucessos += 1
-            resultados.append({"chave": ch_clean, "success": True, "empresa": cert_rec["razao_social"], "status": resp.status_code})
+            resultados.append({
+                "chave": ch_clean,
+                "success": True,
+                "empresa": cert_rec["razao_social"],
+                "status": resp.get("status_code", 200),
+                "c_stat": resp.get("c_stat", "135"),
+                "motivo": resp.get("x_motivo", ""),
+            })
         except Exception as err:
             resultados.append({"chave": ch_clean, "success": False, "motivo": str(err)})
 
@@ -448,32 +464,109 @@ async def salvar_config_notificacoes(payload: dict = Body(...)):
 
 
 @router.post("/cloud/backup")
-async def backup_fiscal_nuvem():
-    """Gera snapshot do banco SQLite e atualiza carimbo de retenção fiscal de 5 anos."""
-    now = datetime.now()
-    set_sync_state("last_cloud_backup_time", now.isoformat())
+async def backup_fiscal_nuvem(request: Request):
+    """Gera snapshot real do banco SQLite e compacta com os XMLs para retenção fiscal de 5 anos."""
+    from backend.services.backup_service import create_fiscal_backup
+    res = create_fiscal_backup(max_retention=30)
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=f"Falha ao gerar backup: {res.get('error')}")
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as tot, SUM(valor_total) as val FROM nfe_docs")
-        r = dict(cursor.fetchone())
-
-    backup_info = {
-        "timestamp": now.isoformat(),
-        "data_formatada": now.strftime("%d/%m/%Y %H:%M:%S"),
-        "total_notas": r["tot"],
-        "valor_total_protegido": r["val"],
-        "validade_retencao_legal": f"{now.year + 5}-12-31",
-        "status": "PROTEGIDO_5_ANOS",
-    }
-    set_sync_state("last_backup_meta", str(backup_info))
-
-    dispatch_notification("Backup Fiscal Concluído", f"Snapshot de {r['tot']} notas fiscais gravado com retenção garantida até {now.year + 5}.", tipo="info")
-
+    backup_info = res["backup"]
+    from backend.services.audit_service import record_audit
+    record_audit(
+        "BACKUP_FISCAL",
+        "SISTEMA",
+        backup_info["filename"],
+        detalhe=f"Backup de {backup_info['total_docs']} notas e {backup_info['xml_count']} XMLs gerado com sucesso",
+        request=request,
+    )
+    dispatch_notification(
+        "Backup Fiscal Concluído",
+        f"Arquivo {backup_info['filename']} gerado com {backup_info['xml_count']} XMLs e {backup_info['total_docs']} notas protegidas.",
+        tipo="info",
+    )
     return {
         "success": True,
         "backup": backup_info,
     }
+
+
+class AuditLogItem(BaseModel):
+    id: int
+    timestamp: str
+    usuario_email: Optional[str] = None
+    usuario_nome: Optional[str] = None
+    acao: str
+    entidade: str
+    entidade_id: Optional[str] = None
+    ip: Optional[str] = None
+    detalhe: Optional[str] = None
+    status: str = "SUCESSO"
+
+
+class AuditLogResponse(BaseModel):
+    total: int
+    page: int
+    limit: int
+    logs: List[AuditLogItem]
+
+
+class BackupItem(BaseModel):
+    filename: str
+    size_bytes: int
+    size_mb: float
+    created_at: str
+    created_at_br: str
+    sha256: Optional[str] = None
+
+
+class BackupListResponse(BaseModel):
+    success: bool
+    backups: List[BackupItem]
+
+
+@router.get("/auditoria", response_model=AuditLogResponse)
+async def consultar_trilha_auditoria(
+    acao: Optional[str] = Query(None),
+    entidade: Optional[str] = Query(None),
+    usuario_email: Optional[str] = Query(None),
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Consulta a trilha imutável de auditoria com paginação e filtros para conformidade fiscal."""
+    from backend.services.audit_service import list_audit_logs
+    return list_audit_logs(
+        acao=acao,
+        entidade=entidade,
+        usuario_email=usuario_email,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/backups", response_model=BackupListResponse)
+async def listar_backups_fiscais():
+    """Lista todos os backups fiscais existentes para download e auditoria."""
+    from backend.services.backup_service import list_backups
+    return {"success": True, "backups": list_backups()}
+
+
+@router.get("/backups/{filename}/download")
+async def download_backup_fiscal(filename: str):
+    """Download seguro de um arquivo de backup ZIP."""
+    from backend.services.backup_service import get_backup_path
+    path = get_backup_path(filename)
+    if not path:
+        raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado ou inválido.")
+    return FileResponse(
+        path=path,
+        filename=filename,
+        media_type="application/zip",
+    )
 
 
 @router.post("/sync/run")
@@ -969,7 +1062,6 @@ async def export_contas_a_pagar(
     status: Optional[str] = Query(None),
 ):
     """Exporta contas a pagar em CSV."""
-    import csv
     import io
     data = list_contas_a_pagar(empresa_cnpj=empresa_cnpj, filtro_status=status)
     output = io.StringIO()
@@ -994,7 +1086,6 @@ async def export_contas_a_receber(
     status: Optional[str] = Query(None),
 ):
     """Exporta contas a receber em CSV."""
-    import csv
     import io
     data = list_contas_a_receber(empresa_cnpj=empresa_cnpj, filtro_status=status)
     output = io.StringIO()
@@ -1016,7 +1107,6 @@ async def export_contas_a_receber(
 @router.get("/financeiro/dre/export")
 async def export_dre_tendencia(empresa_cnpj: Optional[str] = Query(None)):
     """Exporta a tendência do DRE em CSV."""
-    import csv
     import io
     data = get_dre_tendencia(empresa_cnpj=empresa_cnpj)
     output = io.StringIO()
@@ -1093,7 +1183,6 @@ async def status_pull_firestore():
     import json
     import urllib.request as _urlreq
 
-    from backend.config import settings
     from backend.services.firestore_service import _get_api_key, _get_project_id
     from backend.database import get_db_connection
 

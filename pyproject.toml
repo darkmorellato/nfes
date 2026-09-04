@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nfe-manager-backend"
+version = "1.0.0"
+description = "Backend FastAPI para interface de gerenciamento NF-e via PyNFe"
+requires-python = ">=3.9, <4"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".git",
+    "venv",
+    ".venv",
+    "__pycache__",
+    "data",
+    "AppDir",
+    "alembic/versions",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E722", "E402", "E701", "F841", "F401", "W291", "W293"]
+
+
+

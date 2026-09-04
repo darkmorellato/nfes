@@ -45,10 +45,19 @@ async function apiRequest(endpoint, options = {}) {
 
     try {
         const response = await fetch(url, config);
-        const data = await response.json();
-        return { success: response.ok, data, status: response.status };
+        const reqId = response.headers.get("X-Request-ID") || response.headers.get("x-request-id") || "";
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_) {
+            data = {};
+        }
+        if (reqId && typeof data === "object" && data !== null && !data.request_id) {
+            data.request_id = reqId;
+        }
+        return { success: response.ok, data, status: response.status, requestId: reqId };
     } catch (error) {
-        return { success: false, data: { error: error.message }, status: 0 };
+        return { success: false, data: { error: error.message }, status: 0, requestId: "" };
     }
 }
 

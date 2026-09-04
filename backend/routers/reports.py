@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 from typing import Optional
-import io
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 from backend.dependencies import require_session
 
 from backend.services.report_service import (

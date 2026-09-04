@@ -423,7 +423,7 @@ def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
         nat_op = (ide.findtext("nfe:natOp", default="", namespaces=ns) or "").strip()
         tp_nf = (ide.findtext("nfe:tpNF", default="", namespaces=ns) or "").strip()
         fin_nfe = (ide.findtext("nfe:finNFe", default="1", namespaces=ns) or "1").strip()
-        
+
         ref_nfes: list[str] = []
         for ref_node in ide.findall(".//nfe:NFref", ns):
             r_nfe = (ref_node.findtext("nfe:refNFe", default="", namespaces=ns) or "").strip()
@@ -637,8 +637,9 @@ def parse_distribuicao_xml(xml_text: str) -> Dict[str, Any]:
                     doc_info["cnpj_emitente"] = inner_root.findtext(".//nfe:CNPJ", default="", namespaces=ns) or inner_root.findtext(".//CNPJ", default="")
                     doc_info["nome_emitente"] = inner_root.findtext(".//nfe:xNome", default="", namespaces=ns) or inner_root.findtext(".//xNome", default="")
                     doc_info["valor_total"] = inner_root.findtext(".//nfe:vNF", default="0.00", namespaces=ns) or inner_root.findtext(".//vNF", default="0.00")
-                    doc_info["data_emissao"] = inner_root.findtext(".//nfe:dhEmi", default="", namespaces=ns) or inner_root.findtext(".//dhEmi", default="")
-                    doc_info["situacao"] = inner_root.findtext(".//nfe:cSitNFe", default="", namespaces=ns) or inner_root.findtext(".//cSitNFe", default="")
+                    raw_sit = (inner_root.findtext(".//nfe:cSitNFe", default="", namespaces=ns) or inner_root.findtext(".//cSitNFe", default="")).strip()
+                    sit_map = {"1": "Autorizada", "2": "Denegada", "3": "Cancelada"}
+                    doc_info["situacao"] = sit_map.get(raw_sit, raw_sit or "Autorizada")
                 elif tag_name == "resEvento":
                     doc_info["chave"] = inner_root.findtext(".//nfe:chNFe", default="", namespaces=ns) or inner_root.findtext(".//chNFe", default="")
                     doc_info["cnpj_emitente"] = inner_root.findtext(".//nfe:CNPJ", default="", namespaces=ns) or inner_root.findtext(".//CNPJ", default="")
@@ -683,7 +684,7 @@ def build_synthetic_nfe_xml(doc: Dict[str, Any]) -> bytes:
     ide = etree.SubElement(inf_nfe, f"{{{ns}}}ide")
     etree.SubElement(ide, f"{{{ns}}}cUF").text = chave[:2] if len(chave) >= 2 else "35"
     etree.SubElement(ide, f"{{{ns}}}cNF").text = chave[35:43] if len(chave) == 44 else "00000001"
-    
+
     nat_op_val = (
         doc.get("natureza_operacao")
         or doc.get("natureza")
@@ -711,7 +712,7 @@ def build_synthetic_nfe_xml(doc: Dict[str, Any]) -> bytes:
     etree.SubElement(ide, f"{{{ns}}}tpEmis").text = "1"
     etree.SubElement(ide, f"{{{ns}}}cDV").text = chave[43] if len(chave) == 44 else "0"
     etree.SubElement(ide, f"{{{ns}}}tpAmb").text = "1"
-    
+
     fin_val = str(doc.get("finalidade") or doc.get("finNFe") or ("4" if "DEVOLU" in nat_op_val.upper() else "1"))
     etree.SubElement(ide, f"{{{ns}}}finNFe").text = fin_val
     etree.SubElement(ide, f"{{{ns}}}indFinal").text = "1"
@@ -722,7 +723,7 @@ def build_synthetic_nfe_xml(doc: Dict[str, Any]) -> bytes:
     # 2. emit
     emit = etree.SubElement(inf_nfe, f"{{{ns}}}emit")
     cnpj_emit = re.sub(r"\D", "", str(doc.get("emitente_cnpj") or doc.get("empresa_cnpj") or "34511185000110"))
-    
+
     from backend.constants import nome_empresa
     nome_emit = doc.get("emitente_nome")
     if not nome_emit or nome_emit in ("EMPRESA EMITENTE", "MI PLACE", "FILIAL"):

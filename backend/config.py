@@ -3,7 +3,7 @@ import secrets
 import logging
 
 from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -89,11 +89,10 @@ class Settings(BaseSettings):
     FIREBASE_MEASUREMENT_ID: str = ""
     FIREBASE_ENABLED: bool = False
 
-    class Config:
-        # Resolve .env relativo ao BASE_DIR do projeto para não depender do cwd
-        # (o app_launcher sobe o uvicorn a partir do HOME do usuário).
-        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+        case_sensitive=False,
+    )
 
     @model_validator(mode="after")
     def _normalize_paths(self) -> "Settings":

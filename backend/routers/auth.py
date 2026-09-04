@@ -16,10 +16,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 
 from backend.database import get_db_connection
+from backend.dependencies import login_rate_limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
@@ -95,11 +96,96 @@ def _is_legacy_hash(stored: str) -> bool:
     return bool(stored) and not stored.startswith(_BCRYPT_PREFIX)
 
 
+def save_session(token: str, user: dict, hours: int = 8) -> dict:
+    """Salva a sessão na memória RAM e persiste na tabela user_sessions do SQLite."""
+    now = datetime.now()
+    exp = now + timedelta(hours=hours)
+    session_data = {
+        "email": user["email"],
+        "nome": user["nome"],
+        "perfil": user["perfil"],
+        "expires_at": exp,
+    }
+    _sessions[token] = session_data
+    try:
+        with get_db_connection() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO user_sessions (token, email, nome, perfil, expires_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (token, user["email"], user["nome"], user["perfil"], exp.isoformat(), now.isoformat()))
+            conn.commit()
+    except Exception as e:
+        logger.debug(f"[Auth] Falha ao persistir sessão no SQLite: {e}")
+    return session_data
+
+
+def get_session(token: str) -> Optional[dict]:
+    """Recupera a sessão pelo token, conferindo primeiro na RAM e depois no SQLite."""
+    if not token:
+        return None
+    now = datetime.now()
+
+    # 1. Verifica cache em memória
+    session = _sessions.get(token)
+    if session:
+        if session.get("expires_at", datetime.min) > now:
+            return session
+        else:
+            _sessions.pop(token, None)
+            delete_session(token)
+            return None
+
+    # 2. Busca no SQLite se não estiver na memória (ex: após restart do serviço)
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT email, nome, perfil, expires_at FROM user_sessions WHERE token = ?", (token,))
+            row = cursor.fetchone()
+            if row:
+                exp_dt = datetime.fromisoformat(row["expires_at"])
+                if exp_dt > now:
+                    session = {
+                        "email": row["email"],
+                        "nome": row["nome"],
+                        "perfil": row["perfil"],
+                        "expires_at": exp_dt,
+                    }
+                    _sessions[token] = session
+                    return session
+                else:
+                    cursor.execute("DELETE FROM user_sessions WHERE token = ?", (token,))
+                    conn.commit()
+    except Exception as e:
+        logger.debug(f"[Auth] Erro ao recuperar sessão do SQLite: {e}")
+
+    return None
+
+
+def delete_session(token: str) -> None:
+    """Invalida a sessão na memória e no banco SQLite."""
+    if not token:
+        return
+    _sessions.pop(token, None)
+    try:
+        with get_db_connection() as conn:
+            conn.execute("DELETE FROM user_sessions WHERE token = ?", (token,))
+            conn.commit()
+    except Exception:
+        pass
+
+
 def _limpar_sessoes_expiradas():
+    """Remove tokens expirados da memória e da tabela user_sessions."""
     agora = datetime.now()
-    expiradas = [t for t, s in _sessions.items() if s["expires_at"] < agora]
+    expiradas = [t for t, s in list(_sessions.items()) if s.get("expires_at", datetime.min) < agora]
     for t in expiradas:
-        del _sessions[t]
+        _sessions.pop(t, None)
+    try:
+        with get_db_connection() as conn:
+            conn.execute("DELETE FROM user_sessions WHERE expires_at < ?", (agora.isoformat(),))
+            conn.commit()
+    except Exception:
+        pass
 
 
 class LoginRequest(BaseModel):
@@ -117,7 +203,7 @@ class LoginResponse(BaseModel):
     message: str = ""
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse, dependencies=[Depends(login_rate_limiter)])
 async def login(req: LoginRequest, request: Request):
     """
     Autentica o usuário consultando a tabela 'usuarios' do SQLite local.
@@ -148,6 +234,11 @@ async def login(req: LoginRequest, request: Request):
 
     if not _verify_password(senha, user["senha_hash"]):
         logger.warning(f"[Auth] Senha incorreta para: {email}")
+        from backend.services.audit_service import record_audit
+        record_audit(
+            "LOGIN_FALHOU", "USUARIO", email, usuario_email=email, usuario_nome=user["nome"],
+            detalhe="Tentativa de login com senha incorreta", status="FALHA", request=request
+        )
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
 
     # Migração silenciosa: se o hash armazenado ainda é legado (SHA-256),
@@ -166,15 +257,16 @@ async def login(req: LoginRequest, request: Request):
         except Exception as e:
             logger.warning(f"[Auth] Falha ao migrar hash para bcrypt: {e}")
 
-    # Gera token de sessão seguro (expira em 8 horas)
+    # Gera token de sessão seguro (expira em 8 horas e persiste no SQLite)
     _limpar_sessoes_expiradas()
     token = secrets.token_urlsafe(32)
-    _sessions[token] = {
-        "email": user["email"],
-        "nome": user["nome"],
-        "perfil": user["perfil"],
-        "expires_at": datetime.now() + timedelta(hours=8),
-    }
+    save_session(token, user, hours=8)
+
+    from backend.services.audit_service import record_audit
+    record_audit(
+        "LOGIN", "USUARIO", email, usuario_email=email, usuario_nome=user["nome"],
+        detalhe="Autenticação bem-sucedida", request=request
+    )
 
     logger.info(f"[Auth] Login bem-sucedido: {email} ({user['nome']})")
 
@@ -191,19 +283,23 @@ async def login(req: LoginRequest, request: Request):
 
 @router.post("/logout")
 async def logout(request: Request):
-    """Invalida o token de sessão."""
-    token = request.headers.get("X-Session-Token", "")
-    if token and token in _sessions:
-        del _sessions[token]
+    """Invalida o token de sessão na memória e no SQLite e registra auditoria."""
+    token = request.headers.get("X-Session-Token", "").strip()
+    if token:
+        sess = get_session(token)
+        if sess:
+            from backend.services.audit_service import record_audit
+            record_audit("LOGOUT", "USUARIO", sess["email"], usuario_email=sess["email"], usuario_nome=sess["nome"], detalhe="Logout voluntário", request=request)
+        delete_session(token)
     return {"success": True, "message": "Logout realizado."}
 
 
 @router.get("/me")
 async def me(request: Request):
-    """Retorna os dados do usuário autenticado (valida o token)."""
-    token = request.headers.get("X-Session-Token", "")
-    session = _sessions.get(token)
-    if not session or session["expires_at"] < datetime.now():
+    """Retorna os dados do usuário autenticado (valida o token via get_session)."""
+    token = request.headers.get("X-Session-Token", "").strip()
+    session = get_session(token)
+    if not session:
         raise HTTPException(status_code=401, detail="Sessão inválida ou expirada.")
     return {
         "email": session["email"],

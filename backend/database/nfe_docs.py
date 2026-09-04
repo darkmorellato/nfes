@@ -74,6 +74,28 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
     situacao = doc.get("situacao") or "Autorizada"
     nsu = str(doc.get("nsu") or "0")
 
+    # Extração inteligente a partir da chave de 44 dígitos se faltarem dados (como em resNFe)
+    if not numero and len(chave) == 44:
+        try:
+            numero = str(int(chave[25:34]))
+        except Exception:
+            pass
+    if not serie and len(chave) == 44:
+        try:
+            serie = str(int(chave[22:25]))
+        except Exception:
+            pass
+    if not emit_cnpj and len(chave) == 44:
+        emit_cnpj = chave[6:20]
+
+    # Em nota de Entrada (tipo_doc == 0), se destinatário estiver vazio,
+    # o titular da nota é a própria empresa receptora (empresa_cnpj)
+    if tipo_doc == 0 and not dest_cnpj and empresa_digits:
+        dest_cnpj = empresa_digits
+        dest_rec = get_certificate_record(empresa_digits)
+        if dest_rec and not dest_nome:
+            dest_nome = dest_rec.get("razao_social", "")
+
     def _to_float(v):
         if not v:
             return 0.0
@@ -121,7 +143,11 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
                 situacao = COALESCE(NULLIF(excluded.situacao, ''), nfe_docs.situacao),
                 nsu = CASE WHEN excluded.nsu != '0' THEN excluded.nsu ELSE nfe_docs.nsu END,
                 has_xml = CASE WHEN excluded.has_xml = 1 THEN 1 ELSE nfe_docs.has_xml END,
-                xml_raw = COALESCE(NULLIF(excluded.xml_raw, ''), nfe_docs.xml_raw),
+                xml_raw = CASE
+                    WHEN excluded.xml_raw LIKE '%<nfeProc%' OR excluded.xml_raw LIKE '%<NFe%' THEN excluded.xml_raw
+                    WHEN nfe_docs.xml_raw LIKE '%<nfeProc%' OR nfe_docs.xml_raw LIKE '%<NFe%' THEN nfe_docs.xml_raw
+                    ELSE COALESCE(NULLIF(excluded.xml_raw, ''), nfe_docs.xml_raw)
+                END,
                 updated_at = excluded.updated_at
         """, (
             chave, empresa_cnpj, numero, serie, modelo, tipo_doc, emit_cnpj, emit_nome, emit_uf,

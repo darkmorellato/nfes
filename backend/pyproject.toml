@@ -11,3 +11,21 @@ requires-python = ">=3.9, <4"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".git",
+    "venv",
+    ".venv",
+    "__pycache__",
+    "data",
+    "AppDir",
+    "alembic/versions",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E722"]
+

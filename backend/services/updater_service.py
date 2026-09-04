@@ -115,7 +115,7 @@ def check_update_status() -> Dict[str, Any]:
             text=True,
             timeout=5,
         )
-        
+
         if remote_head_proc.returncode != 0 and branch != "main":
             remote_target = "origin/main"
             remote_head_proc = subprocess.run(
@@ -218,7 +218,7 @@ def execute_update() -> Dict[str, Any]:
             text=True,
             timeout=60,
         )
-        
+
         if pull_proc.returncode != 0:
             # Fallback para git pull padrão
             pull_proc = subprocess.run(
@@ -245,7 +245,7 @@ def execute_update() -> Dict[str, Any]:
         if os.path.isfile(req_file):
             pip_cmd = _get_pip_executable(repo_dir)
             logs.append("⚙️ Verificando e instalando dependências Python...")
-            
+
             if isinstance(pip_cmd, list):
                 cmd_args = pip_cmd + ["install", "-r", req_file, "-q"]
             else:
@@ -267,6 +267,16 @@ def execute_update() -> Dict[str, Any]:
         try:
             from backend.database import init_db
             init_db()
+            try:
+                from alembic import command
+                from alembic.config import Config
+                alembic_ini_path = os.path.join(repo_dir, "alembic.ini")
+                if os.path.exists(alembic_ini_path):
+                    cfg = Config(alembic_ini_path)
+                    command.upgrade(cfg, "head")
+                    logs.append("✅ Migrações estruturais do banco (Alembic) aplicadas com sucesso.")
+            except Exception as mig_err:
+                logs.append(f"⚠️ Aviso em migrações Alembic: {mig_err}")
             logs.append("✅ Banco de dados e tabelas verificados.")
         except Exception as db_err:
             logs.append(f"⚠️ Aviso ao verificar banco: {db_err}")

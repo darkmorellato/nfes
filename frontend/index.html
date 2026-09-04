@@ -121,6 +121,9 @@
                     <span id="badgeStatusFirestore" class="badge-firestore">☁️ Firestore OK</span>
                 </div>
 
+                <!-- Banner Global de Cooldown SEFAZ (cStat 656) -->
+                <div id="global-sefaz-cooldown-banner" style="display:none;margin-bottom:14px;"></div>
+
                 <!-- ================= INÍCIO ================= -->
                 <div id="section-inicio" class="content-section active">
                     <!-- Hero Header Minimalista -->
@@ -2229,6 +2232,8 @@
                             <div class="ajax__tab_tab" data-tab="tab-cfg-limpeza">🧹 Limpeza de NF-es de Teste</div>
                             <div class="ajax__tab_tab" data-tab="tab-cfg-orfaos">📁 Limpeza de XMLs Órfãos</div>
                             <div class="ajax__tab_tab" data-tab="tab-cfg-auditoria">📊 Auditoria Rápida da Base</div>
+                            <div class="ajax__tab_tab" data-tab="tab-cfg-backups">📦 Backups Fiscais</div>
+                            <div class="ajax__tab_tab" data-tab="tab-cfg-audit-trail">📜 Trilha de Auditoria</div>
                         </div>
                         <div class="ajax__tab_body">
 
@@ -2717,6 +2722,115 @@
                                             </thead>
                                             <tbody id="tbody-audit-emitentes"></tbody>
                                         </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SUBABA 7: BACKUPS FISCAIS -->
+                            <div id="tab-cfg-backups" class="tab-content">
+                                <div class="painel_info">
+                                    <div class="divMensagem">
+                                        <p>📦 <b>Gerenciamento de Backups Fiscais &amp; Snapshot do Banco de Dados</b><br>
+                                        O sistema realiza snapshots consistentes a quente (SQLite Online Backup API) integrando o banco de dados e os arquivos XMLs assinados em pacotes compactados ZIP (.zip), com hash criptográfico SHA-256 e rotação automática de 30 dias.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="painelSessao" style="margin-top:16px;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                                        <div>
+                                            <div class="painelSessaoTitulo" style="margin-bottom:4px;">Backups Disponíveis no Servidor</div>
+                                            <div style="font-size:12px;color:var(--text-muted);">Snapshots gravados localmente no diretório seguro de backups.</div>
+                                        </div>
+                                        <div style="display:flex;gap:10px;">
+                                            <button type="button" class="botao botao-secundario" id="btn-recarregar-backups" onclick="carregarListaBackups()">
+                                                🔄 Atualizar Lista
+                                            </button>
+                                            <button type="button" class="botao" id="btn-gerar-backup-manual" onclick="executarBackupFiscalManual()">
+                                                ⚡ Criar Backup Agora
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div id="backup-status-area" style="display:none;margin-top:15px;"></div>
+
+                                    <div class="table-responsive" style="margin-top:16px;">
+                                        <table class="tabelaGrupo">
+                                            <thead>
+                                                <tr>
+                                                    <th>Arquivo</th>
+                                                    <th>Data / Hora</th>
+                                                    <th style="text-align:right;">Tamanho</th>
+                                                    <th>Checksum SHA-256</th>
+                                                    <th style="text-align:center;">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-backups-fiscais">
+                                                <tr>
+                                                    <td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">Carregando backups...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SUBABA 8: TRILHA DE AUDITORIA -->
+                            <div id="tab-cfg-audit-trail" class="tab-content">
+                                <div class="painel_info">
+                                    <div class="divMensagem">
+                                        <p>📜 <b>Trilha de Auditoria Imutável (Compliance &amp; Governança)</b><br>
+                                        Registro seguro e auditável de todas as operações sensíveis (autenticações, manifestações de notas fiscais, exclusão de certificados digitais, alterações de parâmetros e criação de backups).
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="painelSessao" style="margin-top:16px;">
+                                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:16px;">
+                                        <div style="flex:1;min-width:180px;">
+                                            <label for="filtro-audit-acao" style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Tipo de Ação</label>
+                                            <select id="filtro-audit-acao" class="input-form" style="width:100%;">
+                                                <option value="">Todas as Ações</option>
+                                                <option value="LOGIN">Login no Sistema</option>
+                                                <option value="LOGOUT">Logout</option>
+                                                <option value="MANIFESTACAO">Manifestação de NF-e</option>
+                                                <option value="EXCLUSAO">Exclusão (Certificado/Registro)</option>
+                                                <option value="BACKUP_CRIADO">Criação de Backup Fiscal</option>
+                                                <option value="ALTERACAO">Alteração de Configuração</option>
+                                            </select>
+                                        </div>
+                                        <div style="flex:1;min-width:180px;">
+                                            <label for="filtro-audit-usuario" style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Usuário / Operador</label>
+                                            <input type="text" id="filtro-audit-usuario" class="input-form" placeholder="Filtrar por usuário..." style="width:100%;">
+                                        </div>
+                                        <div>
+                                            <button type="button" class="botao" onclick="carregarTrilhaAuditoria(1)">
+                                                🔍 Filtrar
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="tabelaGrupo">
+                                            <thead>
+                                                <tr>
+                                                    <th>Data / Hora</th>
+                                                    <th>Usuário</th>
+                                                    <th>Ação</th>
+                                                    <th>IP de Origem</th>
+                                                    <th>Detalhes / Metadados</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-trilha-auditoria">
+                                                <tr>
+                                                    <td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">Carregando trilha de auditoria...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- Paginação -->
+                                    <div id="audit-paginacao" style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:13px;color:var(--text-muted);">
                                     </div>
                                 </div>
                             </div>
@@ -3700,6 +3814,22 @@
     <script src="/static/js/ui-skeleton.js"></script>
     <script src="/static/js/ui-keyboard.js"></script>
     <script src="/static/js/ui-tour.js"></script>
+    <!-- Módulos de Domínio Refatorados -->
+    <script src="/static/js/modules/core.js"></script>
+    <script src="/static/js/modules/navigation.js"></script>
+    <script src="/static/js/modules/certificados.js"></script>
+    <script src="/static/js/modules/danfe.js"></script>
+    <script src="/static/js/modules/manifestacao.js"></script>
+    <script src="/static/js/modules/documentos.js"></script>
+    <script src="/static/js/modules/sync.js"></script>
+    <script src="/static/js/modules/contabil.js"></script>
+    <script src="/static/js/modules/manutencao.js"></script>
+    <script src="/static/js/modules/financeiro.js"></script>
+    <script src="/static/js/modules/emissor.js"></script>
+    <script src="/static/js/modules/nfe-ops.js"></script>
+    <script src="/static/js/modules/cadastros.js"></script>
+    <script src="/static/js/modules/updater.js"></script>
+    <!-- Entry Point Bootstrap -->
     <script src="/static/js/app.js"></script>
 </body>
 </html>

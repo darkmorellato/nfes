@@ -16,7 +16,7 @@ from backend.database import (
     get_nfe_detail,
 )
 from backend.dependencies import require_session
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from backend.services.nfe_emissao_service import (
     emitir_nfe_profissional,
     gerar_previa_nfe,

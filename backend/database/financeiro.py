@@ -11,9 +11,7 @@ def sync_duplicatas_from_xmls():
 
     Apenas documentos de ENTRADA (tipo_doc=0 / Compra/Fornecedor) geram contas a pagar.
     """
-    import glob
     from lxml import etree
-    from datetime import timedelta
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -191,9 +189,7 @@ def pagar_duplicata(dup_id: int) -> bool:
 def sync_contas_receber_from_xmls():
     """Varre todos os XMLs e notas fiscais de SAÍDA (tipo_doc=1) para garantir
     que as parcelas a receber (contas a receber) estejam cadastradas."""
-    import glob
     from lxml import etree
-    from datetime import timedelta
 
     with get_db_connection() as conn:
         cursor = conn.cursor()

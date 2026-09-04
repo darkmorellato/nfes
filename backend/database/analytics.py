@@ -22,7 +22,7 @@ def get_analytics_dashboard(mes: Optional[int] = None, ano: Optional[int] = None
         nossos_cnpjs = ["34511185000110", "13787408000105", "44739622000101", "58186781000130", "58495100000116"]
 
     emp_digits = "".join(c for c in str(empresa_cnpj) if c.isdigit()) if empresa_cnpj else None
-    
+
     # Se uma empresa específica for selecionada (e ela for uma das nossas 5), filtra apenas por ela; senão usa todas as 5
     cnpjs_alvo = [emp_digits] if (emp_digits and emp_digits in nossos_cnpjs) else nossos_cnpjs
     placeholders = ",".join("?" for _ in cnpjs_alvo)

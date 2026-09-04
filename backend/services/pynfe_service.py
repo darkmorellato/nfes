@@ -283,11 +283,11 @@ def manifestacao_destinatario(
 
     desc_map = {
         "210200": "Confirmacao da Operacao",
-        "210210": "Ciencia da Emissao",
+        "210210": "Ciencia da Operacao",
         "210220": "Desconhecimento da Operacao",
         "210240": "Operacao nao Realizada",
     }
-    desc_evento = desc_map.get(tipo_manifestacao, "Ciencia da Emissao")
+    desc_evento = desc_map.get(tipo_manifestacao, "Ciencia da Operacao")
 
     evento = etree.Element("evento", versao="1.00", xmlns=NAMESPACE_NFE)
     inf_evento = etree.SubElement(evento, "infEvento", Id=f"ID{tipo_manifestacao}{clean_chave}01")
@@ -311,17 +311,35 @@ def manifestacao_destinatario(
     evento_assinado = assinador.assinar(evento)
 
     response = con.evento("nfe", evento_assinado, id_lote=1)
-    
+
+    c_stat_ret = "135"
+    x_motivo_ret = f"Manifestação {tipo_manifestacao} ({desc_evento}) enviada à SEFAZ"
+    try:
+        resp_root = etree.fromstring(response.text.encode("utf-8") if isinstance(response.text, str) else response.text)
+        ns_sefaz = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+        inf_ev = resp_root.find(".//nfe:retEvento/nfe:infEvento", ns_sefaz) or resp_root.find(".//infEvento")
+        if inf_ev is not None:
+            c_stat_ret = (inf_ev.findtext("nfe:cStat", namespaces=ns_sefaz) or inf_ev.findtext("cStat") or "135").strip()
+            x_motivo_ret = (inf_ev.findtext("nfe:xMotivo", namespaces=ns_sefaz) or inf_ev.findtext("xMotivo") or x_motivo_ret).strip()
+    except Exception:
+        pass
+
     save_nfe_event({
         "chave": clean_chave,
         "tipo_evento": tipo_manifestacao,
         "desc_evento": desc_evento,
         "dh_evento": datetime.now().isoformat(),
-        "c_stat": "135",
-        "x_motivo": f"Manifestação {tipo_manifestacao} ({desc_evento}) enviada à SEFAZ",
+        "c_stat": c_stat_ret,
+        "x_motivo": x_motivo_ret,
     })
 
-    return {"status_code": response.status_code, "body": response.text}
+    return {
+        "status_code": response.status_code,
+        "body": response.text,
+        "c_stat": c_stat_ret,
+        "x_motivo": x_motivo_ret,
+        "success": c_stat_ret in ("135", "136", "573"),
+    }
 
 
 def autorizar_nfce(

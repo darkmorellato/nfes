@@ -10,7 +10,7 @@ from backend.database import get_db_connection, XML_STORAGE_DIR, get_nfe_detail
 from backend.services.danfe_service import generate_danfe_pdf, build_synthetic_nfe_xml
 from backend.utils.excel_helpers import (
     HEADER_FILL, HEADER_FONT, BOLD_FONT, CURRENCY_FMT,
-    apply_header_row, apply_title, apply_subtitle, auto_adjust_columns,
+    apply_title, apply_subtitle, auto_adjust_columns,
 )
 
 

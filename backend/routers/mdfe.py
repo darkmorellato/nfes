@@ -9,7 +9,6 @@ from backend.services.pynfe_service import (
     cancelar_mdfe,
     encerrar_mdfe,
 )
-from backend.config import settings
 from backend.dependencies import require_session
 
 router = APIRouter(dependencies=[Depends(require_session)])

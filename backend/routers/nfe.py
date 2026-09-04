@@ -1,9 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Body, Depends
+import logging
+from fastapi import APIRouter, HTTPException, Query, Body, Depends, Request
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import tempfile
-import os
+from typing import Optional
 from datetime import datetime
+
+logger = logging.getLogger("nfe.router")
 
 from backend.services.pynfe_service import (
     autorizar_nfe,
@@ -163,7 +164,7 @@ async def inutilizar(req: InutilizacaoRequest):
 
 
 @router.post("/manifestacao")
-async def manifestacao(req: ManifestacaoRequest):
+async def manifestacao(req: ManifestacaoRequest, request: Request):
     try:
         result = manifestacao_destinatario(
             chave=req.chave,
@@ -173,6 +174,52 @@ async def manifestacao(req: ManifestacaoRequest):
             uf=req.uf,
             homologacao=req.homologacao,
         )
+
+        from backend.services.audit_service import record_audit
+        desc_map = {
+            "210200": "Confirmacao da Operacao",
+            "210210": "Ciencia da Operacao",
+            "210220": "Desconhecimento da Operacao",
+            "210240": "Operacao nao Realizada",
+        }
+        record_audit(
+            "MANIFESTACAO",
+            "NFE",
+            req.chave,
+            detalhe=f"Tipo {req.tipo_manifestacao} ({desc_map.get(req.tipo_manifestacao, '')}) - cStat {result.get('c_stat')}: {result.get('motivo')}",
+            status="SUCESSO" if (result.get("success") or result.get("c_stat") in ("135", "136", "573")) else "FALHA",
+            request=request,
+        )
+
+        # Se manifestação teve sucesso ou duplicidade (já homologada), tenta obter o XML completo imediatamente
+        if result.get("success") or result.get("c_stat") in ("135", "136", "573"):
+            try:
+                import time
+                from backend.services.danfe_service import parse_distribuicao_xml, parse_nfe_xml
+                from backend.database import get_certificate_record, list_certificates_db, save_nfe_doc
+                from pynfe.processamento.comunicacao import ComunicacaoSefaz
+
+                clean_cnpj = "".join(c for c in str(req.cnpj) if c.isdigit())
+                clean_chave = "".join(c for c in str(req.chave) if c.isdigit())
+                cert_rec = get_certificate_record(clean_cnpj) or (list_certificates_db()[0] if list_certificates_db() else None)
+                if cert_rec:
+                    time.sleep(0.5)
+                    uf = (req.uf or "SP").upper()
+                    homolog = req.homologacao if req.homologacao is not None else settings.HOMOLOGACAO
+                    con = ComunicacaoSefaz(uf, cert_rec["path"], cert_rec["password"], homologacao=homolog)
+                    dl_resp = con.consulta_distribuicao(cnpj=clean_cnpj, chave=clean_chave)
+                    if dl_resp.status_code == 200:
+                        parsed = parse_distribuicao_xml(dl_resp.text)
+                        for d in parsed.get("documentos", []):
+                            if d.get("tag") in ("nfeProc", "NFe") and d.get("xml_raw"):
+                                dados = parse_nfe_xml(d["xml_raw"].encode("utf-8"))
+                                dados["empresa_cnpj"] = clean_cnpj
+                                save_nfe_doc(dados, xml_raw=d["xml_raw"], empresa_cnpj=clean_cnpj)
+                                result["xml_completo_baixado"] = True
+                                break
+            except Exception as dl_err:
+                logger.debug(f"Erro ao baixar XML pós-manifestação: {dl_err}")
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -182,7 +229,6 @@ async def manifestacao(req: ManifestacaoRequest):
 async def emitir_nfe_rapido(payload: dict):
     """Gera, assina com o certificado A1 da empresa e autoriza NF-e de Venda, Devolução ou Transferência."""
     from backend.database import get_certificate_record, list_certificates_db
-    from pynfe.processamento.comunicacao import ComunicacaoSefaz
 
     emitente_cnpj = "".join(c for c in str(payload.get("emitente_cnpj", "")) if c.isdigit())
     dest_cnpj = "".join(c for c in str(payload.get("destinatario_cnpj", "")) if c.isdigit())

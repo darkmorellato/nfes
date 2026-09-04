@@ -1,12 +1,8 @@
 import hashlib
-import io
-import re
 from datetime import datetime
-from typing import Dict, Any, Optional, List
-from lxml import etree
+from typing import Dict, Any, Optional
 
-from backend.database import get_db_connection, list_certificates_db, get_certificate_record
-from backend.services.danfe_service import build_synthetic_nfe_xml
+from backend.database import get_db_connection, get_certificate_record
 
 
 def gerar_qrcode_nfce_url(
@@ -28,16 +24,16 @@ def gerar_qrcode_nfce_url(
     d_emi = data_emissao or datetime.now().isoformat()
     dia_emissao = d_emi[8:10] if len(d_emi) >= 10 else "01"
     v_tot_str = f"{float(valor_total):.2f}"
-    
+
     # URL base da SEFAZ SP para NFC-e
     url_base = "https://www.nfce.fazenda.sp.gov.br/qrcode" if tp_amb == "1" else "https://www.homologacao.nfce.fazenda.sp.gov.br/qrcode"
-    
+
     # Monta a string para o Hash SHA-1
     # Versão 2.0: chave|2|tpAmb|cIdToken
     raw_str = f"{chave}|2|{tp_amb}|{int(csc_token_id)}"
     hash_str = f"{raw_str}{csc_token}"
     c_hash_qr = hashlib.sha1(hash_str.encode("utf-8")).hexdigest().upper()
-    
+
     return f"{url_base}?p={raw_str}|{c_hash_qr}"
 
 
@@ -57,7 +53,7 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        
+
         # Obtém próximo número de NFC-e da empresa
         cursor.execute("SELECT MAX(CAST(numero AS INTEGER)) as max_n FROM nfe_docs WHERE modelo = '65' AND (empresa_cnpj = ? OR emitente_cnpj = ?)", (empresa_cnpj, empresa_cnpj))
         r_num = cursor.fetchone()
@@ -72,7 +68,7 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
     tp_emis = "1"
     c_cnf = f"{now.microsecond % 100000000:08d}"
     chave_sem_dv = f"{uf_cod}{aamm}{empresa_cnpj.zfill(14)}{mod}{serie}{num_str}{tp_emis}{c_cnf}"
-    
+
     # Cálculo do dígito verificador módulo 11
     pesos = [4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
     soma = sum(int(chave_sem_dv[i]) * pesos[i] for i in range(43))

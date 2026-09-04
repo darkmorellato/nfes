@@ -1,4 +1,3 @@
-from typing import Optional, Dict, Any, List
 from backend.database import get_nfe_detail
 
 

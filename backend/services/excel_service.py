@@ -1,5 +1,5 @@
 import io
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict
 from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font
@@ -7,8 +7,8 @@ from openpyxl.utils import get_column_letter
 
 from backend.database import list_certificates_db, get_db_connection
 from backend.utils.excel_helpers import (
-    HEADER_FILL, HEADER_FONT, TITLE_FONT, SUB_FONT, TOTAL_FILL, BOLD_FONT,
-    NORMAL_FONT, CURRENCY_FMT, NUM_FMT, THIN_BORDER, format_cnpj, apply_header_row, apply_title, apply_subtitle, auto_adjust_columns,
+    TOTAL_FILL, BOLD_FONT,
+    CURRENCY_FMT, NUM_FMT, format_cnpj, apply_header_row, apply_title, apply_subtitle, auto_adjust_columns,
 )
 
 

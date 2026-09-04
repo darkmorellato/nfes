@@ -336,7 +336,7 @@ def get_next_nfe_number(empresa_cnpj: str, serie: str = "1", modelo: str = "55")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        
+
         # 1. Verifica notas emitidas por essa empresa (Saídas - tipo_doc = 1)
         if clean_modelo == "65":
             cursor.execute("""

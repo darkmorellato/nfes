@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 from backend.config import settings
-from backend.database import get_db_connection, XML_STORAGE_DIR, DATA_DIR, DB_PATH
+from backend.database import get_db_connection, XML_STORAGE_DIR, DB_PATH
 from backend.database.certificates import list_certificates_db
 
 

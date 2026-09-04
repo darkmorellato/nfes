@@ -110,7 +110,7 @@ class TestCertPasswordEncryption(unittest.TestCase):
         from backend.services import cert_service
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            from backend.services.crypto_service import encrypt_secret, decrypt_secret
+            from backend.services.crypto_service import encrypt_secret
 
             # Caso 1: senha em texto puro (legado) — devolvida como está
             meta_legado = {"password": "senha-legado-123", "path": ""}
@@ -228,6 +228,73 @@ class TestConstantsFromExternalFile(unittest.TestCase):
                     constants.nome_empresa("99999999000199", fallback="DESCONHECIDA"),
                     "DESCONHECIDA",
                 )
+
+
+class TestRateLimiting(unittest.TestCase):
+    def test_login_rate_limiter_blocks_excessive_attempts(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        from backend.dependencies import login_rate_limiter
+
+        login_rate_limiter._history.clear()
+        client = TestClient(app)
+
+        for _ in range(10):
+            resp = client.post("/api/auth/login", json={"email": "wrong@nfe.com", "senha": "wrong"})
+            self.assertIn(resp.status_code, (400, 401))
+
+        # 11ª tentativa deve ser 429
+        resp = client.post("/api/auth/login", json={"email": "wrong@nfe.com", "senha": "wrong"})
+        self.assertEqual(resp.status_code, 429)
+        self.assertIn("Limite de 10 tentativas", resp.json()["detail"])
+        self.assertIn("Retry-After", resp.headers)
+
+    def test_correlation_id_header_generated_and_propagated(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/health")
+        self.assertEqual(resp.status_code, 200)
+        req_id = resp.headers.get("X-Request-ID")
+        self.assertIsNotNone(req_id)
+        self.assertTrue(req_id.startswith("req_"))
+
+        # Propagação de ID existente
+        resp2 = client.get("/health", headers={"X-Request-ID": "custom_audit_test_123"})
+        self.assertEqual(resp2.headers.get("X-Request-ID"), "custom_audit_test_123")
+
+    def test_backup_list_and_auditoria_endpoints(self):
+        from datetime import datetime, timedelta
+        from backend.main import app
+        from backend.routers import auth as auth_module
+        from fastapi.testclient import TestClient
+
+        token = "test_phase3_token"
+        auth_module._sessions[token] = {
+            "email": "admin@nfe.com",
+            "nome": "Admin",
+            "perfil": "admin",
+            "expires_at": datetime.now() + timedelta(hours=2),
+        }
+
+        client = TestClient(app)
+        headers = {"X-Session-Token": token}
+
+        # Auditoria
+        resp_audit = client.get("/api/gestao/auditoria", headers=headers)
+        self.assertEqual(resp_audit.status_code, 200)
+        data_audit = resp_audit.json()
+        self.assertIn("total", data_audit)
+        self.assertIn("logs", data_audit)
+
+        # Backups
+        resp_backup = client.get("/api/gestao/backups", headers=headers)
+        self.assertEqual(resp_backup.status_code, 200)
+        data_backup = resp_backup.json()
+        self.assertTrue(data_backup.get("success"))
+        self.assertIn("backups", data_backup)
+        self.assertIsInstance(data_backup["backups"], list)
 
 
 if __name__ == "__main__":

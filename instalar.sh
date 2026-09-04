@@ -177,10 +177,22 @@ setup_env() {
     fi
 }
 
+# ── Executar migrações do banco (Alembic) ───────────────────────────────────
+run_database_migrations() {
+    info "Aplicando migrações estruturais do banco de dados..."
+    if [ -f "${VENV_DIR}/bin/alembic" ] && [ -f "${REPO_DIR}/alembic.ini" ]; then
+        "${VENV_DIR}/bin/alembic" -c "${REPO_DIR}/alembic.ini" upgrade head
+        ok "Banco de dados atualizado na última versão estrutural (Alembic)."
+    else
+        "$VENV_DIR/bin/python" -c "from backend.database import init_db; init_db()"
+        ok "Banco de dados inicializado."
+    fi
+}
+
 # ── Instalar atalho .desktop (Linux) ─────────────────────────────────────────
 install_desktop_entry() {
     if [ "$OS" = "linux" ] && [ -f "${REPO_DIR}/scripts/install.sh" ]; then
-        info "Instalando atalho no menu..."
+        info "Instalando atalho no menu e ícone..."
         bash "${REPO_DIR}/scripts/install.sh"
     fi
 }
@@ -238,10 +250,13 @@ main() {
     # 4. Arquivo .env
     setup_env
 
-    # 5. Atalho .desktop (Linux)
+    # 5. Migrações do banco de dados (Alembic)
+    run_database_migrations
+
+    # 6. Atalho .desktop com Ícone (Linux)
     install_desktop_entry
 
-    # 6. Sucesso
+    # 7. Sucesso
     print_success
 }
 

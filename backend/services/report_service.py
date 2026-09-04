@@ -28,17 +28,12 @@ def _fmt_mes_br(iso_ou_yyyy_mm: str) -> str:
         return s
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib import patheffects
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.graphics.shapes import Drawing
-from reportlab.graphics.charts.barcharts import VerticalBarChart
-from reportlab.graphics.charts.piecharts import Pie
-from reportlab.graphics import renderPDF
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
@@ -48,7 +43,6 @@ from backend.database import (
     get_analytics_dashboard,
     get_price_divergences,
     get_auditoria_fornecedores,
-    get_dre_tendencia,
 )
 
 

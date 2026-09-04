@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 
 from backend.database import get_db_connection
 

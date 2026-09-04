@@ -1,6 +1,4 @@
 import io
-from datetime import datetime
-from typing import Dict, Any, Optional
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle

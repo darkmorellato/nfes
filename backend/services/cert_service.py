@@ -1,9 +1,8 @@
 import os
 import json
 import re
-import subprocess
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.config import settings
 from backend.database import (
@@ -16,7 +15,6 @@ from backend.database import (
 
 def save_certificate(content: bytes, password: str, filename: str = "certificado.pfx") -> Dict[str, Any]:
     """Salva um certificado PFX/P12, inspeciona seus dados e cadastra na tabela de certificados."""
-    from cryptography import x509
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.serialization import pkcs12
     from backend.services.crypto_service import encrypt_secret
@@ -63,7 +61,7 @@ def save_certificate(content: bytes, password: str, filename: str = "certificado
 
     val_from = cert.not_valid_before_utc.strftime("%d/%m/%Y")
     val_to = cert.not_valid_after_utc.strftime("%d/%m/%Y")
-    days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()).days)
+    days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
 
     save_certificate_record({
         "cnpj": cnpj,
@@ -192,7 +190,7 @@ def get_cert_info(cnpj: Optional[str] = None) -> Dict[str, Any]:
         issuer = cert.issuer.rfc4514_string()
         valid_from = cert.not_valid_before_utc.strftime("%d/%m/%Y")
         valid_to = cert.not_valid_after_utc.strftime("%d/%m/%Y")
-        days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()).days)
+        days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
 
         return {
             "loaded": True,

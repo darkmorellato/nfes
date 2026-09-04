@@ -32,15 +32,19 @@
 
     const TOAST_ICONS = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
 
-    function showToast(message, type = 'info', duration = 4000) {
+    function showToast(message, type = 'info', duration = 4000, requestId = null) {
         const container = ensureContainer();
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
         toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        const reqHtml = requestId ? `<div style="font-size:10.5px;opacity:0.85;margin-top:4px;font-family:monospace;user-select:all;">ID: ${escapeHtml(requestId)}</div>` : '';
         toast.innerHTML = `
             <span class="toast-icon" aria-hidden="true">${TOAST_ICONS[type] || 'ℹ'}</span>
-            <span class="toast-msg">${escapeHtml(String(message))}</span>
+            <div style="display:flex;flex-direction:column;flex:1;">
+                <span class="toast-msg">${escapeHtml(String(message))}</span>
+                ${reqHtml}
+            </div>
             <button type="button" class="toast-close" aria-label="Fechar notificação">×</button>
         `;
         container.appendChild(toast);
@@ -61,10 +65,10 @@
 
     // Atalhos
     const toast = {
-        success: (m, d) => showToast(m, 'success', d),
-        error:   (m, d) => showToast(m, 'error',   d ?? 6000),
-        warning: (m, d) => showToast(m, 'warning', d ?? 5000),
-        info:    (m, d) => showToast(m, 'info',    d),
+        success: (m, d, r) => showToast(m, 'success', d, r),
+        error:   (m, d, r) => showToast(m, 'error',   d ?? 6000, r),
+        warning: (m, d, r) => showToast(m, 'warning', d ?? 5000, r),
+        info:    (m, d, r) => showToast(m, 'info',    d, r),
     };
 
     // ====================================================================

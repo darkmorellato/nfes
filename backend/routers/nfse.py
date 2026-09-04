@@ -7,7 +7,6 @@ from backend.services.pynfe_service import (
     consultar_nfse_numero,
     consultar_nfse_rps,
 )
-from backend.config import settings
 from backend.dependencies import require_session
 
 router = APIRouter(dependencies=[Depends(require_session)])

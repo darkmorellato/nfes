@@ -5,9 +5,7 @@ from typing import Optional
 from backend.services.pynfe_service import (
     autorizar_nfce,
     consultar_nota_nfce,
-    cancelar_nota_nfce,
 )
-from backend.config import settings
 from backend.dependencies import require_session
 
 router = APIRouter(dependencies=[Depends(require_session)])

@@ -1,10 +1,7 @@
 import os
-import sqlite3
 import json
 import glob
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple
-from contextlib import contextmanager
+from datetime import datetime, timezone
 
 from backend.config import settings
 from backend.database import get_db_connection, DATA_DIR, XML_STORAGE_DIR
@@ -19,6 +16,8 @@ def init_db():
     _ensure_dirs()
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode = WAL")
+        cursor.execute("PRAGMA synchronous = NORMAL")
 
         # Tabela de Certificados Digitais A1 (Multi-Empresa)
         cursor.execute("""
@@ -509,6 +508,39 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_chave ON nfe_duplicatas(chave)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conf_chave ON nfe_conferencia(chave)")
 
+        # Tabela de Sessões de Usuários (Persistência pós-reinicialização)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                token TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                nome TEXT NOT NULL,
+                perfil TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions(expires_at)")
+
+        # Trilha de Auditoria Imutável (Compliance Fiscal & LGPD)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                usuario_email TEXT,
+                usuario_nome TEXT,
+                acao TEXT NOT NULL,
+                entidade TEXT NOT NULL,
+                entidade_id TEXT,
+                ip TEXT,
+                detalhe TEXT,
+                status TEXT DEFAULT 'SUCESSO'
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_acao ON audit_logs(acao)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_usuario ON audit_logs(usuario_email)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_entidade ON audit_logs(entidade, entidade_id)")
+
         conn.commit()
 
     # Registra automaticamente todos os certificados da pasta certs/
@@ -580,7 +612,7 @@ def auto_register_disk_certificates():
 
             val_from = cert.not_valid_before_utc.strftime("%d/%m/%Y")
             val_to = cert.not_valid_after_utc.strftime("%d/%m/%Y")
-            days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()).days)
+            days_rem = max(0, (cert.not_valid_after_utc.replace(tzinfo=None) - datetime.now(timezone.utc).replace(tzinfo=None)).days)
 
             if cnpj:
                 save_certificate_record({

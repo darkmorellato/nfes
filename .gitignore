@@ -67,3 +67,5 @@ scratch/
 *.db.bak_*
 data/.secret_key
 data/danfe_pdfs/
+data/backups/
+*.zip

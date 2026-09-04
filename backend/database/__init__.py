@@ -17,7 +17,9 @@ def _ensure_dirs():
 @contextmanager
 def get_db_connection():
     _ensure_dirs()
-    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    target_db = os.environ.get("NFE_DB_PATH") or DB_PATH
+    conn = sqlite3.connect(target_db, timeout=30.0)
+    conn.execute("PRAGMA busy_timeout = 30000")
     conn.row_factory = sqlite3.Row
     try:
         yield conn

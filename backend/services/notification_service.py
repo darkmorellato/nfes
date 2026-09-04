@@ -1,7 +1,7 @@
 import urllib.request
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from backend.database import add_notification, get_sync_state
 from backend.services.crypto_service import decrypt_secret, is_encrypted
