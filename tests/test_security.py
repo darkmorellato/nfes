@@ -43,6 +43,28 @@ class TestRequireSessionGate(unittest.TestCase):
                 f"{method} {url} deveria exigir sessão mas retornou {resp.status_code}",
             )
 
+    def test_session_accepted_via_header_and_query_param(self):
+        import secrets
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        from backend.routers.auth import save_session
+
+        token = secrets.token_hex(16)
+        save_session(token, {"email": "test@local.com", "nome": "Operador", "perfil": "operador"})
+        client = TestClient(app)
+
+        # Teste com token no Header
+        resp_header = client.get("/api/gestao/documentos", headers={"X-Session-Token": token})
+        self.assertNotIn(resp_header.status_code, (401, 403))
+
+        # Teste com token na Query string
+        resp_query = client.get(f"/api/gestao/documentos?token={token}")
+        self.assertNotIn(resp_query.status_code, (401, 403))
+
+        # Teste com token inválido na Query string
+        resp_invalid = client.get("/api/gestao/documentos?token=token_invalido_123")
+        self.assertEqual(resp_invalid.status_code, 401)
+
 
 class TestAuthBcrypt(unittest.TestCase):
     """1.3: bcrypt + retrocompatibilidade com SHA-256 legado."""

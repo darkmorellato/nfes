@@ -22,12 +22,14 @@ def _get_sessions() -> dict:
 
 def require_session(request: Request) -> dict:
     """
-    Valida o header ``X-Session-Token`` e devolve os dados da sessão.
+    Valida o header ``X-Session-Token`` ou parâmetro de query ``token`` e devolve os dados da sessão.
 
     Verifica o cache em memória e o banco SQLite (para persistir pós-restart).
     Lança ``HTTP 401`` se o token estiver ausente, inválido ou expirado.
     """
     token = request.headers.get("X-Session-Token", "").strip()
+    if not token:
+        token = request.query_params.get("token", "").strip()
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

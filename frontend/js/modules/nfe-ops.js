@@ -269,7 +269,7 @@ async function carregarNfeSaidas(page = 1) {
                             <div class="actions-cell" style="justify-content:center;gap:4px;flex-wrap:wrap;">
                                 <button type="button" class="btn-action btn-action-primary" onclick="event.stopPropagation();abrirDanfeDireto('${d.chave}');" title="Visualizar DANFE">👁️ DANFE</button>
                                 <button type="button" class="btn-action" onclick="event.stopPropagation();reenviarNfeSefaz('${d.chave}');" title="Reenviar / Validar Retorno na SEFAZ" style="${isPendenteOuRejeitada ? 'background:#fef3c7;color:#92400e;border-color:#f59e0b;font-weight:bold;' : 'background:#f0fdf4;color:#166534;border-color:#bbf7d0;'}">🔄 Reenviar</button>
-                                <a href="/api/danfe/pdf/${d.chave}" target="_blank" class="btn-action" style="text-decoration:none;" title="Baixar PDF">📥 PDF</a>
+                                <button type="button" class="btn-action" onclick="event.stopPropagation();downloadDanfePdf('${d.chave}');" title="Baixar PDF">📥 PDF</button>
                                 <button type="button" class="btn-action" onclick="event.stopPropagation();enviarWhatsappNfe('${d.chave}');" title="Enviar para o WhatsApp do Cliente" style="background:#25d366;color:#fff;border-color:#25d366;font-weight:bold;">💬 Zap</button>
                                 <button type="button" class="btn-action" onclick="event.stopPropagation();abrirModalEmailNfe('${d.chave}', '${escapeHtml(d.destinatario_nome || '')}');" title="Enviar por E-mail com XML e PDF">📧 E-mail</button>
                                 <button type="button" class="btn-action" onclick="event.stopPropagation();clonarNfeParaEmissao('${d.chave}');" title="Clonar dados para emitir nova nota">📋 Clonar</button>
@@ -627,9 +627,9 @@ function abrirModalRetornoSefaz(data) {
                 <button type="button" class="botao botao-primario" onclick="fecharModalRetornoSefaz(); abrirDanfeDireto('${data.chave}');" style="font-size:12px;padding:6px 12px;">
                     👁️ Visualizar DANFE
                 </button>
-                <a href="/api/danfe/pdf/${data.chave}" target="_blank" class="btn-action" style="font-size:12px;padding:6px 12px;text-decoration:none;">
+                <button type="button" class="btn-action" onclick="downloadDanfePdf('${data.chave}');" style="font-size:12px;padding:6px 12px;">
                     📥 Baixar PDF
-                </a>
+                </button>
             `;
         } else {
             botoesExtras.innerHTML = `

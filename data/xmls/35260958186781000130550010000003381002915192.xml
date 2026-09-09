@@ -1,0 +1,231 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+    <infNFe versao="4.00" Id="NFe35260958186781000130550010000003381002915192" xmlns="http://www.portalfiscal.inf.br/nfe">
+      <ide>
+        <cUF>35</cUF>
+        <cNF>00291519</cNF>
+        <natOp>VENDA</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>338</nNF>
+        <dhEmi>2026-09-01T12:09:00-03:00</dhEmi>
+        <dhSaiEnt>2026-09-01T12:09:00-03:00</dhSaiEnt>
+        <tpNF>1</tpNF>
+        <idDest>1</idDest>
+        <cMunFG>3501905</cMunFG>
+        <tpImp>1</tpImp>
+        <tpEmis>1</tpEmis>
+        <cDV>2</cDV>
+        <tpAmb>1</tpAmb>
+        <finNFe>1</finNFe>
+        <indFinal>1</indFinal>
+        <indPres>1</indPres>
+        <procEmi>0</procEmi>
+        <verProc>3.0</verProc>
+      </ide>
+      <emit>
+        <CNPJ>58186781000130</CNPJ>
+        <xNome>J. DE A. FERNANDES OPERACOES DE CREDITO</xNome>
+        <xFant>MI PLACE PREMIUM</xFant>
+        <enderEmit>
+          <xLgr>RUA TREZE DE MAIO</xLgr>
+          <nro>26</nro>
+          <xBairro>CENTRO</xBairro>
+          <cMun>3501905</cMun>
+          <xMun>Amparo</xMun>
+          <UF>SP</UF>
+          <CEP>13900005</CEP>
+          <cPais>1058</cPais>
+          <xPais>BRASIL</xPais>
+        </enderEmit>
+        <IE>168197097116</IE>
+        <CRT>1</CRT>
+      </emit>
+      <dest>
+        <CPF>44140494824</CPF>
+        <xNome>LEONARDO ANICETO</xNome>
+        <enderDest>
+          <xLgr>RUA PERNAMBUCO</xLgr>
+          <nro>238</nro>
+          <xBairro>JARDIM BRASIL</xBairro>
+          <cMun>3501905</cMun>
+          <xMun>Amparo</xMun>
+          <UF>SP</UF>
+          <CEP>13902280</CEP>
+          <cPais>1058</cPais>
+          <xPais>BRASIL</xPais>
+        </enderDest>
+        <indIEDest>9</indIEDest>
+        <email>lconardoaniceto94@2gmaiil.com</email>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>1416906</cProd>
+          <cEAN>SEM GTIN</cEAN>
+          <xProd>SAMSUNG GALAXY A07 8 256 VERDE</xProd>
+          <NCM>85171300</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>UND</uCom>
+          <qCom>1.000</qCom>
+          <vUnCom>1599.0000</vUnCom>
+          <vProd>1599.00</vProd>
+          <cEANTrib>SEM GTIN</cEANTrib>
+          <uTrib>UND</uTrib>
+          <qTrib>1.000</qTrib>
+          <vUnTrib>1599.0000</vUnTrib>
+          <indTot>1</indTot>
+        </prod>
+        <imposto>
+          <ICMS>
+            <ICMSSN102>
+              <orig>0</orig>
+              <CSOSN>102</CSOSN>
+            </ICMSSN102>
+          </ICMS>
+          <PIS>
+            <PISOutr>
+              <CST>99</CST>
+              <qBCProd>1.00</qBCProd>
+              <vAliqProd>0.0000</vAliqProd>
+              <vPIS>0.00</vPIS>
+            </PISOutr>
+          </PIS>
+          <COFINS>
+            <COFINSOutr>
+              <CST>99</CST>
+              <qBCProd>0.000</qBCProd>
+              <vAliqProd>0.0000</vAliqProd>
+              <vCOFINS>0.00</vCOFINS>
+            </COFINSOutr>
+          </COFINS>
+          <IBSCBS>
+            <CST>000</CST>
+            <cClassTrib>000001</cClassTrib>
+            <gIBSCBS>
+              <vBC>1599.00</vBC>
+              <gIBSUF>
+                <pIBSUF>0.10</pIBSUF>
+                <vIBSUF>1.60</vIBSUF>
+              </gIBSUF>
+              <gIBSMun>
+                <pIBSMun>0.00</pIBSMun>
+                <vIBSMun>0.00</vIBSMun>
+              </gIBSMun>
+              <vIBS>1.60</vIBS>
+              <gCBS>
+                <pCBS>0.90</pCBS>
+                <vCBS>14.39</vCBS>
+              </gCBS>
+            </gIBSCBS>
+          </IBSCBS>
+        </imposto>
+      </det>
+      <total>
+        <ICMSTot>
+          <vBC>0.00</vBC>
+          <vICMS>0.00</vICMS>
+          <vICMSDeson>0.00</vICMSDeson>
+          <vICMSUFDest>0.00</vICMSUFDest>
+          <vICMSUFRemet>0.00</vICMSUFRemet>
+          <vFCP>0.00</vFCP>
+          <vBCST>0.00</vBCST>
+          <vST>0.00</vST>
+          <vFCPST>0.00</vFCPST>
+          <vFCPSTRet>0.00</vFCPSTRet>
+          <qBCMonoRet>0.00</qBCMonoRet>
+          <vProd>1599.00</vProd>
+          <vFrete>0.00</vFrete>
+          <vSeg>0.00</vSeg>
+          <vDesc>0.00</vDesc>
+          <vII>0.00</vII>
+          <vIPI>0.00</vIPI>
+          <vIPIDevol>0.00</vIPIDevol>
+          <vPIS>0.00</vPIS>
+          <vCOFINS>0.00</vCOFINS>
+          <vOutro>0.00</vOutro>
+          <vNF>1599.00</vNF>
+        </ICMSTot>
+        <IBSCBSTot>
+          <vBCIBSCBS>1599.00</vBCIBSCBS>
+          <gIBS>
+            <gIBSUF>
+              <vDif>0.00</vDif>
+              <vDevTrib>0.00</vDevTrib>
+              <vIBSUF>1.60</vIBSUF>
+            </gIBSUF>
+            <gIBSMun>
+              <vDif>0.00</vDif>
+              <vDevTrib>0.00</vDevTrib>
+              <vIBSMun>0.00</vIBSMun>
+            </gIBSMun>
+            <vIBS>1.60</vIBS>
+            <vCredPres>0.00</vCredPres>
+            <vCredPresCondSus>0.00</vCredPresCondSus>
+          </gIBS>
+          <gCBS>
+            <vDif>0.00</vDif>
+            <vDevTrib>0.00</vDevTrib>
+            <vCBS>14.39</vCBS>
+            <vCredPres>0.00</vCredPres>
+            <vCredPresCondSus>0.00</vCredPresCondSus>
+          </gCBS>
+        </IBSCBSTot>
+      </total>
+      <transp>
+        <modFrete>1</modFrete>
+        <vol>
+          <qVol>1</qVol>
+        </vol>
+      </transp>
+      <pag>
+        <detPag>
+          <indPag>0</indPag>
+          <tPag>15</tPag>
+          <vPag>1599.00</vPag>
+        </detPag>
+      </pag>
+      <infAdic>
+        <infCpl>TRIB APROX R$: 125,52 FEDERAL 66,20 ESTADUAL FONTE: IBPT - FINANCIADO PAYJOY</infCpl>
+      </infAdic>
+      <infRespTec>
+        <CNPJ>23161652000103</CNPJ>
+        <xContato>João Batista</xContato>
+        <email>joao@hostmundo.com.br</email>
+        <fone>1930410975</fone>
+      </infRespTec>
+    </infNFe>
+    <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+      <SignedInfo>
+        <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" />
+        <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" />
+        <Reference URI="#NFe35260958186781000130550010000003381002915192">
+          <Transforms>
+            <Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />
+            <Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" />
+          </Transforms>
+          <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" />
+          <DigestValue>QiF8hORoEExaBCkl/uTR+ZZfaT8=</DigestValue>
+        </Reference>
+      </SignedInfo>
+      <SignatureValue>UBnxQ5CRARX07RmGKFzzaziNhwbQDp3cBwzM/8orVSeCI4iCUDNIRHD3V5PT0UnCD5kzGjN5vXGtb06g5KPEQsG+LyLu2QoIavOX/ASlUh9rCXe7z7AQGg+bGsU1sC2DWfE4Yw1CscoMQgodlctQiJpCeboF9HxlpJ19wq1Lq9AfvfAY2SMPwzadAU3/CkS8fdYa8MXSuPStAlZpAHTdPKZ8GztuETrAgTl/oujuGN9Yuf6gJ1OzR0YWXt2CNZqmKxnTU3lPnQzcMQXwCytQgaHwpULLFENXmxh/sJHEJ51A1C6au2o33+1ZiwT+S/o/ttELkGvuzGvYNVv4/EVuDA==</SignatureValue>
+      <KeyInfo>
+        <X509Data>
+          <X509Certificate>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</X509Certificate>
+        </X509Data>
+      </KeyInfo>
+    </Signature>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt xmlns="http://www.portalfiscal.inf.br/nfe">
+      <tpAmb>1</tpAmb>
+      <verAplic>SP_NFE_PL009_V4</verAplic>
+      <chNFe>35260958186781000130550010000003381002915192</chNFe>
+      <dhRecbto>2026-09-05T12:12:04-03:00</dhRecbto>
+      <nProt>135263697521674</nProt>
+      <digVal>QiF8hORoEExaBCkl/uTR+ZZfaT8=</digVal>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NF-e</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>

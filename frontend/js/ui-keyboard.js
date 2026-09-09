@@ -102,13 +102,13 @@
         try {
             // Chama 3 endpoints em paralelo (não falha se um der erro)
             const [nfe, cli, prod] = await Promise.allSettled([
-                fetch(`/api/emissao/saidas?busca=${encodeURIComponent(term)}&limit=5`, { credentials: 'same-origin' })
+                apiFetch(`/api/emissao/saidas?busca=${encodeURIComponent(term)}&limit=5`)
                     .then(r => r.ok ? r.json() : { data: { documentos: [] } })
                     .catch(() => ({ data: { documentos: [] } })),
-                fetch(`/api/emissao/clientes?busca=${encodeURIComponent(term)}&limit=5`, { credentials: 'same-origin' })
+                apiFetch(`/api/emissao/clientes?busca=${encodeURIComponent(term)}&limit=5`)
                     .then(r => r.ok ? r.json() : { data: { clientes: [] } })
                     .catch(() => ({ data: { clientes: [] } })),
-                fetch(`/api/emissao/produtos?busca=${encodeURIComponent(term)}&limit=5`, { credentials: 'same-origin' })
+                apiFetch(`/api/emissao/produtos?busca=${encodeURIComponent(term)}&limit=5`)
                     .then(r => r.ok ? r.json() : { data: { produtos: [] } })
                     .catch(() => ({ data: { produtos: [] } })),
             ]);

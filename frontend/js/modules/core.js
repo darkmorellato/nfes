@@ -454,13 +454,33 @@ function showLoading(elementId) {
 
 async function downloadPdf(url, filename) {
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
+        let res;
+        if (typeof apiDownload === "function") {
+            res = await apiDownload(url, filename);
+        } else {
+            const headers = typeof _withAuth === "function" ? _withAuth({}) : {};
+            const resp = await fetch(url, { headers });
+            if (!resp.ok) {
+                let detail = `HTTP ${resp.status}`;
+                try {
+                    const j = await resp.json();
+                    if (j && j.detail) detail = j.detail;
+                } catch (_) {}
+                res = { ok: false, status: resp.status, error: detail };
+            } else {
+                const blob = await resp.blob();
+                res = { ok: true, blob, filename };
+            }
+        }
+
+        if (!res.ok) {
+            throw new Error(res.error || `HTTP ${res.status}`);
+        }
+
+        const blobUrl = window.URL.createObjectURL(res.blob);
         const a = document.createElement("a");
         a.href = blobUrl;
-        a.download = filename;
+        a.download = res.filename || filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

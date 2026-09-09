@@ -1220,31 +1220,75 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
 
 
 async function downloadDanfePdf(chave, ufOverride) {
-    const ufParaConsulta = ufOverride || ufFromChave(chave) || AppState.uf;
-    const url = `/api/danfe/pdf/${chave}?uf=${ufParaConsulta}&homologacao=${AppState.ambiente === "homologacao"}`;
+    const ufParaConsulta = ufOverride || ufFromChave(chave) || (typeof AppState !== "undefined" && AppState.uf ? AppState.uf : "SP");
+    const isHomolog = typeof AppState !== "undefined" && AppState.ambiente === "homologacao";
+    const token = typeof _getSessionToken === "function" ? _getSessionToken() : "";
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
+    const url = `/api/danfe/pdf/${chave}?uf=${ufParaConsulta}&homologacao=${isHomolog}${tokenParam}`;
+    const defaultName = `DANFE_${chave}.pdf`;
+
+    if (typeof toast !== "undefined" && toast.info) {
+        toast.info("Gerando PDF oficial do DANFE...");
+    }
+
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
+        let res;
+        if (typeof apiDownload === "function") {
+            res = await apiDownload(url, defaultName);
+        } else {
+            const headers = typeof _withAuth === "function" ? _withAuth({}) : {};
+            const resp = await fetch(url, { headers });
+            if (!resp.ok) {
+                let errDetail = `HTTP ${resp.status}`;
+                try {
+                    const j = await resp.json();
+                    if (j && j.detail) errDetail = j.detail;
+                } catch (_) {}
+                res = { ok: false, status: resp.status, error: errDetail };
+            } else {
+                const blob = await resp.blob();
+                res = { ok: true, blob, filename: defaultName };
+            }
+        }
+
+        if (!res.ok) {
+            const statusCode = String(res.status || "");
+            let msg = "Erro ao gerar PDF do DANFE: " + (res.error || `HTTP ${res.status}`);
+            if (statusCode === "404" || statusCode === "502" || statusCode === "500") {
+                msg = "A NF-e não pôde ser obtida na SEFAZ (provavelmente não autorizada, chave inválida neste ambiente, ou não existe na base). " +
+                      "Use a opção 'Upload de XML' no menu acima para gerar o PDF a partir de um arquivo XML local.";
+            } else if (statusCode === "401") {
+                msg = "Sessão expirada ou não autenticada. Faça login novamente.";
+            }
+            if (typeof toast !== "undefined" && toast.error) {
+                toast.error(msg);
+            } else {
+                alert(msg);
+            }
+            return;
+        }
+
+        const blobUrl = window.URL.createObjectURL(res.blob);
         const a = document.createElement("a");
         a.href = blobUrl;
-        a.download = `danfe_${chave}.pdf`;
+        a.download = res.filename || defaultName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-        const code = (error.message || "").match(/HTTP (\d+)/);
-        const statusCode = code ? code[1] : null;
-        let msg = "Erro ao gerar PDF do DANFE: " + error.message;
-        if (statusCode === "404" || statusCode === "502" || statusCode === "500") {
-            msg = "A NF-e não pôde ser obtida na SEFAZ (provavelmente não autorizada, chave inválida neste ambiente, ou não existe na base). " +
-                  "Use a opção 'Upload de XML' no menu acima para gerar o PDF a partir de um arquivo XML local.";
+        if (typeof toast !== "undefined" && toast.success) {
+            toast.success("Download do DANFE iniciado com sucesso!");
         }
-        toast.error(msg);
+    } catch (error) {
+        const msg = "Erro ao gerar PDF do DANFE: " + (error.message || error);
+        if (typeof toast !== "undefined" && toast.error) {
+            toast.error(msg);
+        } else {
+            alert(msg);
+        }
     }
 }
+window.downloadDanfePdf = downloadDanfePdf;
 
 
 document.addEventListener("DOMContentLoaded", init);

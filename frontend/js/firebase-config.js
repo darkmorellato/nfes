@@ -168,7 +168,7 @@ async function syncAllToFirestore() {
 
     try {
         // Tenta sincronização em lote de alta performance via backend
-        const res = await fetch("/api/gestao/firestore/sync-all", { method: "POST" });
+        const res = await apiFetch("/api/gestao/firestore/sync-all", { method: "POST" });
         if (res.ok) {
             const data = await res.json();
             if (data.success) {
@@ -219,7 +219,7 @@ async function pullFromFirestore() {
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Baixando do Firestore..."; }
 
     try {
-        const res = await fetch("/api/gestao/firestore/pull-all", { method: "POST" });
+        const res = await apiFetch("/api/gestao/firestore/pull-all", { method: "POST" });
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
@@ -274,7 +274,7 @@ async function consolidarClientesFirestore() {
     const original = btn ? btn.textContent : "👥 Consolidar Clientes";
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Consolidando clientes..."; }
     try {
-        const res = await fetch("/api/gestao/firestore/consolidar-clientes", { method: "POST" });
+        const res = await apiFetch("/api/gestao/firestore/consolidar-clientes", { method: "POST" });
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
@@ -316,7 +316,7 @@ async function consolidarProdutosFirestore() {
     const original = btn ? btn.textContent : "📦 Consolidar Produtos";
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Consolidando produtos..."; }
     try {
-        const res = await fetch("/api/gestao/firestore/consolidar-produtos", { method: "POST" });
+        const res = await apiFetch("/api/gestao/firestore/consolidar-produtos", { method: "POST" });
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
@@ -358,7 +358,7 @@ async function sincronizarClientesLocal() {
     const original = btn ? btn.textContent : "📥 Copiar Clientes → Local";
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Copiando clientes..."; }
     try {
-        const res = await fetch("/api/gestao/firestore/sincronizar-clientes-local", { method: "POST" });
+        const res = await apiFetch("/api/gestao/firestore/sincronizar-clientes-local", { method: "POST" });
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
@@ -403,7 +403,7 @@ async function sincronizarProdutosLocal() {
     const original = btn ? btn.textContent : "📥 Copiar Produtos → Local";
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Copiando produtos..."; }
     try {
-        const res = await fetch("/api/gestao/firestore/sincronizar-produtos-local", { method: "POST" });
+        const res = await apiFetch("/api/gestao/firestore/sincronizar-produtos-local", { method: "POST" });
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);

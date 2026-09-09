@@ -45,7 +45,7 @@ def record_audit(
                 resolved_ip = request.client.host if request.client else "127.0.0.1"
 
         if not resolved_email:
-            token = request.headers.get("X-Session-Token", "").strip()
+            token = request.headers.get("X-Session-Token", "").strip() or request.query_params.get("token", "").strip()
             if token:
                 try:
                     from backend.routers.auth import get_session
