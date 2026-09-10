@@ -516,6 +516,41 @@ class TestNFEManager(unittest.TestCase):
         self.assertEqual(previa["emitente"]["municipio"], "PIRACICABA")
         self.assertEqual(previa["emitente"]["cep"], "13400370")
 
+    def test_cliente_preservacao_contato_e_sync(self):
+        """Verifica se save_cliente preserva dados existentes (e-mail, telefone) em atualizações parciais."""
+        from backend.database.cadastros import save_cliente, delete_cliente_by_cpf_cnpj
+
+        cpf = "99887766554"
+        # 1. Cria com email e telefone
+        res1 = save_cliente({
+            "cpf_cnpj": cpf,
+            "razao_social": "TESTE PRESERVACAO SYNC",
+            "email": "cliente.teste@dominio.com",
+            "telefone": "19999887766",
+            "cep": "13400000",
+            "logradouro": "Avenida Brasil",
+            "numero": "500",
+        }, sync_remote=False)
+
+        self.assertEqual(res1["cliente"]["email"], "cliente.teste@dominio.com")
+        self.assertEqual(res1["cliente"]["telefone"], "19999887766")
+
+        # 2. Atualização parcial sem email e sem telefone (como na emissão de NF-e rápida)
+        res2 = save_cliente({
+            "cpf_cnpj": cpf,
+            "razao_social": "TESTE PRESERVACAO SYNC",
+            "email": "",
+            "telefone": "",
+        }, sync_remote=False)
+
+        # Não deve ter apagado os dados
+        self.assertEqual(res2["cliente"]["email"], "cliente.teste@dominio.com")
+        self.assertEqual(res2["cliente"]["telefone"], "19999887766")
+        self.assertEqual(res2["cliente"]["logradouro"], "Avenida Brasil")
+
+        # Limpeza
+        delete_cliente_by_cpf_cnpj(cpf)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ from backend.database import (
     save_cliente,
     list_clientes,
     delete_cliente,
+    delete_cliente_by_cpf_cnpj,
     save_produto,
     list_produtos,
     get_produto_detail,
@@ -60,6 +61,26 @@ async def excluir_cliente(cliente_id: int):
     if not ok:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
     return {"success": True, "message": "Cliente excluído com sucesso."}
+
+
+@router.post("/clientes/sync-item")
+async def sync_cliente_item(payload: Dict[str, Any] = Body(...)):
+    """
+    Sincroniza um cliente recebido em tempo real via Cloud Firestore.
+    Salva ou atualiza no SQLite local preservando campos existentes, sem retransmitir ao Firestore.
+    """
+    try:
+        res = save_cliente(payload, sync_remote=False)
+        return {"success": True, "data": res}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/clientes/by-doc/{doc_clean}")
+async def excluir_cliente_por_doc(doc_clean: str):
+    """Exclui cliente no SQLite por CPF/CNPJ quando removido no Firestore."""
+    ok = delete_cliente_by_cpf_cnpj(doc_clean)
+    return {"success": True, "deleted": ok}
 
 
 # ====================================================================

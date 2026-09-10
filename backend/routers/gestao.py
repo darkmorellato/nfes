@@ -1177,6 +1177,16 @@ async def pull_do_firestore():
         raise HTTPException(status_code=500, detail=f"Erro no pull do Firestore: {str(e)}")
 
 
+@router.post("/firestore/sync-doc")
+async def sync_doc_firestore(payload: Dict[str, Any] = Body(...)):
+    """Salva ou atualiza no SQLite local uma NF-e recebida em tempo real via Cloud Firestore."""
+    try:
+        ok = save_nfe_doc(payload)
+        return {"success": ok}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/firestore/pull-status")
 async def status_pull_firestore():
     """Retorna contagem de NF-es locais + status de conexão com o Firestore."""

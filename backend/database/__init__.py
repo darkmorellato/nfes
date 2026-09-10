@@ -91,6 +91,7 @@ from .cadastros import (
     save_cliente,
     list_clientes,
     delete_cliente,
+    delete_cliente_by_cpf_cnpj,
     save_produto,
     get_produto_detail,
     sugerir_dados_fiscais_produto,

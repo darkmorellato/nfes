@@ -28,24 +28,75 @@ def get_empresas() -> List[Dict[str, Any]]:
 # INADIMPLÊNCIA POR CLIENTE/FORNECEDOR
 # ====================================================================
 
-def save_cliente(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Cadastra ou atualiza um cliente destinatário."""
+def save_cliente(data: Dict[str, Any], sync_remote: bool = True) -> Dict[str, Any]:
+    """Cadastra ou atualiza um cliente destinatário.
+    Preserva valores já existentes (e-mail, telefone, endereço, etc.) se uma atualização
+    parcial for recebida com campos vazios, evitando a perda acidental de contatos.
+    Sincroniza automaticamente em tempo real com o Cloud Firestore.
+    """
     doc_clean = "".join(c for c in str(data.get("cpf_cnpj", "")) if c.isdigit())
-    if not doc_clean or not data.get("razao_social"):
+    razao_input = str(data.get("razao_social") or "").strip().upper()
+    if not doc_clean or not razao_input:
         raise ValueError("CPF/CNPJ e Razão Social são obrigatórios.")
 
-    tipo_pessoa = "PF" if len(doc_clean) == 11 else "PJ"
+    tipo_pessoa = data.get("tipo_pessoa") or ("PF" if len(doc_clean) == 11 else "PJ")
     now_iso = datetime.now().isoformat()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cli_id = data.get("id")
         if cli_id:
-            cursor.execute("SELECT id FROM cad_clientes WHERE id = ?", (cli_id,))
+            cursor.execute("SELECT * FROM cad_clientes WHERE id = ?", (cli_id,))
             row = cursor.fetchone()
         else:
-            cursor.execute("SELECT id FROM cad_clientes WHERE cpf_cnpj = ?", (doc_clean,))
+            cursor.execute("SELECT * FROM cad_clientes WHERE cpf_cnpj = ?", (doc_clean,))
             row = cursor.fetchone()
+
+        existing = dict(row) if row else {}
+
+        # Preserva campos existentes se os recebidos forem vazios
+        incoming_email = str(data.get("email") or "").strip().lower()
+        email = incoming_email if incoming_email else str(existing.get("email") or "").strip().lower()
+
+        incoming_tel = str(data.get("telefone") or "").strip()
+        telefone = incoming_tel if incoming_tel else str(existing.get("telefone") or "").strip()
+
+        incoming_cep = str(data.get("cep") or "").replace("-", "").strip()
+        cep = incoming_cep if incoming_cep else str(existing.get("cep") or "").replace("-", "").strip()
+
+        incoming_logr = str(data.get("logradouro") or "").strip()
+        logradouro = incoming_logr if incoming_logr else str(existing.get("logradouro") or "").strip()
+
+        incoming_num = str(data.get("numero") or "").strip()
+        numero = incoming_num if incoming_num else str(existing.get("numero") or "").strip()
+
+        incoming_comp = str(data.get("complemento") or "").strip()
+        complemento = incoming_comp if incoming_comp else str(existing.get("complemento") or "").strip()
+
+        incoming_bairro = str(data.get("bairro") or "").strip()
+        bairro = incoming_bairro if incoming_bairro else str(existing.get("bairro") or "").strip()
+
+        incoming_mun = str(data.get("municipio") or "").strip()
+        municipio = incoming_mun if incoming_mun else str(existing.get("municipio") or "").strip()
+
+        incoming_cod_mun = str(data.get("cod_municipio") or "").strip()
+        cod_municipio = incoming_cod_mun if incoming_cod_mun else str(existing.get("cod_municipio") or "3550308").strip()
+
+        incoming_uf = str(data.get("uf") or "").strip().upper()
+        uf = incoming_uf if incoming_uf else str(existing.get("uf") or "SP").strip().upper()
+
+        incoming_ie = str(data.get("ie") or "").strip()
+        ie = incoming_ie if incoming_ie else str(existing.get("ie") or "").strip()
+
+        if data.get("indicador_ie") is not None:
+            indicador_ie = int(data.get("indicador_ie"))
+        else:
+            indicador_ie = int(existing.get("indicador_ie", 9))
+
+        razao_social = razao_input or str(existing.get("razao_social") or "").strip().upper()
+
+        incoming_fantasia = str(data.get("nome_fantasia") or "").strip().upper()
+        nome_fantasia = incoming_fantasia if incoming_fantasia else str(existing.get("nome_fantasia") or "").strip().upper()
 
         if row:
             cursor.execute("""
@@ -55,24 +106,9 @@ def save_cliente(data: Dict[str, Any]) -> Dict[str, Any]:
                     bairro = ?, municipio = ?, cod_municipio = ?, uf = ?, updated_at = ?
                 WHERE id = ?
             """, (
-                tipo_pessoa,
-                doc_clean,
-                data.get("razao_social", "").strip().upper(),
-                data.get("nome_fantasia", "").strip().upper(),
-                data.get("ie", "").strip(),
-                int(data.get("indicador_ie", 9)),
-                data.get("email", "").strip().lower(),
-                data.get("telefone", "").strip(),
-                data.get("cep", "").replace("-", "").strip(),
-                data.get("logradouro", "").strip(),
-                data.get("numero", "").strip(),
-                data.get("complemento", "").strip(),
-                data.get("bairro", "").strip(),
-                data.get("municipio", "").strip(),
-                data.get("cod_municipio", "3550308").strip(),
-                data.get("uf", "SP").strip().upper(),
-                now_iso,
-                row["id"]
+                tipo_pessoa, doc_clean, razao_social, nome_fantasia, ie, indicador_ie,
+                email, telefone, cep, logradouro, numero, complemento,
+                bairro, municipio, cod_municipio, uf, now_iso, row["id"]
             ))
             cliente_id = row["id"]
         else:
@@ -83,29 +119,43 @@ def save_cliente(data: Dict[str, Any]) -> Dict[str, Any]:
                     bairro, municipio, cod_municipio, uf, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                tipo_pessoa,
-                doc_clean,
-                data.get("razao_social", "").strip().upper(),
-                data.get("nome_fantasia", "").strip().upper(),
-                data.get("ie", "").strip(),
-                int(data.get("indicador_ie", 9)),
-                data.get("email", "").strip().lower(),
-                data.get("telefone", "").strip(),
-                data.get("cep", "").replace("-", "").strip(),
-                data.get("logradouro", "").strip(),
-                data.get("numero", "").strip(),
-                data.get("complemento", "").strip(),
-                data.get("bairro", "").strip(),
-                data.get("municipio", "").strip(),
-                data.get("cod_municipio", "3550308").strip(),
-                data.get("uf", "SP").strip().upper(),
-                now_iso,
-                now_iso
+                tipo_pessoa, doc_clean, razao_social, nome_fantasia, ie, indicador_ie,
+                email, telefone, cep, logradouro, numero, complemento,
+                bairro, municipio, cod_municipio, uf, now_iso, now_iso
             ))
             cliente_id = cursor.lastrowid
         conn.commit()
 
-    return {"success": True, "id": cliente_id, "cpf_cnpj": doc_clean}
+    cliente_salvo = {
+        "id": cliente_id,
+        "tipo_pessoa": tipo_pessoa,
+        "cpf_cnpj": doc_clean,
+        "razao_social": razao_social,
+        "nome_fantasia": nome_fantasia,
+        "ie": ie,
+        "indicador_ie": indicador_ie,
+        "email": email,
+        "telefone": telefone,
+        "cep": cep,
+        "logradouro": logradouro,
+        "numero": numero,
+        "complemento": complemento,
+        "bairro": bairro,
+        "municipio": municipio,
+        "cod_municipio": cod_municipio,
+        "uf": uf,
+        "updated_at": now_iso,
+    }
+
+    if sync_remote:
+        try:
+            from backend.services.firestore_service import sync_cliente_to_firestore_async
+            sync_cliente_to_firestore_async(cliente_salvo)
+        except Exception as e:
+            import logging
+            logging.getLogger("nfe.cadastros").warning(f"Erro ao disparar sync Firestore cliente: {e}")
+
+    return {"success": True, "id": cliente_id, "cpf_cnpj": doc_clean, "cliente": cliente_salvo}
 
 def list_clientes(busca: Optional[str] = None) -> List[Dict[str, Any]]:
     """Lista todos os clientes com suporte a busca rápida por nome, CPF/CNPJ, e-mail e telefone."""
@@ -132,11 +182,39 @@ def list_clientes(busca: Optional[str] = None) -> List[Dict[str, Any]]:
             cursor.execute("SELECT * FROM cad_clientes ORDER BY razao_social ASC LIMIT 2000")
         return [dict(r) for r in cursor.fetchall()]
 
-def delete_cliente(cliente_id: int) -> bool:
-    """Exclui um cliente do cadastro."""
+def delete_cliente(cliente_id: int, sync_remote: bool = True) -> bool:
+    """Exclui um cliente do cadastro local e opcionalmente do Firestore."""
+    doc_clean = None
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT cpf_cnpj FROM cad_clientes WHERE id = ?", (cliente_id,))
+        row = cursor.fetchone()
+        if row:
+            doc_clean = row["cpf_cnpj"]
+
         cursor.execute("DELETE FROM cad_clientes WHERE id = ?", (cliente_id,))
+        conn.commit()
+        deleted = cursor.rowcount > 0
+
+    if deleted and doc_clean and sync_remote:
+        try:
+            from backend.services.firestore_service import delete_cliente_from_firestore_async
+            delete_cliente_from_firestore_async(doc_clean)
+        except Exception as e:
+            import logging
+            logging.getLogger("nfe.cadastros").warning(f"Erro ao disparar delete Firestore cliente: {e}")
+
+    return deleted
+
+
+def delete_cliente_by_cpf_cnpj(cpf_cnpj: str) -> bool:
+    """Exclui um cliente por CPF/CNPJ (chamado via sincronização remota)."""
+    doc_clean = "".join(c for c in str(cpf_cnpj or "") if c.isdigit())
+    if not doc_clean:
+        return False
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cad_clientes WHERE cpf_cnpj = ?", (doc_clean,))
         conn.commit()
         return cursor.rowcount > 0
 

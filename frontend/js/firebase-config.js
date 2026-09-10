@@ -45,6 +45,8 @@ function initFirebase() {
             isFirestoreAvailable = true;
             console.log("✓ Firebase & Cloud Firestore inicializados com sucesso!");
             updateFirestoreStatusUI(true);
+            initClientesRealtimeListener();
+            initNfesRealtimeListener();
             // Notifica todos que aguardam o Firebase
             if (_firebaseReadyResolve) _firebaseReadyResolve(true);
         } else {
@@ -494,3 +496,208 @@ if (document.readyState === "loading") {
 } else {
     bootstrapFirebase();
 }
+
+// ====================================================================
+// SINCRONIZAÇÃO EM TEMPO REAL MULTI-MÁQUINA VIA FIRESTORE (onSnapshot)
+// ====================================================================
+
+let _unsubscribeClientes = null;
+
+/**
+ * Listener em tempo real para a coleção 'clientes' do Cloud Firestore.
+ * Quando qualquer máquina cadastra, edita ou exclui um cliente, reflete
+ * instantaneamente no SQLite local e na interface desta máquina.
+ */
+function initClientesRealtimeListener() {
+    if (!isFirestoreAvailable || !firestoreDb) return;
+    if (_unsubscribeClientes) return;
+
+    console.log("👥 [Real-time] Conectando listener de clientes Firestore...");
+    let isFirstSnapshot = true;
+
+    try {
+        _unsubscribeClientes = firestoreDb.collection("clientes")
+            .onSnapshot(async (snapshot) => {
+                if (isFirstSnapshot) {
+                    isFirstSnapshot = false;
+                    console.log(`👥 [Real-time] Snapshot inicial de clientes carregado (${snapshot.docs.length} docs).`);
+                    const changes = snapshot.docChanges();
+                    const now = Date.now();
+                    const recentChanges = changes.filter(c => {
+                        const d = c.doc.data();
+                        if (!d.updated_at) return false;
+                        const t = new Date(d.updated_at).getTime();
+                        return (now - t) < (48 * 3600 * 1000);
+                    });
+                    if (recentChanges.length > 0) {
+                        console.log(`👥 [Real-time] Sincronizando ${recentChanges.length} clientes alterados recentemente...`);
+                        await _processarMudancasClientes(recentChanges, false);
+                    }
+                    return;
+                }
+
+                const changes = snapshot.docChanges();
+                if (!changes || changes.length === 0) return;
+
+                console.log(`⚡ [Real-time] ${changes.length} alteração(ões) em clientes detectada(s)!`);
+                await _processarMudancasClientes(changes, true);
+            }, (err) => {
+                console.warn("Aviso no listener de clientes Firestore:", err);
+            });
+    } catch (e) {
+        console.warn("Erro ao registrar onSnapshot de clientes:", e);
+    }
+}
+
+async function _processarMudancasClientes(changes, showToast = true) {
+    let houveAlteracao = false;
+    let nomesAtualizados = [];
+
+    for (const change of changes) {
+        const d = change.doc.data();
+        const docId = (change.doc.id || "").replace(/\D/g, "");
+
+        if (change.type === "removed") {
+            try {
+                if (docId) {
+                    await apiFetch(`/api/emissao/clientes/by-doc/${docId}`, { method: "DELETE" });
+                    houveAlteracao = true;
+                }
+            } catch (e) {
+                console.warn("Erro ao remover cliente localmente:", e);
+            }
+        } else if (change.type === "added" || change.type === "modified") {
+            const cpfCnpj = (d.cpf_cnpj || d.cnpj_cpf || docId || "").replace(/\D/g, "");
+            const razao = (d.razao_social || d.nome || "").trim().toUpperCase();
+            if (!cpfCnpj || !razao) continue;
+
+            const payload = {
+                cpf_cnpj: cpfCnpj,
+                razao_social: razao,
+                nome_fantasia: (d.nome_fantasia || "").trim().toUpperCase(),
+                tipo_pessoa: d.tipo_pessoa || (cpfCnpj.length === 11 ? "PF" : "PJ"),
+                indicador_ie: d.indicador_ie !== undefined ? parseInt(d.indicador_ie) : 9,
+                ie: (d.ie || "").trim(),
+                email: (d.email || "").trim().lower(),
+                telefone: (d.telefone || "").trim(),
+                cep: (d.cep || "").replace(/\D/g, "").trim(),
+                logradouro: (d.logradouro || "").trim(),
+                numero: (d.numero || "").trim(),
+                complemento: (d.complemento || "").trim(),
+                bairro: (d.bairro || "").trim(),
+                municipio: (d.municipio || "").trim(),
+                cod_municipio: (d.cod_municipio || "3550308").trim(),
+                uf: (d.uf || "SP").trim().toUpperCase(),
+            };
+
+            try {
+                const res = await apiPost("/api/emissao/clientes/sync-item", payload);
+                if (res && res.success) {
+                    houveAlteracao = true;
+                    nomesAtualizados.push(razao);
+                }
+            } catch (e) {
+                console.warn("Erro ao sincronizar cliente Firestore→SQLite:", e);
+            }
+        }
+    }
+
+    if (houveAlteracao) {
+        if (typeof carregarTabelaCadClientes === "function") {
+            try { await carregarTabelaCadClientes(); } catch (_) {}
+        }
+        if (typeof carregarSelectClientesEmissao === "function") {
+            try { await carregarSelectClientesEmissao(); } catch (_) {}
+        }
+
+        if (showToast && nomesAtualizados.length > 0) {
+            const primeiro = nomesAtualizados[0];
+            const extra = nomesAtualizados.length > 1 ? ` (+${nomesAtualizados.length - 1})` : "";
+            if (typeof toast !== "undefined" && toast.info) {
+                toast.info(`👥 Cliente sincronizado em tempo real: ${primeiro}${extra}`, 4500);
+            }
+        }
+    }
+}
+
+let _unsubscribeNfes = null;
+
+/**
+ * Listener em tempo real para a coleção 'nfe_docs' do Cloud Firestore.
+ * Quando uma máquina emite uma nota fiscal, ela aparece imediatamente na
+ * outra máquina sem necessidade de recarregar a página.
+ */
+function initNfesRealtimeListener() {
+    if (!isFirestoreAvailable || !firestoreDb) return;
+    if (_unsubscribeNfes) return;
+
+    console.log("☁️ [Real-time] Conectando listener de NF-es Firestore...");
+    let isFirstSnapshot = true;
+
+    try {
+        _unsubscribeNfes = firestoreDb.collection("nfe_docs")
+            .orderBy("updated_at", "desc")
+            .limit(25)
+            .onSnapshot(async (snapshot) => {
+                if (isFirstSnapshot) {
+                    isFirstSnapshot = false;
+                    console.log(`☁️ [Real-time] Snapshot inicial de NF-es pronto (${snapshot.docs.length} docs).`);
+                    return;
+                }
+
+                const changes = snapshot.docChanges();
+                if (!changes || changes.length === 0) return;
+
+                let houveNovasNotas = false;
+                for (const change of changes) {
+                    if (change.type === "added" || change.type === "modified") {
+                        const d = change.doc.data();
+                        const chave = (d.chave || change.doc.id || "").replace(/\D/g, "");
+                        if (chave.length !== 44) continue;
+
+                        try {
+                            const res = await apiPost("/api/gestao/firestore/sync-doc", {
+                                chave: chave,
+                                numero: d.numero || (chave.length === 44 ? String(parseInt(chave.substring(25, 34), 10) || "") : ""),
+                                serie: d.serie || (chave.length === 44 ? String(parseInt(chave.substring(22, 25), 10) || "") : "1"),
+                                modelo: d.modelo || "55",
+                                tipo_doc: d.tipo_doc !== undefined ? d.tipo_doc : 1,
+                                emitente_nome: d.emitente_nome || "",
+                                emitente_cnpj: d.emitente_cnpj || "",
+                                destinatario_nome: d.destinatario_nome || "",
+                                destinatario_cnpj: d.destinatario_cnpj || "",
+                                data_emissao: d.data_emissao || "",
+                                valor_total: d.valor_total || 0.0,
+                                valor_icms: d.valor_icms || 0.0,
+                                situacao: d.situacao || "Autorizada",
+                                nsu: d.nsu || "0",
+                                empresa_cnpj: d.empresa_cnpj || d.emitente_cnpj || "",
+                            });
+                            if (res && res.success) {
+                                houveNovasNotas = true;
+                            }
+                        } catch (e) {
+                            console.warn("Erro ao salvar NF-e recebida em tempo real:", e);
+                        }
+                    }
+                }
+
+                if (houveNovasNotas) {
+                    if (typeof carregarNfeSaidas === "function") {
+                        try { carregarNfeSaidas(1); } catch (_) {}
+                    }
+                    if (typeof carregarDocumentos === "function") {
+                        try { carregarDocumentos(1); } catch (_) {}
+                    }
+                    if (typeof toast !== "undefined" && toast.info) {
+                        toast.info("☁️ Nova NF-e sincronizada da outra máquina em tempo real!", 5000);
+                    }
+                }
+            }, (err) => {
+                console.warn("Aviso no listener de NF-es Firestore:", err);
+            });
+    } catch (e) {
+        console.warn("Erro ao registrar onSnapshot de NF-es:", e);
+    }
+}
+

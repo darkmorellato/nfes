@@ -607,6 +607,80 @@ def _upsert_firestore_doc(collection: str, doc_id: str, payload: Dict[str, Any])
         return False
 
 
+def _delete_firestore_doc(collection: str, doc_id: str) -> bool:
+    """DELETE em /v1/.../documents/{collection}/{doc_id}."""
+    import unicodedata
+
+    api_key = _get_api_key()
+    project_id = _get_project_id()
+    if not api_key or not project_id:
+        return False
+    normalized = unicodedata.normalize("NFD", str(doc_id))
+    ascii_only = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in ascii_only)
+    doc_path = (
+        f"projects/{project_id}/databases/(default)/documents/{collection}/{safe_id}"
+    )
+    url = f"https://firestore.googleapis.com/v1/{doc_path}?key={api_key}"
+    req = urllib.request.Request(url, method="DELETE")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status in (200, 204)
+    except Exception as e:
+        logger.warning(f"[Firestore] Erro delete {collection}/{safe_id}: {e}")
+        return False
+
+
+def sync_cliente_to_firestore(cliente: Dict[str, Any]) -> bool:
+    """Sincroniza um cliente (cadastrado ou atualizado) para o Cloud Firestore."""
+    doc_clean = "".join(c for c in str(cliente.get("cpf_cnpj") or cliente.get("cnpj_cpf") or "") if c.isdigit())
+    if not doc_clean:
+        return False
+
+    razao = str(cliente.get("razao_social") or cliente.get("nome") or "").strip().upper()
+    if not razao:
+        return False
+
+    payload = {
+        "cnpj_cpf": doc_clean,
+        "cpf_cnpj": doc_clean,
+        "nome": razao,
+        "razao_social": razao,
+        "nome_fantasia": str(cliente.get("nome_fantasia") or "").strip().upper(),
+        "tipo_pessoa": str(cliente.get("tipo_pessoa") or ("PF" if len(doc_clean) == 11 else "PJ")),
+        "ie": str(cliente.get("ie") or "").strip(),
+        "indicador_ie": int(cliente.get("indicador_ie", 9)),
+        "email": str(cliente.get("email") or "").strip().lower(),
+        "telefone": str(cliente.get("telefone") or "").strip(),
+        "cep": str(cliente.get("cep") or "").replace("-", "").strip(),
+        "logradouro": str(cliente.get("logradouro") or "").strip(),
+        "numero": str(cliente.get("numero") or "").strip(),
+        "complemento": str(cliente.get("complemento") or "").strip(),
+        "bairro": str(cliente.get("bairro") or "").strip(),
+        "municipio": str(cliente.get("municipio") or "").strip(),
+        "cod_municipio": str(cliente.get("cod_municipio") or "3550308").strip(),
+        "uf": str(cliente.get("uf") or "SP").strip().upper(),
+        "updated_at": datetime.now().isoformat(),
+    }
+    return _upsert_firestore_doc("clientes", doc_clean, payload)
+
+
+def sync_cliente_to_firestore_async(cliente: Dict[str, Any]) -> None:
+    threading.Thread(target=sync_cliente_to_firestore, args=(cliente,), daemon=True).start()
+
+
+def delete_cliente_from_firestore(cpf_cnpj: str) -> bool:
+    doc_clean = "".join(c for c in str(cpf_cnpj or "") if c.isdigit())
+    if not doc_clean:
+        return False
+    return _delete_firestore_doc("clientes", doc_clean)
+
+
+def delete_cliente_from_firestore_async(cpf_cnpj: str) -> None:
+    threading.Thread(target=delete_cliente_from_firestore, args=(cpf_cnpj,), daemon=True).start()
+
+
+
 def consolidar_clientes_do_sqlite() -> Dict[str, Any]:
     """Varre TODAS as NF-es do SQLite e consolida emitentes + destinatários
     na coleção 'clientes' do Firestore. Idempotente."""
@@ -974,21 +1048,21 @@ def sincronizar_clientes_firestore_para_sqlite() -> Dict[str, Any]:
         try:
             save_cliente({
                 "cpf_cnpj": cnpj_cpf,
-                "razao_social": (d.get("nome") or f"CLIENTE {cnpj_cpf}").strip(),
-                "nome_fantasia": "",
-                "ie": "",
-                "indicador_ie": 9,
+                "razao_social": (d.get("razao_social") or d.get("nome") or f"CLIENTE {cnpj_cpf}").strip(),
+                "nome_fantasia": (d.get("nome_fantasia") or "").strip(),
+                "ie": (d.get("ie") or "").strip(),
+                "indicador_ie": int(d.get("indicador_ie", 9)),
                 "uf": (d.get("uf") or "SP").strip().upper(),
-                "email": "",
-                "telefone": "",
-                "cep": "",
-                "logradouro": "",
-                "numero": "",
-                "complemento": "",
-                "bairro": "",
-                "municipio": "",
-                "cod_municipio": "3550308",
-            })
+                "email": (d.get("email") or "").strip().lower(),
+                "telefone": (d.get("telefone") or "").strip(),
+                "cep": (d.get("cep") or "").replace("-", "").strip(),
+                "logradouro": (d.get("logradouro") or "").strip(),
+                "numero": (d.get("numero") or "").strip(),
+                "complemento": (d.get("complemento") or "").strip(),
+                "bairro": (d.get("bairro") or "").strip(),
+                "municipio": (d.get("municipio") or "").strip(),
+                "cod_municipio": str(d.get("cod_municipio") or "3550308").strip(),
+            }, sync_remote=False)
             sucessos += 1
         except Exception as e:
             logger.warning(f"[Sync] Falha ao inserir cliente {cnpj_cpf}: {e}")

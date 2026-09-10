@@ -52,7 +52,7 @@ async function consultarCnpjReceitaFederal(targetInputId) {
                 setV("modal-cli-mun", d.municipio || "");
                 setV("modal-cli-uf", d.uf || "SP");
                 if (d.email) setV("modal-cli-email", d.email);
-                if (d.telefone) setV("modal-cli-fone", d.telefone);
+                if (d.telefone) setV("modal-cli-tel", d.telefone);
 
                 inputDoc.value = cleanCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 
@@ -328,11 +328,38 @@ async function salvarClienteModal(e) {
 
         const res = await apiPost("/api/emissao/clientes", payload);
 
+        // Sincronização direta com Cloud Firestore para propagação instantânea entre máquinas
+        if (typeof isFirestoreAvailable !== "undefined" && isFirestoreAvailable && typeof firestoreDb !== "undefined" && firestoreDb) {
+            try {
+                await firestoreDb.collection("clientes").doc(doc).set({
+                    cnpj_cpf: doc,
+                    cpf_cnpj: doc,
+                    nome: nome,
+                    razao_social: nome,
+                    nome_fantasia: fantasia,
+                    indicador_ie: indIe,
+                    ie: ie,
+                    email: email,
+                    telefone: tel,
+                    cep: cep,
+                    logradouro: logr,
+                    numero: num,
+                    bairro: bairro,
+                    municipio: mun,
+                    uf: uf,
+                    tipo_pessoa: doc.length === 11 ? "PF" : "PJ",
+                    updated_at: new Date().toISOString(),
+                }, { merge: true });
+            } catch (fErr) {
+                console.warn("Aviso ao sincronizar cliente com Firestore diretamente:", fErr);
+            }
+        }
+
         if (res.success && res.data?.success !== false) {
             fecharModalCliente();
             await carregarTabelaCadClientes();
             await carregarSelectClientesEmissao();
-            toast.success("Cliente salvo com sucesso!");
+            toast.success("Cliente salvo com sucesso e sincronizado em tempo real!");
         } else {
             const msg = res.data?.detail || res.data?.error || "Falha ao salvar cliente.";
             toast.error("Erro ao salvar cliente: " + msg);
@@ -350,6 +377,9 @@ function usarClienteNaEmissao(doc) {
 }
 
 async function excluirClienteCad(id) {
+    const cliente = (AppState.clientesCad || []).find(c => c.id === id);
+    const docClean = cliente ? String(cliente.cpf_cnpj).replace(/\D/g, "") : null;
+
     const confirma = await showConfirmModal({
         title: "Excluir Cliente",
         message: "Deseja realmente excluir este cliente do cadastro?",
@@ -362,6 +392,13 @@ async function excluirClienteCad(id) {
     try {
         const res = await apiRequest(`/api/emissao/clientes/${id}`, { method: "DELETE" });
         if (res.success) {
+            if (docClean && typeof isFirestoreAvailable !== "undefined" && isFirestoreAvailable && typeof firestoreDb !== "undefined" && firestoreDb) {
+                try {
+                    await firestoreDb.collection("clientes").doc(docClean).delete();
+                } catch (fErr) {
+                    console.warn("Aviso ao remover cliente do Firestore:", fErr);
+                }
+            }
             await carregarTabelaCadClientes();
             await carregarSelectClientesEmissao();
             toast.success("Cliente excluído com sucesso.");
