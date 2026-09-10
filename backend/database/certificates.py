@@ -152,9 +152,10 @@ def update_cert_sync_state(cnpj: str, last_nsu: str, max_nsu: Optional[str] = No
         conn.commit()
 
 
-def update_certificate_fiscal_data(cnpj: str, data: Dict[str, Any]) -> bool:
+def update_certificate_fiscal_data(cnpj: str, data: Dict[str, Any], sync_remote: bool = True) -> bool:
     """Atualiza dados fiscais e cadastrais (IE, nome fantasia, endereço, CRT) da empresa/certificado."""
     import json
+    from backend.config import settings
     cnpj_clean = "".join(c for c in str(cnpj) if c.isdigit())
     now = datetime.now().isoformat()
     with get_db_connection() as conn:
@@ -185,12 +186,23 @@ def update_certificate_fiscal_data(cnpj: str, data: Dict[str, Any]) -> bool:
 
     if updated:
         try:
-            from backend.constants import _empresas_file_path
-            path = _empresas_file_path()
+            # Garante que salva em certs/empresas_fiscais.json (gitignored), nunca sujando o repositório git
+            os.makedirs(settings.CERT_DIR, exist_ok=True)
+            path = os.path.join(settings.CERT_DIR, "empresas_fiscais.json")
             empresas = []
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     empresas = json.load(f).get("empresas", [])
+            else:
+                # Inicializa cópia a partir de data/empresas_fiscais.json se existir
+                seed_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "empresas_fiscais.json")
+                if os.path.exists(seed_path):
+                    try:
+                        with open(seed_path, "r", encoding="utf-8") as f:
+                            empresas = json.load(f).get("empresas", [])
+                    except Exception:
+                        empresas = []
+
             found = False
             for emp in empresas:
                 if emp.get("cnpj") == cnpj_clean:
@@ -228,6 +240,31 @@ def update_certificate_fiscal_data(cnpj: str, data: Dict[str, Any]) -> bool:
                 })
             with open(path, "w", encoding="utf-8") as f:
                 json.dump({"empresas": empresas}, f, indent=2, ensure_ascii=False)
+
+            from backend.constants import reload_empresas_oficiais
+            reload_empresas_oficiais()
+
+            if sync_remote:
+                try:
+                    from backend.services.firestore_service import sync_empresa_fiscal_to_firestore_async
+                    emp_fiscal_info = {
+                        "cnpj": cnpj_clean,
+                        "ie": str(data.get("ie") or "").strip(),
+                        "nome_fantasia": str(data.get("nome_fantasia") or "").strip(),
+                        "logradouro": str(data.get("logradouro") or "").strip(),
+                        "numero": str(data.get("numero") or "").strip(),
+                        "complemento": str(data.get("complemento") or "").strip(),
+                        "bairro": str(data.get("bairro") or "").strip(),
+                        "municipio": str(data.get("municipio") or "").strip(),
+                        "cod_municipio": str(data.get("cod_municipio") or "").strip(),
+                        "uf": str(data.get("uf") or "SP").strip().upper(),
+                        "cep": "".join(c for c in str(data.get("cep") or "") if c.isdigit()),
+                        "crt": int(data.get("crt") or 1),
+                    }
+                    sync_empresa_fiscal_to_firestore_async(cnpj_clean, emp_fiscal_info)
+                except Exception:
+                    pass
+
         except Exception:
             pass
 

@@ -551,6 +551,40 @@ class TestNFEManager(unittest.TestCase):
         # Limpeza
         delete_cliente_by_cpf_cnpj(cpf)
 
+    def test_produto_sync_and_deletion(self):
+        """Verifica cadastro de produto com retorno enriquecido e exclusão por código."""
+        from backend.database.cadastros import save_produto, delete_produto_by_codigo, list_produtos
+
+        test_cod = "TEST_SYNC_999"
+        res = save_produto({
+            "codigo": test_cod,
+            "descricao": "PRODUTO TESTE SINCRONIZACAO",
+            "ncm": "85171300",
+            "cfop_padrao": "5102",
+            "unidade": "UN",
+            "preco_venda": 1599.90,
+        }, sync_remote=False)
+
+        self.assertTrue(res["success"])
+        self.assertIsNotNone(res.get("produto"))
+        self.assertEqual(res["produto"]["codigo"], test_cod)
+        self.assertEqual(res["produto"]["preco_venda"], 1599.90)
+
+        # Exclusão por código
+        del_ok = delete_produto_by_codigo(test_cod)
+        self.assertTrue(del_ok)
+
+        # Confirma que não está mais no catálogo
+        produtos = list_produtos(busca=test_cod)
+        self.assertEqual(len(produtos), 0)
+
+    def test_updater_pip_cmd_is_list(self):
+        """Garante que _get_pip_cmd retorna uma lista para não quebrar subprocess no Linux/Zorin OS."""
+        from backend.services.updater_service import _get_pip_cmd, _get_repo_dir
+        cmd = _get_pip_cmd(_get_repo_dir())
+        self.assertIsInstance(cmd, list)
+        self.assertGreater(len(cmd), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

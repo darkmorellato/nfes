@@ -218,7 +218,7 @@ def delete_cliente_by_cpf_cnpj(cpf_cnpj: str) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
-def save_produto(data: Dict[str, Any]) -> Dict[str, Any]:
+def save_produto(data: Dict[str, Any], sync_remote: bool = True) -> Dict[str, Any]:
     """Cadastra ou atualiza um item no catálogo de produtos com parâmetros fiscais completos."""
     codigo = str(data.get("codigo", "")).strip().upper()
     descricao = str(data.get("descricao", "")).strip().upper()
@@ -278,7 +278,16 @@ def save_produto(data: Dict[str, Any]) -> Dict[str, Any]:
             prod_id = cursor.lastrowid
         conn.commit()
 
-    return {"success": True, "id": prod_id, "codigo": codigo, "descricao": descricao}
+    prod_salvo = get_produto_detail(prod_id)
+    if sync_remote and prod_salvo:
+        try:
+            from backend.services.firestore_service import sync_produto_to_firestore_async
+            sync_produto_to_firestore_async(prod_salvo)
+        except Exception as e:
+            import logging
+            logging.getLogger("nfe.cadastros").warning(f"Erro ao disparar sync Firestore produto: {e}")
+
+    return {"success": True, "id": prod_id, "codigo": codigo, "descricao": descricao, "produto": prod_salvo}
 
 def get_produto_detail(prod_id: int) -> Optional[Dict[str, Any]]:
     """Retorna os dados completos de um produto específico."""
@@ -398,11 +407,38 @@ def list_produtos(busca: Optional[str] = None) -> List[Dict[str, Any]]:
             cursor.execute("SELECT * FROM cad_produtos ORDER BY descricao ASC")
         return [dict(r) for r in cursor.fetchall()]
 
-def delete_produto(prod_id: int) -> bool:
-    """Exclui um produto do catálogo."""
+def delete_produto(prod_id: int, sync_remote: bool = True) -> bool:
+    """Exclui um produto do catálogo local e opcionalmente do Firestore."""
+    codigo = None
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT codigo FROM cad_produtos WHERE id = ?", (prod_id,))
+        row = cursor.fetchone()
+        if row:
+            codigo = row["codigo"]
         cursor.execute("DELETE FROM cad_produtos WHERE id = ?", (prod_id,))
+        conn.commit()
+        deleted = cursor.rowcount > 0
+
+    if deleted and codigo and sync_remote:
+        try:
+            from backend.services.firestore_service import delete_produto_from_firestore_async
+            delete_produto_from_firestore_async(codigo)
+        except Exception as e:
+            import logging
+            logging.getLogger("nfe.cadastros").warning(f"Erro ao disparar delete Firestore produto: {e}")
+
+    return deleted
+
+
+def delete_produto_by_codigo(codigo: str) -> bool:
+    """Exclui um produto por código (chamado via sincronização remota)."""
+    cod_clean = str(codigo or "").strip().upper()
+    if not cod_clean:
+        return False
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cad_produtos WHERE codigo = ?", (cod_clean,))
         conn.commit()
         return cursor.rowcount > 0
 

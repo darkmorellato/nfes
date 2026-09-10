@@ -187,15 +187,36 @@ async function executarAtualizacaoSistema() {
         if (terminalCfg) terminalCfg.textContent = data.logs || (data.success ? "Atualização concluída!" : `Erro: ${data.message}`);
 
         if (data.success) {
-            if (typeof showToast === "function") showToast("🎉 Sistema atualizado com sucesso!", "success");
+            if (typeof showToast === "function") showToast("🎉 Sistema atualizado com sucesso! Reiniciando...", "success");
             if (btnModal) btnModal.style.display = "none";
             if (btnCfg) btnCfg.style.display = "none";
-            if (btnReload) btnReload.style.display = "inline-block";
 
-            // Atualiza status após sucesso
+            const restartMsg = "\n\n🔄 Reiniciando servidor com a nova versão. Recarregando em 3 segundos...";
+            if (terminalModal) terminalModal.textContent += restartMsg;
+            if (terminalCfg) terminalCfg.textContent += restartMsg;
+
+            // Dispara reinício do processo no backend
+            try {
+                if (typeof apiPost === "function") {
+                    apiPost("/api/gestao/sistema/reiniciar", {});
+                } else {
+                    const token = (typeof AuthSession !== "undefined" && AuthSession?.token) || "";
+                    const headers = { "Content-Type": "application/json" };
+                    if (token) headers["X-Session-Token"] = token;
+                    fetch("/api/gestao/sistema/reiniciar", { method: "POST", headers, body: JSON.stringify({}) });
+                }
+            } catch (e) {
+                console.warn("Aviso ao solicitar reinício:", e);
+            }
+
+            if (btnReload) {
+                btnReload.style.display = "inline-block";
+                btnReload.textContent = "🔄 Recarregando...";
+            }
+
             setTimeout(() => {
-                verificarAtualizacoes(false);
-            }, 1000);
+                window.location.reload();
+            }, 3000);
         } else {
             if (typeof showToast === "function") showToast(`❌ ${data.message || "Erro na atualização"}`, "error");
             if (btnModal) { btnModal.disabled = false; btnModal.innerHTML = "🚀 Tentar Novamente"; }

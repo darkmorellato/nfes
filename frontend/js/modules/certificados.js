@@ -536,7 +536,18 @@ async function salvarDadosFiscaisCertModal(e) {
     try {
         const res = await apiPut(`/api/certificado/${cleanCnpj}/dados-fiscais`, payload);
         if (res.success) {
-            toast.success("Dados fiscais atualizados com sucesso!");
+            if (typeof isFirestoreAvailable !== "undefined" && isFirestoreAvailable && typeof firestoreDb !== "undefined" && firestoreDb) {
+                try {
+                    await firestoreDb.collection("empresas").doc(cleanCnpj).set({
+                        ...payload,
+                        cnpj: cleanCnpj,
+                        updated_at: new Date().toISOString(),
+                    }, { merge: true });
+                } catch (fErr) {
+                    console.warn("Aviso ao sincronizar dados fiscais com Firestore:", fErr);
+                }
+            }
+            toast.success("Dados fiscais atualizados e sincronizados em tempo real!");
             fecharModalEditarDadosFiscaisCert();
             await loadCertificatesUI();
             if (typeof carregarEmpresasEmitentesSelect === "function") {

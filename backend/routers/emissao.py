@@ -12,6 +12,7 @@ from backend.database import (
     get_produto_detail,
     sugerir_dados_fiscais_produto,
     delete_produto,
+    delete_produto_by_codigo,
     get_next_nfe_number,
     list_nfe_saidas,
     get_nfe_detail,
@@ -129,6 +130,27 @@ async def excluir_produto(produto_id: int):
     if not ok:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     return {"success": True, "message": "Produto excluído com sucesso."}
+
+
+@router.post("/produtos/sync-item")
+async def sync_produto_item(payload: Dict[str, Any] = Body(...)):
+    """
+    Sincroniza um produto recebido em tempo real via Cloud Firestore.
+    Salva ou atualiza no SQLite local sem retransmitir ao Firestore.
+    """
+    try:
+        res = save_produto(payload, sync_remote=False)
+        return {"success": True, "data": res}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/produtos/by-codigo/{codigo}")
+async def excluir_produto_por_codigo(codigo: str):
+    """Exclui produto no SQLite por código quando removido no Firestore."""
+    ok = delete_produto_by_codigo(codigo)
+    return {"success": True, "deleted": ok}
+
 
 
 # ====================================================================

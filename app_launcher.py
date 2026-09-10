@@ -79,6 +79,11 @@ def _auto_update(repo_dir: str) -> None:
             logger.info("[AutoUpdate] Já está atualizado.")
             return
 
+        try:
+            subprocess.run(["git", "config", "--global", "--add", "safe.directory", repo_dir], cwd=repo_dir, capture_output=True, timeout=5)
+        except Exception:
+            pass
+
         logger.info("[AutoUpdate] Nova versão disponível. Atualizando...")
         pull_result = subprocess.run(
             ["git", "pull", "origin", "main"],
@@ -87,12 +92,17 @@ def _auto_update(repo_dir: str) -> None:
             text=True,
             timeout=60,
         )
+        if pull_result.returncode != 0:
+            logger.warning("[AutoUpdate] git pull encontrou divergência (%s). Aplicando sincronização forçada limpa...", pull_result.stderr.strip())
+            subprocess.run(["git", "checkout", "-f", "main"], cwd=repo_dir, capture_output=True, text=True, timeout=10)
+            pull_result = subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_dir, capture_output=True, text=True, timeout=15)
+
         if pull_result.returncode == 0:
             logger.info("[AutoUpdate] Atualizado com sucesso: %s", pull_result.stdout.strip())
             # Instalar novas dependências se requirements.txt mudou
+            pip_cmd = [sys.executable, "-m", "pip"]
             pip_install = subprocess.run(
-                [os.path.join(repo_dir, "venv", "bin", "pip"), "install", "-r",
-                 os.path.join(repo_dir, "backend", "requirements.txt"), "-q"],
+                pip_cmd + ["install", "-r", os.path.join(repo_dir, "backend", "requirements.txt"), "-q"],
                 cwd=repo_dir,
                 capture_output=True,
                 text=True,
@@ -101,7 +111,7 @@ def _auto_update(repo_dir: str) -> None:
             if pip_install.returncode == 0:
                 logger.info("[AutoUpdate] Dependências atualizadas.")
         else:
-            logger.warning("[AutoUpdate] git pull falhou: %s", pull_result.stderr.strip())
+            logger.warning("[AutoUpdate] Falha final ao sincronizar: %s", pull_result.stderr.strip())
 
     except subprocess.TimeoutExpired:
         logger.warning("[AutoUpdate] Timeout ao verificar atualizações.")

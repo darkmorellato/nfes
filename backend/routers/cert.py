@@ -109,3 +109,15 @@ async def update_cert_fiscal_data_endpoint(cnpj: str, payload: dict, request: Re
         request=request,
     )
     return {"success": True, "message": "Dados fiscais atualizados com sucesso!"}
+
+
+@router.post("/certificado/sync-empresa-fiscal")
+async def sync_empresa_fiscal_endpoint(payload: dict):
+    """Sincroniza dados fiscais de empresa recebidos via Firestore sem retransmitir."""
+    from backend.database import update_certificate_fiscal_data
+    cnpj = str(payload.get("cnpj") or "").strip()
+    if not cnpj:
+        raise HTTPException(status_code=400, detail="CNPJ é obrigatório")
+    ok = update_certificate_fiscal_data(cnpj, payload, sync_remote=False)
+    return {"success": True, "updated": ok}
+

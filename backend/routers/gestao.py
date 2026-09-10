@@ -1418,3 +1418,10 @@ async def rota_executar_atualizacao():
     from backend.services.updater_service import execute_update
     return execute_update()
 
+
+@router.post("/sistema/reiniciar")
+async def rota_reiniciar_sistema():
+    """Reinicia o servidor em segundo plano após uma atualização."""
+    from backend.services.updater_service import restart_server_process
+    return restart_server_process()
+

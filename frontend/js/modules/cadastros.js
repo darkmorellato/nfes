@@ -730,10 +730,37 @@ async function salvarProdutoModal(e) {
         const res = await apiPost("/api/emissao/produtos", payload);
 
         if (res.success && res.data?.success !== false) {
+            // Sincronização direta com Cloud Firestore para propagação instantânea entre máquinas
+            if (typeof isFirestoreAvailable !== "undefined" && isFirestoreAvailable && typeof firestoreDb !== "undefined" && firestoreDb) {
+                try {
+                    await firestoreDb.collection("produtos").doc(cod).set({
+                        codigo: cod,
+                        descricao: desc,
+                        ncm: ncm,
+                        cest: cest,
+                        cfop_padrao: cfop,
+                        cfop_interestadual: cfopInter,
+                        csosn_cst: csosn,
+                        unidade: un,
+                        preco_venda: preco,
+                        preco_custo: custo,
+                        estoque_atual: estoque,
+                        origem: origem,
+                        gtin: gtin,
+                        ean: gtin,
+                        imei: imei,
+                        marca: marca,
+                        updated_at: new Date().toISOString(),
+                    }, { merge: true });
+                } catch (fErr) {
+                    console.warn("Aviso ao sincronizar produto com Firestore diretamente:", fErr);
+                }
+            }
+
             fecharModalProduto();
             await carregarTabelaCadProdutos();
             await carregarSelectProdutosEmissao();
-            toast.success("Produto salvo com sucesso no catálogo!");
+            toast.success("Produto salvo com sucesso e sincronizado em tempo real!");
         } else {
             const msg = res.data?.detail || res.data?.error || "Falha ao salvar produto.";
             toast.error("Erro ao salvar produto: " + msg);
@@ -751,6 +778,9 @@ function usarProdutoNaEmissao(codigo) {
 }
 
 async function excluirProdutoCad(id) {
+    const prod = (AppState.produtosCad || []).find(p => p.id === id);
+    const codClean = prod ? String(prod.codigo).trim().toUpperCase() : null;
+
     const confirma = await showConfirmModal({
         title: "Excluir Produto",
         message: "Deseja realmente excluir este produto do catálogo?",
@@ -763,6 +793,13 @@ async function excluirProdutoCad(id) {
     try {
         const res = await apiRequest(`/api/emissao/produtos/${id}`, { method: "DELETE" });
         if (res.success) {
+            if (codClean && typeof isFirestoreAvailable !== "undefined" && isFirestoreAvailable && typeof firestoreDb !== "undefined" && firestoreDb) {
+                try {
+                    await firestoreDb.collection("produtos").doc(codClean).delete();
+                } catch (fErr) {
+                    console.warn("Aviso ao remover produto do Firestore:", fErr);
+                }
+            }
             await carregarTabelaCadProdutos();
             await carregarSelectProdutosEmissao();
             toast.success("Produto excluído com sucesso.");

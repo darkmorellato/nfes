@@ -47,6 +47,8 @@ function initFirebase() {
             updateFirestoreStatusUI(true);
             initClientesRealtimeListener();
             initNfesRealtimeListener();
+            initProdutosRealtimeListener();
+            initEmpresasRealtimeListener();
             // Notifica todos que aguardam o Firebase
             if (_firebaseReadyResolve) _firebaseReadyResolve(true);
         } else {
@@ -578,7 +580,7 @@ async function _processarMudancasClientes(changes, showToast = true) {
                 tipo_pessoa: d.tipo_pessoa || (cpfCnpj.length === 11 ? "PF" : "PJ"),
                 indicador_ie: d.indicador_ie !== undefined ? parseInt(d.indicador_ie) : 9,
                 ie: (d.ie || "").trim(),
-                email: (d.email || "").trim().lower(),
+                email: (d.email || "").trim().toLowerCase(),
                 telefone: (d.telefone || "").trim(),
                 cep: (d.cep || "").replace(/\D/g, "").trim(),
                 logradouro: (d.logradouro || "").trim(),
@@ -700,4 +702,192 @@ function initNfesRealtimeListener() {
         console.warn("Erro ao registrar onSnapshot de NF-es:", e);
     }
 }
+
+let _unsubscribeProdutos = null;
+
+/**
+ * Listener em tempo real para o catálogo de produtos no Firestore.
+ */
+function initProdutosRealtimeListener() {
+    if (!isFirestoreAvailable || !firestoreDb) return;
+    if (_unsubscribeProdutos) return;
+
+    console.log("📦 [Real-time] Conectando listener de produtos Firestore...");
+    let isFirstSnapshot = true;
+
+    try {
+        _unsubscribeProdutos = firestoreDb.collection("produtos")
+            .onSnapshot(async (snapshot) => {
+                if (isFirstSnapshot) {
+                    isFirstSnapshot = false;
+                    console.log(`📦 [Real-time] Snapshot inicial de produtos carregado (${snapshot.docs.length} docs).`);
+                    const changes = snapshot.docChanges();
+                    const now = Date.now();
+                    const recentChanges = changes.filter(c => {
+                        const d = c.doc.data();
+                        if (!d.updated_at) return false;
+                        const t = new Date(d.updated_at).getTime();
+                        return (now - t) < (48 * 3600 * 1000);
+                    });
+                    if (recentChanges.length > 0) {
+                        await _processarMudancasProdutos(recentChanges, false);
+                    }
+                    return;
+                }
+
+                const changes = snapshot.docChanges();
+                if (!changes || changes.length === 0) return;
+
+                console.log(`⚡ [Real-time] ${changes.length} alteração(ões) em produtos detectada(s)!`);
+                await _processarMudancasProdutos(changes, true);
+            }, (err) => {
+                console.warn("Aviso no listener de produtos Firestore:", err);
+            });
+    } catch (e) {
+        console.warn("Erro ao registrar onSnapshot de produtos:", e);
+    }
+}
+
+async function _processarMudancasProdutos(changes, showToast = true) {
+    let houveAlteracao = false;
+    let nomesAtualizados = [];
+
+    for (const change of changes) {
+        const d = change.doc.data();
+        const codigo = (d.codigo || change.doc.id || "").trim().toUpperCase();
+        if (!codigo) continue;
+
+        if (change.type === "removed") {
+            try {
+                await apiFetch(`/api/emissao/produtos/by-codigo/${encodeURIComponent(codigo)}`, { method: "DELETE" });
+                houveAlteracao = true;
+            } catch (e) {
+                console.warn("Erro ao remover produto localmente:", e);
+            }
+        } else if (change.type === "added" || change.type === "modified") {
+            const desc = (d.descricao || "").trim().toUpperCase();
+            const ncm = (d.ncm || "").replace(/\D/g, "");
+            if (!desc || !ncm) continue;
+
+            const payload = {
+                codigo: codigo,
+                descricao: desc,
+                ncm: ncm,
+                cest: (d.cest || "").trim(),
+                cfop_padrao: (d.cfop_padrao || "5102").replace(/\D/g, ""),
+                cfop_interestadual: (d.cfop_interestadual || "6102").replace(/\D/g, ""),
+                unidade: (d.unidade || "UN").trim().toUpperCase(),
+                preco_venda: parseFloat(d.preco_venda || d.preco_medio || 0) || 0,
+                preco_custo: parseFloat(d.preco_custo || 0) || 0,
+                estoque_atual: parseFloat(d.estoque_atual || 0) || 0,
+                estoque_minimo: parseFloat(d.estoque_minimo || 0) || 0,
+                origem: d.origem !== undefined ? parseInt(d.origem) : 0,
+                csosn_cst: (d.csosn_cst || "102").trim(),
+                aliquota_icms: parseFloat(d.aliquota_icms || 0) || 0,
+                gtin: (d.gtin || d.ean || "").trim(),
+                imei: (d.imei || "").trim().toUpperCase(),
+                marca: (d.marca || "").trim().toUpperCase(),
+            };
+
+            try {
+                const res = await apiPost("/api/emissao/produtos/sync-item", payload);
+                if (res && res.success) {
+                    houveAlteracao = true;
+                    nomesAtualizados.push(desc);
+                }
+            } catch (e) {
+                console.warn("Erro ao sincronizar produto Firestore→SQLite:", e);
+            }
+        }
+    }
+
+    if (houveAlteracao) {
+        if (typeof carregarTabelaCadProdutos === "function") {
+            try { await carregarTabelaCadProdutos(); } catch (_) {}
+        }
+        if (typeof carregarSelectProdutosEmissao === "function") {
+            try { await carregarSelectProdutosEmissao(); } catch (_) {}
+        }
+
+        if (showToast && nomesAtualizados.length > 0) {
+            const primeiro = nomesAtualizados[0];
+            const extra = nomesAtualizados.length > 1 ? ` (+${nomesAtualizados.length - 1})` : "";
+            if (typeof toast !== "undefined" && toast.info) {
+                toast.info(`📦 Produto sincronizado em tempo real: ${primeiro}${extra}`, 4500);
+            }
+        }
+    }
+}
+
+let _unsubscribeEmpresas = null;
+
+/**
+ * Listener em tempo real para os dados cadastrais e fiscais das empresas/certificados no Firestore.
+ */
+function initEmpresasRealtimeListener() {
+    if (!isFirestoreAvailable || !firestoreDb) return;
+    if (_unsubscribeEmpresas) return;
+
+    console.log("🏢 [Real-time] Conectando listener de empresas Firestore...");
+    let isFirstSnapshot = true;
+
+    try {
+        _unsubscribeEmpresas = firestoreDb.collection("empresas")
+            .onSnapshot(async (snapshot) => {
+                if (isFirstSnapshot) {
+                    isFirstSnapshot = false;
+                    return;
+                }
+
+                const changes = snapshot.docChanges();
+                if (!changes || changes.length === 0) return;
+
+                let houveAtualizacao = false;
+                for (const change of changes) {
+                    if (change.type === "added" || change.type === "modified") {
+                        const d = change.doc.data();
+                        const cnpj = (d.cnpj || change.doc.id || "").replace(/\D/g, "");
+                        if (!cnpj) continue;
+
+                        try {
+                            const res = await apiPost("/api/cert/certificado/sync-empresa-fiscal", {
+                                cnpj: cnpj,
+                                ie: (d.ie || "").trim(),
+                                nome_fantasia: (d.nome_fantasia || "").trim(),
+                                logradouro: (d.logradouro || "").trim(),
+                                numero: (d.numero || "").trim(),
+                                complemento: (d.complemento || "").trim(),
+                                bairro: (d.bairro || "").trim(),
+                                municipio: (d.municipio || "").trim(),
+                                cod_municipio: (d.cod_municipio || "").trim(),
+                                uf: (d.uf || "SP").trim().toUpperCase(),
+                                cep: (d.cep || "").replace(/\D/g, ""),
+                                crt: d.crt !== undefined ? parseInt(d.crt) : 1,
+                            });
+                            if (res && res.success) houveAtualizacao = true;
+                        } catch (e) {
+                            console.warn("Erro ao sincronizar dados fiscais da empresa:", e);
+                        }
+                    }
+                }
+
+                if (houveAtualizacao) {
+                    if (typeof carregarEmpresasEmitentesSelect === "function") {
+                        try { await carregarEmpresasEmitentesSelect(); } catch (_) {}
+                    }
+                    if (typeof loadCertificatesUI === "function") {
+                        try { await loadCertificatesUI(); } catch (_) {}
+                    }
+                    if (typeof toast !== "undefined" && toast.info) {
+                        toast.info("🏢 Dados fiscais da empresa sincronizados em tempo real!", 4500);
+                    }
+                }
+            }, (err) => {
+                console.warn("Aviso no listener de empresas Firestore:", err);
+            });
+    } catch (e) {
+        console.warn("Erro ao registrar onSnapshot de empresas:", e);
+    }
+}
+
 

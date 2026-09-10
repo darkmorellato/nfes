@@ -97,6 +97,7 @@ from .cadastros import (
     sugerir_dados_fiscais_produto,
     list_produtos,
     delete_produto,
+    delete_produto_by_codigo,
     get_next_nfe_number,
     get_empresas,
 )

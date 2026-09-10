@@ -680,6 +680,112 @@ def delete_cliente_from_firestore_async(cpf_cnpj: str) -> None:
     threading.Thread(target=delete_cliente_from_firestore, args=(cpf_cnpj,), daemon=True).start()
 
 
+def sync_produto_to_firestore(produto: Dict[str, Any]) -> bool:
+    """Sincroniza um produto cadastrado ou atualizado para o Cloud Firestore."""
+    codigo = str(produto.get("codigo") or "").strip().upper()
+    if not codigo:
+        return False
+    descricao = str(produto.get("descricao") or "").strip().upper()
+    if not descricao:
+        return False
+
+    preco = 0.0
+    try:
+        preco = float(produto.get("preco_venda") or produto.get("preco_medio") or 0.0)
+    except (TypeError, ValueError):
+        preco = 0.0
+
+    preco_custo = 0.0
+    try:
+        preco_custo = float(produto.get("preco_custo") or 0.0)
+    except (TypeError, ValueError):
+        preco_custo = 0.0
+
+    estoque = 0.0
+    try:
+        estoque = float(produto.get("estoque_atual") or 0.0)
+    except (TypeError, ValueError):
+        estoque = 0.0
+
+    estoque_min = 0.0
+    try:
+        estoque_min = float(produto.get("estoque_minimo") or 0.0)
+    except (TypeError, ValueError):
+        estoque_min = 0.0
+
+    aliq_icms = 0.0
+    try:
+        aliq_icms = float(produto.get("aliquota_icms") or 0.0)
+    except (TypeError, ValueError):
+        aliq_icms = 0.0
+
+    payload = {
+        "codigo": codigo,
+        "descricao": descricao,
+        "ncm": str(produto.get("ncm") or "").strip(),
+        "cest": str(produto.get("cest") or "").strip(),
+        "cfop_padrao": str(produto.get("cfop_padrao") or "5102").strip(),
+        "cfop_interestadual": str(produto.get("cfop_interestadual") or "6102").strip(),
+        "unidade": str(produto.get("unidade") or "UN").strip().upper(),
+        "preco_venda": preco,
+        "preco_custo": preco_custo,
+        "estoque_atual": estoque,
+        "estoque_minimo": estoque_min,
+        "origem": int(produto.get("origem") or 0),
+        "csosn_cst": str(produto.get("csosn_cst") or "102").strip(),
+        "aliquota_icms": aliq_icms,
+        "gtin": str(produto.get("gtin") or "").strip(),
+        "ean": str(produto.get("gtin") or produto.get("ean") or "").strip(),
+        "imei": str(produto.get("imei") or "").strip().upper(),
+        "marca": str(produto.get("marca") or "").strip().upper(),
+        "updated_at": datetime.now().isoformat(),
+    }
+    return _upsert_firestore_doc("produtos", codigo, payload)
+
+
+def sync_produto_to_firestore_async(produto: Dict[str, Any]) -> None:
+    threading.Thread(target=sync_produto_to_firestore, args=(produto,), daemon=True).start()
+
+
+def delete_produto_from_firestore(codigo: str) -> bool:
+    """Exclui produto do Cloud Firestore por código."""
+    cod_clean = str(codigo or "").strip().upper()
+    if not cod_clean:
+        return False
+    return _delete_firestore_doc("produtos", cod_clean)
+
+
+def delete_produto_from_firestore_async(codigo: str) -> None:
+    threading.Thread(target=delete_produto_from_firestore, args=(codigo,), daemon=True).start()
+
+
+def sync_empresa_fiscal_to_firestore(cnpj: str, data: Dict[str, Any]) -> bool:
+    """Sincroniza os dados fiscais da empresa/certificado no Firestore."""
+    cnpj_clean = "".join(c for c in str(cnpj or "") if c.isdigit())
+    if not cnpj_clean:
+        return False
+    payload = {
+        "cnpj": cnpj_clean,
+        "ie": str(data.get("ie") or "").strip(),
+        "nome_fantasia": str(data.get("nome_fantasia") or "").strip(),
+        "logradouro": str(data.get("logradouro") or "").strip(),
+        "numero": str(data.get("numero") or "").strip(),
+        "complemento": str(data.get("complemento") or "").strip(),
+        "bairro": str(data.get("bairro") or "").strip(),
+        "municipio": str(data.get("municipio") or "").strip(),
+        "cod_municipio": str(data.get("cod_municipio") or "").strip(),
+        "uf": str(data.get("uf") or "SP").strip().upper(),
+        "cep": "".join(c for c in str(data.get("cep") or "") if c.isdigit()),
+        "crt": int(data.get("crt") or 1),
+        "updated_at": datetime.now().isoformat(),
+    }
+    return _upsert_firestore_doc("empresas", cnpj_clean, payload)
+
+
+def sync_empresa_fiscal_to_firestore_async(cnpj: str, data: Dict[str, Any]) -> None:
+    threading.Thread(target=sync_empresa_fiscal_to_firestore, args=(cnpj, data), daemon=True).start()
+
+
 
 def consolidar_clientes_do_sqlite() -> Dict[str, Any]:
     """Varre TODAS as NF-es do SQLite e consolida emitentes + destinatários
