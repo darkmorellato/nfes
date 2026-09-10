@@ -1489,6 +1489,19 @@ async def rota_exportar_dados_rede():
     }
 
 
+@router.get("/rede/download-banco")
+async def rota_download_banco_dados():
+    """Permite baixar diretamente o arquivo nfe_database.db completo contendo todos os clientes e notas."""
+    from fastapi.responses import FileResponse
+    from backend.config import settings
+    db_path = os.path.join(settings.DATA_DIR, "nfe_database.db")
+    if not os.path.exists(db_path):
+        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "nfe_database.db")
+    if os.path.exists(db_path):
+        return FileResponse(db_path, media_type="application/x-sqlite3", filename="nfe_database.db")
+    raise HTTPException(status_code=404, detail="Banco de dados não encontrado.")
+
+
 @router.post("/rede/puxar-dados")
 async def rota_puxar_dados_de_outra_maquina(payload: Dict[str, Any] = Body(...)):
     """Conecta à outra máquina na rede local via HTTP e sincroniza clientes e produtos instantaneamente."""
