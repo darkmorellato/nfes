@@ -971,6 +971,11 @@ async function executarSyncRedeLocal() {
         return;
     }
 
+    if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+        rawUrl = "http://" + rawUrl;
+    }
+    rawUrl = rawUrl.replace(/\/+$/, "");
+
     localStorage.setItem("nfe_p2p_sync_url", rawUrl);
 
     if (btn) { btn.disabled = true; btn.innerHTML = "⏳ Sincronizando..."; }
@@ -983,8 +988,56 @@ async function executarSyncRedeLocal() {
     }
 
     try {
-        const res = await apiPost("/api/gestao/rede/puxar-dados", { url_origem: rawUrl });
-        const data = res.data || res;
+        let res = await apiPost("/api/gestao/rede/puxar-dados", { url_origem: rawUrl });
+        let data = res.data || res;
+
+        // Fallback: se o backend local responder 404 (servidor não reiniciado após atualização de código),
+        // o navegador puxa diretamente da máquina remota e salva via rotas padrão locais!
+        if (res.status === 404 || !res.success) {
+            if (statusBox) {
+                statusBox.textContent = `Backend local em versão anterior. Executando importação direta pelo navegador de ${rawUrl}...`;
+            }
+
+            let directResp;
+            try {
+                directResp = await fetch(`${rawUrl}/api/gestao/rede/exportar-dados`, { mode: "cors" });
+            } catch (netErr) {
+                throw new Error(`Não foi possível conectar a ${rawUrl}. Verifique se o firewall da máquina principal liberou a porta 8000 (execute: sudo ufw allow 8000/tcp na máquina principal).`);
+            }
+
+            if (!directResp.ok) {
+                throw new Error(`Máquina remota ${rawUrl} retornou status HTTP ${directResp.status}`);
+            }
+
+            const exportData = await directResp.json();
+            const clientes = exportData.clientes || [];
+            const produtos = exportData.produtos || [];
+
+            let cliOk = 0;
+            for (const c of clientes) {
+                try {
+                    await apiPost("/api/emissao/clientes", c);
+                    cliOk++;
+                } catch (_) {}
+            }
+
+            let prodOk = 0;
+            for (const p of produtos) {
+                try {
+                    await apiPost("/api/emissao/produtos", p);
+                    prodOk++;
+                } catch (_) {}
+            }
+
+            data = {
+                success: true,
+                clientes_importados: cliOk,
+                produtos_importados: prodOk,
+                empresas_importadas: exportData.certificados_fiscais?.length || 0,
+            };
+            res = { success: true };
+        }
+
         if (res.success && data.success !== false) {
             if (statusBox) {
                 statusBox.style.background = "#f0fdf4";
@@ -1008,7 +1061,7 @@ async function executarSyncRedeLocal() {
                 statusBox.style.background = "#fef2f2";
                 statusBox.style.border = "1px solid #fecaca";
                 statusBox.style.color = "#991b1b";
-                statusBox.textContent = `❌ Falha ao sincronizar: ${err}`;
+                statusBox.innerHTML = `❌ Falha ao sincronizar: <b>${err}</b><br><br>💡 <b>Atenção:</b> Reinicie o servidor na outra máquina (feche e abra o inicializador) para carregar os novos endpoints.`;
             }
             if (typeof toast !== "undefined" && toast.error) {
                 toast.error("Erro na sincronização: " + err);
@@ -1019,7 +1072,7 @@ async function executarSyncRedeLocal() {
             statusBox.style.background = "#fef2f2";
             statusBox.style.border = "1px solid #fecaca";
             statusBox.style.color = "#991b1b";
-            statusBox.textContent = `❌ Erro de conexão: ${e.message}. Verifique se a outra máquina está ligada na mesma rede e se o IP está correto.`;
+            statusBox.innerHTML = `❌ Erro de conexão: <b>${e.message}</b><br><br>👉 <b>Dica essencial:</b> Se as máquinas estão na mesma rede e não conectam, libere a porta 8000 no firewall do computador principal (<code>192.168.3.97</code>) rodando:<br><code>sudo ufw allow 8000/tcp</code>`;
         }
         if (typeof toast !== "undefined" && toast.error) {
             toast.error("Falha ao conectar: " + e.message);
