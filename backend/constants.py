@@ -24,7 +24,12 @@ _EMPRESAS_CACHE: Dict[str, str] = {}
 
 def _empresas_file_path() -> str:
     """Resolve o caminho do JSON de empresas fiscais."""
-    return os.path.join(settings.CERT_DIR, "empresas_fiscais.json")
+    p = os.path.join(settings.CERT_DIR, "empresas_fiscais.json")
+    if not os.path.exists(p):
+        repo_data = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "empresas_fiscais.json")
+        if os.path.exists(repo_data):
+            return repo_data
+    return p
 
 
 def _load_from_disk() -> Dict[str, str]:

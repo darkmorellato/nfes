@@ -148,13 +148,15 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # 1. Dados do Emitente
     emit_uf = (payload.get("emitente_uf") or cert_rec.get("uf") or "SP").upper()
-    emit_municipio = payload.get("emitente_municipio") or cert_rec.get("municipio") or "PIRACICABA"
-    emit_cod_mun = payload.get("emitente_cod_municipio") or cert_rec.get("cod_municipio") or ("3538709" if "PIRACICABA" in emit_municipio.upper() else "3501905")
-    emit_ie = "".join(c for c in str(payload.get("emitente_ie") or cert_rec.get("ie") or "535758386119") if c.isdigit())
-    emit_logr = payload.get("emitente_logradouro") or cert_rec.get("logradouro") or "Rua Dom Pedro II"
-    emit_num = payload.get("emitente_numero") or cert_rec.get("numero") or "857"
-    emit_bairro = payload.get("emitente_bairro") or cert_rec.get("bairro") or "Centro"
-    emit_cep = "".join(c for c in str(payload.get("emitente_cep") or cert_rec.get("cep") or "13400390") if c.isdigit())
+    emit_municipio = (payload.get("emitente_municipio") or cert_rec.get("municipio") or "Piracicaba").strip()
+    emit_cod_mun = str(payload.get("emitente_cod_municipio") or cert_rec.get("cod_municipio") or ("3538709" if "PIRACICABA" in emit_municipio.upper() else "3501905" if "AMPARO" in emit_municipio.upper() else "3550308")).strip()
+    emit_ie = "".join(c for c in str(payload.get("emitente_ie") or cert_rec.get("ie") or "") if c.isdigit())
+    if not emit_ie:
+        raise ValueError(f"Inscrição Estadual (IE) da empresa emitente {cert_rec.get('razao_social')} não encontrada. Configure a IE no cadastro do certificado.")
+    emit_logr = (payload.get("emitente_logradouro") or cert_rec.get("logradouro") or "Rua Principal").strip()
+    emit_num = str(payload.get("emitente_numero") or cert_rec.get("numero") or "S/N").strip()
+    emit_bairro = (payload.get("emitente_bairro") or cert_rec.get("bairro") or "Centro").strip()
+    emit_cep = "".join(c for c in str(payload.get("emitente_cep") or cert_rec.get("cep") or "01001000") if c.isdigit())
     emit_crt = int(payload.get("regime_tributario") or cert_rec.get("crt") or 1)
 
     pynfe_emitente = Emitente(
@@ -1206,14 +1208,15 @@ def gerar_previa_nfe(payload: Dict[str, Any]) -> Dict[str, Any]:
         "ambiente": "Homologação" if is_homologacao else "Produção",
         "emitente": {
             "razao_social": razao_emit,
+            "cnpj": _fmt_cnpj_cpf(emit_cnpj_clean),
             "cnpj_formatado": _fmt_cnpj_cpf(emit_cnpj_clean),
-            "ie": cert_rec.get("ie", "ISENTO") if cert_rec else "ISENTO",
-            "logradouro": cert_rec.get("logradouro", "Rua Comercial") if cert_rec else "Rua Comercial",
-            "numero": cert_rec.get("numero", "100") if cert_rec else "100",
-            "bairro": cert_rec.get("bairro", "Centro") if cert_rec else "Centro",
-            "municipio": cert_rec.get("municipio", "Piracicaba") if cert_rec else "Piracicaba",
+            "ie": payload.get("emitente_ie") or (cert_rec.get("ie") if cert_rec else None) or "ISENTO",
+            "logradouro": payload.get("emitente_logradouro") or (cert_rec.get("logradouro") if cert_rec else None) or "Rua Principal",
+            "numero": payload.get("emitente_numero") or (cert_rec.get("numero") if cert_rec else None) or "S/N",
+            "bairro": payload.get("emitente_bairro") or (cert_rec.get("bairro") if cert_rec else None) or "Centro",
+            "municipio": payload.get("emitente_municipio") or (cert_rec.get("municipio") if cert_rec else None) or "Piracicaba",
             "uf": emit_uf,
-            "cep": cert_rec.get("cep", "13400-000") if cert_rec else "13400-000",
+            "cep": payload.get("emitente_cep") or (cert_rec.get("cep") if cert_rec else None) or "13400-000",
         },
         "destinatario": {
             "razao_social": dest_nome,

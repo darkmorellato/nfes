@@ -37,6 +37,7 @@ from .certificates import (
     get_certificate_record,
     delete_certificate_record,
     update_cert_sync_state,
+    update_certificate_fiscal_data,
 )
 
 # Re-exports from nfe_docs

@@ -26,7 +26,13 @@ class CertificadoResponse(BaseModel):
 @router.get("/certificado/list")
 async def list_certificates_endpoint():
     """Retorna todos os certificados digitais A1 cadastrados para visualização de validades."""
-    return list_all_certificates()
+    certs = list_all_certificates()
+    sanitized = []
+    for c in certs:
+        d = dict(c)
+        d.pop("password", None)
+        sanitized.append(d)
+    return sanitized
 
 
 @router.post("/certificado/upload", response_model=CertificadoResponse)
@@ -79,3 +85,27 @@ async def delete_all_certificates(request: Request):
     from backend.services.audit_service import record_audit
     record_audit("EXCLUSAO_TODOS_CERTIFICADOS", "CERTIFICADO", "TODOS", detalhe=f"{len(certs)} certificados excluídos", request=request)
     return {"status": "ok", "message": "Todos os certificados foram removidos"}
+
+
+@router.put("/certificado/{cnpj}/dados-fiscais")
+async def update_cert_fiscal_data_endpoint(cnpj: str, payload: dict, request: Request):
+    """Atualiza dados cadastrais e fiscais da empresa dona do certificado (IE, endereço, etc)."""
+    from backend.database import update_certificate_fiscal_data, get_certificate_record
+    from backend.services.audit_service import record_audit
+
+    cert = get_certificate_record(cnpj)
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificado não encontrado")
+
+    ok = update_certificate_fiscal_data(cnpj, payload)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Não foi possível atualizar os dados fiscais")
+
+    record_audit(
+        "ATUALIZACAO_DADOS_FISCAIS_CERT",
+        "CERTIFICADO",
+        cnpj,
+        detalhe=f"Dados fiscais da empresa {cert.get('razao_social', cnpj)} atualizados",
+        request=request,
+    )
+    return {"success": True, "message": "Dados fiscais atualizados com sucesso!"}

@@ -26,24 +26,44 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
     dest_uf = dest.get("endereco", {}).get("uf") if isinstance(dest.get("endereco"), dict) else doc.get("destinatario_uf", "")
 
     # Determina a empresa dona do documento
-    if not empresa_cnpj:
-        empresa_cnpj = doc.get("empresa_cnpj")
-    if not empresa_cnpj:
-        dest_digits = "".join(c for c in str(dest_cnpj) if c.isdigit())
-        emit_digits = "".join(c for c in str(emit_cnpj) if c.isdigit())
-        cert_record = get_certificate_record(dest_digits) or get_certificate_record(emit_digits)
-        if cert_record:
-            empresa_cnpj = cert_record["cnpj"]
-        else:
-            empresa_cnpj = dest_digits
+    dest_digits = "".join(c for c in str(dest_cnpj) if c.isdigit())
+    emit_digits = "".join(c for c in str(emit_cnpj) if c.isdigit())
+    empresa_digits = "".join(c for c in str(empresa_cnpj or doc.get("empresa_cnpj") or "") if c.isdigit())
+
+    # Se não temos um CNPJ válido de empresa dona, tenta localizar pelos certificados (por CNPJ ou Razão Social)
+    cert_record = get_certificate_record(empresa_digits) or get_certificate_record(dest_digits) or get_certificate_record(emit_digits)
+    if not cert_record:
+        from backend.database.certificates import list_certificates_db
+        certs = list_certificates_db()
+        emit_upper = (emit_nome or "").strip().upper()
+        dest_upper = (dest_nome or "").strip().upper()
+        for c in certs:
+            c_razao = (c.get("razao_social") or "").strip().upper()
+            c_fantasia = (c.get("nome_fantasia") or "").strip().upper()
+            if c_razao and (c_razao in emit_upper or emit_upper in c_razao or (c_fantasia and c_fantasia in emit_upper)):
+                cert_record = c
+                if not emit_digits or emit_digits == "00000000000000":
+                    emit_cnpj = c["cnpj"]
+                    emit_digits = c["cnpj"]
+                break
+            if c_razao and (c_razao in dest_upper or dest_upper in c_razao or (c_fantasia and c_fantasia in dest_upper)):
+                cert_record = c
+                if not dest_digits or dest_digits == "00000000000000":
+                    dest_cnpj = c["cnpj"]
+                    dest_digits = c["cnpj"]
+                break
+
+    if cert_record:
+        empresa_cnpj = cert_record["cnpj"]
+        empresa_digits = cert_record["cnpj"]
+    elif not empresa_cnpj:
+        empresa_cnpj = dest_digits or emit_digits
+        empresa_digits = "".join(c for c in str(empresa_cnpj) if c.isdigit())
 
     # Determina o tipo de documento (0 = Entrada / Fornecedor, 1 = Saída / Venda)
     # Critério oficial: tipo_doc é definido pelo PAPEL da empresa_cnpj (a empresa dona
     # do registro), não pelo emitente/destinatário do XML.
     tipo_doc = doc.get("tipo_doc")
-    dest_digits = "".join(c for c in str(dest_cnpj) if c.isdigit())
-    emit_digits = "".join(c for c in str(emit_cnpj) if c.isdigit())
-    empresa_digits = "".join(c for c in str(empresa_cnpj or "") if c.isdigit())
     if tipo_doc is None:
         if empresa_digits and emit_digits == empresa_digits:
             # A empresa dona do registro é a EMITENTE → SAÍDA
@@ -85,7 +105,9 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
             serie = str(int(chave[22:25]))
         except Exception:
             pass
-    if not emit_cnpj and len(chave) == 44:
+    if (not emit_cnpj or emit_cnpj == "00000000000000") and tipo_doc == 1 and empresa_cnpj:
+        emit_cnpj = empresa_cnpj
+    elif not emit_cnpj and len(chave) == 44:
         emit_cnpj = chave[6:20]
 
     # Em nota de Entrada (tipo_doc == 0), se destinatário estiver vazio,

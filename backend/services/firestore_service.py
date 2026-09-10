@@ -87,6 +87,27 @@ def format_nfe_payload(doc: Dict[str, Any]) -> Dict[str, Any]:
     empresa_cnpj = "".join(c for c in str(doc.get("empresa_cnpj") or "") if c.isdigit())
     emit_cnpj = "".join(c for c in str(doc.get("emitente_cnpj") or "") if c.isdigit())
     dest_cnpj = "".join(c for c in str(doc.get("destinatario_cnpj") or "") if c.isdigit())
+    tipo_doc = int(doc.get("tipo_doc") or 0)
+
+    if not empresa_cnpj:
+        if tipo_doc == 1:
+            empresa_cnpj = emit_cnpj or dest_cnpj
+        else:
+            empresa_cnpj = dest_cnpj or emit_cnpj
+
+    numero = str(doc.get("numero") or "")
+    if not numero and len(chave) == 44:
+        try:
+            numero = str(int(chave[25:34]))
+        except Exception:
+            pass
+
+    serie = str(doc.get("serie") or "")
+    if not serie and len(chave) == 44:
+        try:
+            serie = str(int(chave[22:25]))
+        except Exception:
+            pass
 
     def _to_float(v):
         if not v:
@@ -98,12 +119,12 @@ def format_nfe_payload(doc: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "chave": chave,
-        "empresa_cnpj": empresa_cnpj or dest_cnpj or emit_cnpj,
+        "empresa_cnpj": empresa_cnpj,
         "competencia": competencia,
-        "numero": str(doc.get("numero") or ""),
-        "serie": str(doc.get("serie") or ""),
+        "numero": numero,
+        "serie": serie,
         "modelo": str(doc.get("modelo") or ("65" if chave[20:22] == "65" else "55")),
-        "tipo_doc": int(doc.get("tipo_doc") or 0),
+        "tipo_doc": tipo_doc,
         "emitente_cnpj": emit_cnpj,
         "emitente_nome": str(doc.get("emitente_nome") or ""),
         "emitente_uf": str(doc.get("emitente_uf") or ""),
@@ -142,12 +163,27 @@ def sync_single_nfe(doc: Dict[str, Any]) -> bool:
     body = json.dumps({"fields": fields}).encode("utf-8")
     req = urllib.request.Request(url, data=body, method="PATCH", headers={"Content-Type": "application/json"})
 
+    ok = False
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status in (200, 201)
+            ok = resp.status in (200, 201)
     except Exception as e:
         logger.warning(f"[Firestore] Erro ao sincronizar NF-e {chave}: {e}")
         return False
+
+    # Também salva na subcoleção da empresa se tiver empresa_cnpj
+    emp_cnpj = payload.get("empresa_cnpj")
+    if emp_cnpj:
+        emp_doc_path = f"projects/{project_id}/databases/(default)/documents/empresas/{emp_cnpj}/nfe_docs/{chave}"
+        emp_url = f"https://firestore.googleapis.com/v1/{emp_doc_path}?key={api_key}"
+        emp_req = urllib.request.Request(emp_url, data=body, method="PATCH", headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(emp_req, timeout=10) as emp_resp:
+                pass
+        except Exception:
+            pass
+
+    return ok
 
 def sync_single_nfe_async(doc: Dict[str, Any]) -> None:
     threading.Thread(target=sync_single_nfe, args=(doc,), daemon=True).start()

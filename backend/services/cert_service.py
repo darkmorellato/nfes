@@ -75,6 +75,19 @@ def save_certificate(content: bytes, password: str, filename: str = "certificado
         "is_active": 1,
     })
 
+    try:
+        from backend.constants import _empresas_file_path
+        from backend.database.certificates import update_certificate_fiscal_data
+        path = _empresas_file_path()
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                empresas = json.load(f).get("empresas", [])
+                emp_fiscal = next((e for e in empresas if e.get("cnpj") == cnpj), None)
+                if emp_fiscal:
+                    update_certificate_fiscal_data(cnpj, emp_fiscal)
+    except Exception as e:
+        logger.warning(f"Erro ao vincular dados fiscais para {cnpj}: {e}")
+
     # Atualiza cert_meta.json com o último carregado.
     # A senha é gravada CIFRADA (Fernet) para não ficar em texto puro no disco.
     # Restringe permissões do arquivo a 0o600 (apenas o dono lê).

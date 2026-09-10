@@ -150,3 +150,85 @@ def update_cert_sync_state(cnpj: str, last_nsu: str, max_nsu: Optional[str] = No
                 WHERE cnpj = ?
             """, (str(last_nsu), now, status_str, now, cnpj_clean))
         conn.commit()
+
+
+def update_certificate_fiscal_data(cnpj: str, data: Dict[str, Any]) -> bool:
+    """Atualiza dados fiscais e cadastrais (IE, nome fantasia, endereço, CRT) da empresa/certificado."""
+    import json
+    cnpj_clean = "".join(c for c in str(cnpj) if c.isdigit())
+    now = datetime.now().isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE certificates
+            SET ie = ?, nome_fantasia = ?, logradouro = ?, numero = ?,
+                complemento = ?, bairro = ?, municipio = ?, cod_municipio = ?,
+                uf = ?, cep = ?, crt = ?, updated_at = ?
+            WHERE cnpj = ?
+        """, (
+            str(data.get("ie") or "").strip(),
+            str(data.get("nome_fantasia") or "").strip(),
+            str(data.get("logradouro") or "").strip(),
+            str(data.get("numero") or "").strip(),
+            str(data.get("complemento") or "").strip(),
+            str(data.get("bairro") or "").strip(),
+            str(data.get("municipio") or "").strip(),
+            str(data.get("cod_municipio") or "").strip(),
+            str(data.get("uf") or "SP").strip().upper(),
+            "".join(c for c in str(data.get("cep") or "") if c.isdigit()),
+            int(data.get("crt") or 1),
+            now,
+            cnpj_clean
+        ))
+        conn.commit()
+        updated = cursor.rowcount > 0
+
+    if updated:
+        try:
+            from backend.constants import _empresas_file_path
+            path = _empresas_file_path()
+            empresas = []
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    empresas = json.load(f).get("empresas", [])
+            found = False
+            for emp in empresas:
+                if emp.get("cnpj") == cnpj_clean:
+                    emp.update({
+                        "ie": str(data.get("ie") or "").strip(),
+                        "nome_fantasia": str(data.get("nome_fantasia") or "").strip(),
+                        "logradouro": str(data.get("logradouro") or "").strip(),
+                        "numero": str(data.get("numero") or "").strip(),
+                        "complemento": str(data.get("complemento") or "").strip(),
+                        "bairro": str(data.get("bairro") or "").strip(),
+                        "municipio": str(data.get("municipio") or "").strip(),
+                        "cod_municipio": str(data.get("cod_municipio") or "").strip(),
+                        "uf": str(data.get("uf") or "SP").strip().upper(),
+                        "cep": "".join(c for c in str(data.get("cep") or "") if c.isdigit()),
+                        "crt": int(data.get("crt") or 1),
+                    })
+                    found = True
+                    break
+            if not found:
+                cert = get_certificate_record(cnpj_clean)
+                empresas.append({
+                    "cnpj": cnpj_clean,
+                    "razao_social": cert.get("razao_social") if cert else "",
+                    "ie": str(data.get("ie") or "").strip(),
+                    "nome_fantasia": str(data.get("nome_fantasia") or "").strip(),
+                    "logradouro": str(data.get("logradouro") or "").strip(),
+                    "numero": str(data.get("numero") or "").strip(),
+                    "complemento": str(data.get("complemento") or "").strip(),
+                    "bairro": str(data.get("bairro") or "").strip(),
+                    "municipio": str(data.get("municipio") or "").strip(),
+                    "cod_municipio": str(data.get("cod_municipio") or "").strip(),
+                    "uf": str(data.get("uf") or "SP").strip().upper(),
+                    "cep": "".join(c for c in str(data.get("cep") or "") if c.isdigit()),
+                    "crt": int(data.get("crt") or 1),
+                })
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"empresas": empresas}, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    return updated

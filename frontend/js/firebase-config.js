@@ -93,21 +93,45 @@ async function saveDocToFirestore(doc) {
 
     const dataEmi = doc.data_emissao || (doc.identificacao && doc.identificacao.data_emissao) || "";
     const competencia = dataEmi.length >= 7 ? dataEmi.substring(0, 7) : "";
-    const empresaCnpj = doc.empresa_cnpj || doc.destinatario_cnpj || (doc.destinatario && doc.destinatario.cnpj) || "";
-    const cleanEmpresa = empresaCnpj.replace(/\D/g, "");
+    const numero = doc.numero || (doc.identificacao && doc.identificacao.numero) || (chave.length === 44 ? String(parseInt(chave.substring(25, 34), 10) || "") : "");
+    const serie = doc.serie || (doc.identificacao && doc.identificacao.serie) || (chave.length === 44 ? String(parseInt(chave.substring(22, 25), 10) || "") : "");
+    const emitNome = doc.emitente_nome || (doc.emitente && doc.emitente.nome) || "";
+    const destNome = doc.destinatario_nome || (doc.destinatario && doc.destinatario.nome) || "";
+    let emitCnpj = doc.emitente_cnpj || (doc.emitente && (doc.emitente.cnpj || doc.emitente.cnpj_formatado)) || "";
+    let destCnpj = doc.destinatario_cnpj || (doc.destinatario && (doc.destinatario.cnpj || doc.destinatario.cpf || doc.destinatario.cnpj_cpf)) || "";
+    let cleanEmit = (emitCnpj || "").replace(/\D/g, "");
+    let cleanDest = (destCnpj || "").replace(/\D/g, "");
+    let cleanEmpresa = (doc.empresa_cnpj || "").replace(/\D/g, "");
+
+    // Identifica empresa dona pelos certificados em cache se emitente/empresa estiver vazio
+    if ((!cleanEmpresa || !cleanEmit) && typeof AppState !== "undefined" && Array.isArray(AppState.certificados)) {
+        const emitUpper = emitNome.toUpperCase().trim();
+        const matched = AppState.certificados.find(c => c.razao_social && (emitUpper.includes(c.razao_social.toUpperCase().trim()) || c.razao_social.toUpperCase().trim().includes(emitUpper)));
+        if (matched) {
+            cleanEmit = cleanEmit || matched.cnpj;
+            cleanEmpresa = cleanEmpresa || matched.cnpj;
+        }
+    }
+
+    if (!cleanEmpresa) {
+        if (doc.tipo_doc === 1 || doc.tipo_doc === "1") {
+            cleanEmpresa = cleanEmit;
+        } else if (cleanDest && cleanDest.length === 14) {
+            cleanEmpresa = cleanDest;
+        } else {
+            cleanEmpresa = cleanEmit || cleanDest;
+        }
+    }
 
     try {
         const payload = {
             chave: chave,
-            empresa_cnpj: cleanEmpresa,
-            competencia: competencia, // Ex: "2026-01", "2026-08" para arquivamento mês a mês
-            numero: doc.numero || "",
-            serie: doc.serie || "",
-            modelo: doc.modelo || "55",
-            emitente_cnpj: doc.emitente_cnpj || (doc.emitente && doc.emitente.cnpj) || "",
-            emitente_nome: doc.emitente_nome || (doc.emitente && doc.emitente.nome) || "",
-            destinatario_cnpj: doc.destinatario_cnpj || (doc.destinatario && (doc.destinatario.cnpj || doc.destinatario.cpf)) || "",
-            destinatario_nome: doc.destinatario_nome || (doc.destinatario && doc.destinatario.nome) || "",
+            competencia: competencia,
+            numero: numero,
+            serie: serie,
+            modelo: doc.modelo || (doc.identificacao && doc.identificacao.modelo) || "55",
+            emitente_nome: emitNome,
+            destinatario_nome: destNome,
             data_emissao: dataEmi,
             data_autorizacao: doc.data_autorizacao || "",
             valor_total: parseFloat(doc.valor_total || (doc.totais && doc.totais.v_nf) || 0.0),
@@ -121,6 +145,11 @@ async function saveDocToFirestore(doc) {
             updated_at: firebase.firestore.FieldValue.serverTimestamp(),
         };
 
+        if (cleanEmpresa) payload.empresa_cnpj = cleanEmpresa;
+        if (cleanEmit) payload.emitente_cnpj = cleanEmit;
+        if (cleanDest) payload.destinatario_cnpj = cleanDest;
+        if (doc.tipo_doc !== undefined) payload.tipo_doc = parseInt(doc.tipo_doc, 10);
+
         // Salva na coleção global nfe_docs
         await firestoreDb.collection("nfe_docs").doc(chave).set(payload, { merge: true });
 
@@ -129,7 +158,7 @@ async function saveDocToFirestore(doc) {
             await firestoreDb.collection("empresas").doc(cleanEmpresa).collection("nfe_docs").doc(chave).set(payload, { merge: true });
         }
 
-        console.log(`✓ NF-e ${chave} sincronizada no Firestore (Empresa: ${cleanEmpresa} | Mês: ${competencia}).`);
+        console.log(`✓ NF-e ${chave} sincronizada no Firestore (Empresa: ${cleanEmpresa || 'N/D'} | Mês: ${competencia}).`);
         return true;
     } catch (err) {
         console.warn(`Aviso: sincronização Firestore para NF-e ${chave}:`, err.message);

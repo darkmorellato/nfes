@@ -465,6 +465,57 @@ class TestNFEManager(unittest.TestCase):
         self.assertIn("has_update", status)
         self.assertIn("local_commit", status)
 
+    def test_certificate_fiscal_data_and_previa(self):
+        from backend.database.certificates import update_certificate_fiscal_data, get_certificate_record
+        from backend.services.nfe_emissao_service import gerar_previa_nfe
+
+        # Atualiza dados fiscais para Fernandes Comércio (13787408000105)
+        ok = update_certificate_fiscal_data("13787408000105", {
+            "ie": "535891235110",
+            "nome_fantasia": "MI PLACE XV",
+            "logradouro": "RUA QUINZE DE NOVEMBRO",
+            "numero": "936",
+            "complemento": "",
+            "bairro": "CENTRO",
+            "municipio": "PIRACICABA",
+            "cod_municipio": "3538709",
+            "uf": "SP",
+            "cep": "13400370",
+            "crt": 1,
+        })
+        self.assertTrue(ok)
+        rec = get_certificate_record("13787408000105")
+        self.assertIsNotNone(rec)
+        self.assertEqual(rec["ie"], "535891235110")
+        self.assertEqual(rec["logradouro"], "RUA QUINZE DE NOVEMBRO")
+        self.assertEqual(rec["numero"], "936")
+        self.assertEqual(rec["municipio"], "PIRACICABA")
+
+        # Verifica se gerar_previa_nfe reflete os dados reais da Fernandes Comercio
+        payload = {
+            "emitente_cnpj": "13787408000105",
+            "destinatario": {
+                "cpf_cnpj": "00000000191",
+                "razao_social": "TESTE CLIENTE",
+            },
+            "produtos": [
+                {
+                    "codigo": "ITEM1",
+                    "descricao": "PRODUTO TESTE",
+                    "ncm": "85171300",
+                    "quantidade": 1,
+                    "valor_unitario": 100.0,
+                }
+            ],
+        }
+        previa = gerar_previa_nfe(payload)
+        self.assertIn("emitente", previa)
+        self.assertEqual(previa["emitente"]["ie"], "535891235110")
+        self.assertEqual(previa["emitente"]["logradouro"], "RUA QUINZE DE NOVEMBRO")
+        self.assertEqual(previa["emitente"]["numero"], "936")
+        self.assertEqual(previa["emitente"]["municipio"], "PIRACICABA")
+        self.assertEqual(previa["emitente"]["cep"], "13400370")
+
 
 if __name__ == "__main__":
     unittest.main()

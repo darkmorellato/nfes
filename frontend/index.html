@@ -1431,7 +1431,10 @@
                         <div class="painelSessao">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>Notas Fiscais de Saída / Vendas Emitidas</span>
-                                <button type="button" class="btn-action" onclick="carregarNfeSaidas(1);">🔄 Atualizar Lista</button>
+                                <div style="display:flex;gap:6px;">
+                                    <button type="button" class="btn-action" onclick="pullFromFirestore();" style="background:#16a085;border-color:#138d75;color:#fff;font-weight:600;" title="Baixar notas emitidas em outros computadores via Cloud Firestore">☁️ Sincronizar da Nuvem</button>
+                                    <button type="button" class="btn-action" onclick="carregarNfeSaidas(1);">🔄 Atualizar Lista</button>
+                                </div>
                             </div>
                             <div class="table-responsive">
                                 <table class="tabelaGrupo" id="tabela-saidas-nfe">
@@ -3714,6 +3717,103 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Editar Dados Fiscais do Certificado / Empresa -->
+    <div id="modal-editar-dados-fiscais-cert" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.65);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+        <div style="background:#fff;width:640px;max-width:94vw;border-radius:10px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.4);">
+            <div style="background:#1e40af;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:20px;">🏢</span>
+                    <b style="font-size:14px;">Dados Fiscais da Empresa Emitente</b>
+                </div>
+                <button type="button" onclick="fecharModalEditarDadosFiscaisCert();" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+            </div>
+            <form id="form-modal-editar-dados-fiscais-cert" onsubmit="salvarDadosFiscaisCertModal(event);" style="padding:20px;max-height:85vh;overflow-y:auto;">
+                <input type="hidden" id="modal-cert-fiscal-cnpj">
+                <input type="hidden" id="modal-cert-fiscal-razao">
+
+                <!-- Header Empresa -->
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px 14px;margin-bottom:16px;">
+                    <div style="font-size:13.5px;font-weight:bold;color:#1e3a8a;" id="modal-cert-fiscal-razao-display">—</div>
+                    <div style="font-size:12px;color:#3b82f6;margin-top:2px;">CNPJ: <code id="modal-cert-fiscal-cnpj-display" style="font-weight:bold;">—</code></div>
+                </div>
+
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+                    <div class="form-group" style="flex:1.4;min-width:180px;">
+                        <label for="modal-cert-fiscal-ie" class="label-obrigatorio">Inscrição Estadual (IE): <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-ie" class="input-obrigatorio" placeholder="Ex: 535891235110" required style="font-weight:600;">
+                        <small style="color:#64748b;font-size:11px;">Obrigatória para emissão de NF-e e SEFAZ.</small>
+                    </div>
+                    <div class="form-group" style="flex:1.6;min-width:180px;">
+                        <label for="modal-cert-fiscal-fantasia">Nome Fantasia:</label>
+                        <input type="text" id="modal-cert-fiscal-fantasia" placeholder="Ex: MI PLACE XV" style="font-size:12px;">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label for="modal-cert-fiscal-crt" class="label-obrigatorio">Regime Tributário (CRT): <span class="obrigatorio-badge">*</span></label>
+                    <select id="modal-cert-fiscal-crt" class="input-obrigatorio" style="font-size:12px;">
+                        <option value="1">1 - Simples Nacional (Microempresa / EPP)</option>
+                        <option value="2">2 - Simples Nacional - Excesso de Sublimite de Receita</option>
+                        <option value="3">3 - Regime Normal (Lucro Presumido / Lucro Real)</option>
+                    </select>
+                </div>
+
+                <div style="font-weight:bold;font-size:12px;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:16px 0 10px 0;">
+                    📍 Endereço Fiscal do Estabelecimento
+                </div>
+
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+                    <div class="form-group" style="flex:1;min-width:140px;">
+                        <label for="modal-cert-fiscal-cep" class="label-obrigatorio">CEP: <span class="obrigatorio-badge">*</span></label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="text" id="modal-cert-fiscal-cep" class="input-obrigatorio" placeholder="00000-000" maxlength="9" onblur="buscarCepCertViaCep(this.value);" required style="font-size:12px;">
+                            <button type="button" class="btn-action" onclick="buscarCepCertViaCep(document.getElementById('modal-cert-fiscal-cep').value);" title="Buscar endereço no ViaCEP">🔍</button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="flex:2.2;min-width:200px;">
+                        <label for="modal-cert-fiscal-logradouro" class="label-obrigatorio">Logradouro (Rua/Av): <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-logradouro" class="input-obrigatorio" placeholder="Ex: RUA QUINZE DE NOVEMBRO" required style="font-size:12px;">
+                    </div>
+                    <div class="form-group" style="flex:0.8;min-width:80px;">
+                        <label for="modal-cert-fiscal-numero" class="label-obrigatorio">Número: <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-numero" class="input-obrigatorio" placeholder="Ex: 936" required style="font-size:12px;">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+                    <div class="form-group" style="flex:1.2;min-width:140px;">
+                        <label for="modal-cert-fiscal-complemento">Complemento:</label>
+                        <input type="text" id="modal-cert-fiscal-complemento" placeholder="Ex: Sala 2, Loja 1" style="font-size:12px;">
+                    </div>
+                    <div class="form-group" style="flex:1.5;min-width:150px;">
+                        <label for="modal-cert-fiscal-bairro" class="label-obrigatorio">Bairro: <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-bairro" class="input-obrigatorio" placeholder="Ex: CENTRO" required style="font-size:12px;">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+                    <div class="form-group" style="flex:2;min-width:160px;">
+                        <label for="modal-cert-fiscal-municipio" class="label-obrigatorio">Município: <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-municipio" class="input-obrigatorio" placeholder="Ex: Piracicaba" required style="font-size:12px;">
+                    </div>
+                    <div class="form-group" style="flex:1.2;min-width:110px;">
+                        <label for="modal-cert-fiscal-cod-mun" class="label-obrigatorio">Cód. IBGE: <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-cod-mun" class="input-obrigatorio" placeholder="Ex: 3538709" maxlength="7" required style="font-size:12px;">
+                    </div>
+                    <div class="form-group" style="flex:0.8;min-width:70px;">
+                        <label for="modal-cert-fiscal-uf" class="label-obrigatorio">UF: <span class="obrigatorio-badge">*</span></label>
+                        <input type="text" id="modal-cert-fiscal-uf" class="input-obrigatorio" value="SP" maxlength="2" required style="text-align:center;text-transform:uppercase;font-size:12px;">
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;text-align:right;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #e2e8f0;padding-top:14px;">
+                    <button type="button" class="btn-action" onclick="fecharModalEditarDadosFiscaisCert();">Cancelar</button>
+                    <button type="submit" class="botao botao-primario" style="font-weight:bold;background:#1e40af;border-color:#1e40af;">💾 Salvar Dados Fiscais</button>
+                </div>
+            </form>
         </div>
     </div>
 

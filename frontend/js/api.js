@@ -72,6 +72,19 @@ async function apiPost(endpoint, body) {
     });
 }
 
+async function apiPut(endpoint, body) {
+    return apiRequest(endpoint, {
+        method: "PUT",
+        body: JSON.stringify(body),
+    });
+}
+
+async function apiDelete(endpoint) {
+    return apiRequest(endpoint, {
+        method: "DELETE",
+    });
+}
+
 async function apiUploadForm(endpoint, formData) {
     const url = `${API_BASE}${endpoint}`;
     // Para FormData o browser define Content-Type com boundary; só

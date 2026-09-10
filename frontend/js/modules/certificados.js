@@ -44,6 +44,7 @@ async function loadCertificatesUI() {
         const res = await apiGet("/api/certificado/list");
         if (!res.success || !res.data) return;
         const certs = res.data || [];
+        AppState.certificados = certs;
 
         // 1. Renderiza Cards na Tela Inicial (#inicio-cards-certificados)
         const cardsContainer = document.getElementById("inicio-cards-certificados");
@@ -70,18 +71,21 @@ async function loadCertificatesUI() {
                         badgeStyle = "background:var(--pastel-amber-bg);color:var(--pastel-amber-text);border:1px solid var(--pastel-amber-border);";
                         badgeText = `🟡 Atenção: ${days} dias`;
                     }
+                    const ieResumo = c.ie ? `IE: <b>${escapeHtml(c.ie)}</b>` : `<span style="color:#ef4444;font-size:10.5px;">IE pendente</span>`;
 
                     return `
                         <div class="card-kpi" style="border-top:3px solid var(--primary);">
                             <div>
                                 <div style="font-size:12.5px;font-weight:600;color:var(--text-main);margin-bottom:4px;line-height:1.3;" title="${escapeHtml(c.razao_social)}">${escapeHtml(c.razao_social)}</div>
-                                <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-bottom:8px;">CNPJ: <b>${escapeHtml(cnpjFmt)}</b></div>
-                                <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;">Validade: <b>${escapeHtml(c.valid_from || '—')}</b> até <b>${escapeHtml(c.valid_to || '—')}</b></div>
-                                <div style="margin-bottom:12px;"><span style="${badgeStyle}font-size:10.5px;padding:3px 8px;border-radius:9999px;font-weight:600;">${escapeHtml(badgeText)}</span></div>
+                                <div style="font-size:11px;font-family:monospace;color:var(--text-muted);margin-bottom:4px;">CNPJ: <b>${escapeHtml(cnpjFmt)}</b></div>
+                                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">${ieResumo}</div>
+                                <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Validade: <b>${escapeHtml(c.valid_from || '—')}</b> até <b>${escapeHtml(c.valid_to || '—')}</b></div>
+                                <div style="margin-bottom:10px;"><span style="${badgeStyle}font-size:10.5px;padding:3px 8px;border-radius:9999px;font-weight:600;">${escapeHtml(badgeText)}</span></div>
                             </div>
-                            <div style="display:flex;gap:6px;border-top:1px solid var(--border-subtle);padding-top:10px;margin-top:6px;">
-                                <button type="button" class="btn-action btn-action-primary" onclick="filtrarNotasPorEmpresa('${c.cnpj}');" style="flex:1;justify-content:center;padding:5px 8px;">🗄️ Notas</button>
-                                <button type="button" class="btn-action btn-action-success" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="flex:1;justify-content:center;padding:5px 8px;">⚡ Sincronizar</button>
+                            <div style="display:flex;gap:5px;border-top:1px solid var(--border-subtle);padding-top:10px;margin-top:6px;flex-wrap:wrap;">
+                                <button type="button" class="btn-action" onclick="abrirModalEditarDadosFiscaisCert('${c.cnpj}');" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;" title="Editar IE e Endereço desta empresa">✏️ Fiscal</button>
+                                <button type="button" class="btn-action btn-action-primary" onclick="filtrarNotasPorEmpresa('${c.cnpj}');" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;">🗄️ Notas</button>
+                                <button type="button" class="btn-action btn-action-success" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;">⚡ Sync</button>
                             </div>
                         </div>
                     `;
@@ -104,11 +108,12 @@ async function loadCertificatesUI() {
                 certTabela.innerHTML = `
                     <table class="tabelaGrupo" style="width:100%;font-size:11px;">
                         <tr class="linhaTitulo">
-                            <th style="text-align:left;padding:6px;">Razão Social</th>
+                            <th style="text-align:left;padding:6px;">Razão Social / Nome Fantasia</th>
                             <th>CNPJ</th>
-                            <th>Validade Inicial</th>
+                            <th>Inscrição Estadual</th>
+                            <th>Endereço Fiscal</th>
                             <th>Validade Final</th>
-                            <th>Dias Restantes</th>
+                            <th>Dias</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
@@ -116,17 +121,28 @@ async function loadCertificatesUI() {
                             const cnpjFmt = (c.cnpj || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
                             const days = c.days_remaining || 0;
                             let badgeColor = days > 30 ? "#27ae60" : days > 0 ? "#e67e22" : "#b00020";
+                            const ieClean = (c.ie || "").replace(/\D/g, "");
+                            let ieFmt = ieClean ? (ieClean.length === 12 ? ieClean.replace(/^(\d{3})(\d{3})(\d{3})(\d{3})$/, "$1.$2.$3.$4") : ieClean) : `<span style="color:#ef4444;font-style:italic;">Não configurada</span>`;
+                            const endFmt = c.logradouro
+                                ? `${escapeHtml(c.logradouro)}, ${escapeHtml(c.numero || 'S/N')} - ${escapeHtml(c.municipio || '')}/${escapeHtml(c.uf || 'SP')}`
+                                : `<span style="color:#ef4444;font-style:italic;">Não configurado</span>`;
+
                             return `
                                 <tr>
-                                    <td style="text-align:left;padding:6px;"><b>${escapeHtml(c.razao_social)}</b></td>
+                                    <td style="text-align:left;padding:6px;">
+                                        <b>${escapeHtml(c.razao_social)}</b>
+                                        ${c.nome_fantasia ? `<br><small style="color:var(--text-muted);">${escapeHtml(c.nome_fantasia)}</small>` : ""}
+                                    </td>
                                     <td style="font-family:monospace;">${escapeHtml(cnpjFmt)}</td>
-                                    <td>${escapeHtml(c.valid_from || "—")}</td>
+                                    <td style="font-family:monospace;font-weight:bold;color:var(--primary);">${ieFmt}</td>
+                                    <td style="font-size:10.5px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.logradouro || '')}">${endFmt}</td>
                                     <td><b>${escapeHtml(c.valid_to || "—")}</b></td>
                                     <td><b>${days} dias</b></td>
                                     <td><span class="badge-ambiente" style="background:${badgeColor};font-size:10px;">${escapeHtml(c.status_validade || "ATIVO")}</span></td>
-                                    <td style="white-space:nowrap;">
-                                        <button type="button" class="botao" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="font-size:10px;padding:2px 6px;">⚡ Sincronizar</button>
-                                        <button type="button" class="botao" onclick="excluirCertificado('${c.cnpj}', '${escapeHtml(c.razao_social)}');" style="font-size:10px;padding:2px 6px;color:#b00020;border-color:#b00020;">🗑️ Excluir</button>
+                                    <td style="white-space:nowrap;display:flex;gap:4px;justify-content:center;padding:6px 4px;">
+                                        <button type="button" class="botao" onclick="abrirModalEditarDadosFiscaisCert('${c.cnpj}');" style="font-size:10px;padding:3px 7px;color:#0284c7;border-color:#0284c7;" title="Configurar Inscrição Estadual e Endereço Fiscal">✏️ Fiscal</button>
+                                        <button type="button" class="botao" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="font-size:10px;padding:3px 7px;">⚡ Sync</button>
+                                        <button type="button" class="botao" onclick="excluirCertificado('${c.cnpj}', '${escapeHtml(c.razao_social)}');" style="font-size:10px;padding:3px 7px;color:#b00020;border-color:#b00020;">🗑️</button>
                                     </td>
                                 </tr>
                             `;
@@ -421,3 +437,119 @@ async function checkCertStatus() {
         AppState.certLoaded = false;
     }
 }
+
+// ── Modal Edição de Dados Fiscais do Certificado ─────────────────────────────
+
+function abrirModalEditarDadosFiscaisCert(cnpj) {
+    if (!cnpj) return;
+    const cleanCnpj = String(cnpj).replace(/\D/g, "");
+    const cert = (AppState.certificados || []).find(c => String(c.cnpj || "").replace(/\D/g, "") === cleanCnpj);
+    if (!cert) {
+        toast.error("Certificado não encontrado.");
+        return;
+    }
+
+    const modal = document.getElementById("modal-editar-dados-fiscais-cert");
+    if (!modal) return;
+
+    const cnpjFmt = (cert.cnpj || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
+    document.getElementById("modal-cert-fiscal-cnpj").value = cert.cnpj || "";
+    document.getElementById("modal-cert-fiscal-razao").value = cert.razao_social || "";
+    document.getElementById("modal-cert-fiscal-cnpj-display").textContent = cnpjFmt;
+    document.getElementById("modal-cert-fiscal-razao-display").textContent = cert.razao_social || "";
+    document.getElementById("modal-cert-fiscal-fantasia").value = cert.nome_fantasia || "";
+    document.getElementById("modal-cert-fiscal-ie").value = cert.ie || "";
+    document.getElementById("modal-cert-fiscal-crt").value = String(cert.crt || 1);
+    document.getElementById("modal-cert-fiscal-cep").value = cert.cep || "";
+    document.getElementById("modal-cert-fiscal-logradouro").value = cert.logradouro || "";
+    document.getElementById("modal-cert-fiscal-numero").value = cert.numero || "";
+    document.getElementById("modal-cert-fiscal-complemento").value = cert.complemento || "";
+    document.getElementById("modal-cert-fiscal-bairro").value = cert.bairro || "";
+    document.getElementById("modal-cert-fiscal-municipio").value = cert.municipio || "";
+    document.getElementById("modal-cert-fiscal-cod-mun").value = cert.cod_municipio || "";
+    document.getElementById("modal-cert-fiscal-uf").value = cert.uf || "SP";
+
+    modal.style.display = "flex";
+}
+
+function fecharModalEditarDadosFiscaisCert() {
+    const modal = document.getElementById("modal-editar-dados-fiscais-cert");
+    if (modal) modal.style.display = "none";
+}
+
+async function buscarCepCertViaCep(cep) {
+    const clean = String(cep || "").replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    try {
+        const resp = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await resp.json();
+        if (data.erro) {
+            toast.error("CEP não encontrado.");
+            return;
+        }
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val) el.value = val;
+        };
+        setVal("modal-cert-fiscal-logradouro", data.logradouro);
+        setVal("modal-cert-fiscal-bairro", data.bairro);
+        setVal("modal-cert-fiscal-municipio", data.localidade);
+        setVal("modal-cert-fiscal-uf", data.uf);
+        setVal("modal-cert-fiscal-cod-mun", data.ibge);
+        const numEl = document.getElementById("modal-cert-fiscal-numero");
+        if (numEl) numEl.focus();
+    } catch (err) {
+        console.warn("Erro ao buscar CEP:", err);
+    }
+}
+
+async function salvarDadosFiscaisCertModal(e) {
+    e.preventDefault();
+    const cnpj = document.getElementById("modal-cert-fiscal-cnpj").value;
+    if (!cnpj) return;
+
+    const cleanCnpj = String(cnpj).replace(/\D/g, "");
+    const payload = {
+        ie: (document.getElementById("modal-cert-fiscal-ie")?.value || "").replace(/\D/g, ""),
+        nome_fantasia: document.getElementById("modal-cert-fiscal-fantasia")?.value?.trim() || "",
+        crt: parseInt(document.getElementById("modal-cert-fiscal-crt")?.value || 1),
+        cep: (document.getElementById("modal-cert-fiscal-cep")?.value || "").replace(/\D/g, ""),
+        logradouro: document.getElementById("modal-cert-fiscal-logradouro")?.value?.trim() || "",
+        numero: document.getElementById("modal-cert-fiscal-numero")?.value?.trim() || "",
+        complemento: document.getElementById("modal-cert-fiscal-complemento")?.value?.trim() || "",
+        bairro: document.getElementById("modal-cert-fiscal-bairro")?.value?.trim() || "",
+        municipio: document.getElementById("modal-cert-fiscal-municipio")?.value?.trim() || "",
+        cod_municipio: (document.getElementById("modal-cert-fiscal-cod-mun")?.value || "").replace(/\D/g, ""),
+        uf: (document.getElementById("modal-cert-fiscal-uf")?.value || "SP").trim().toUpperCase(),
+    };
+
+    if (!payload.ie) {
+        toast.error("A Inscrição Estadual (IE) é obrigatória para emissão de NF-e.");
+        return;
+    }
+    if (!payload.logradouro || !payload.numero || !payload.bairro || !payload.municipio) {
+        toast.error("Preencha todos os campos obrigatórios do endereço fiscal.");
+        return;
+    }
+
+    try {
+        const res = await apiPut(`/api/certificado/${cleanCnpj}/dados-fiscais`, payload);
+        if (res.success) {
+            toast.success("Dados fiscais atualizados com sucesso!");
+            fecharModalEditarDadosFiscaisCert();
+            await loadCertificatesUI();
+            if (typeof carregarEmpresasEmitentesSelect === "function") {
+                await carregarEmpresasEmitentesSelect();
+            }
+            if (typeof atualizarCardEmitenteInfo === "function") {
+                atualizarCardEmitenteInfo();
+            }
+        } else {
+            toast.error(res.data?.detail || res.detail || "Erro ao salvar dados fiscais.");
+        }
+    } catch (err) {
+        toast.error("Erro de comunicação: " + err.message);
+    }
+}
+

@@ -92,8 +92,18 @@ function atualizarCardEmitenteInfo() {
     }
 
     const cnpjFmt = (cert.cnpj || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
-    const ieFmt = cert.ie ? cert.ie.replace(/^(\d{3})(\d{3})(\d{3})(\d{3})$/, "$1.$2.$3.$4") : (cert.ie || "535.758.386.119");
-    const endFmt = `${cert.logradouro || 'Rua Dom Pedro II'}, ${cert.numero || '857'}${cert.bairro ? ' - ' + cert.bairro : ''} - ${cert.municipio || 'Piracicaba'}/${cert.uf || 'SP'}${cert.cep ? ' (CEP: ' + cert.cep.replace(/^(\d{5})(\d{3})$/, "$1-$2") + ')' : ''}`;
+    const ieClean = (cert.ie || "").replace(/\D/g, "");
+    let ieFmt = "Não configurada";
+    if (ieClean) {
+        ieFmt = ieClean.length === 12
+            ? ieClean.replace(/^(\d{3})(\d{3})(\d{3})(\d{3})$/, "$1.$2.$3.$4")
+            : ieClean;
+    }
+    const endFmt = cert.logradouro
+        ? `${cert.logradouro}, ${cert.numero || 'S/N'}${cert.bairro ? ' - ' + cert.bairro : ''} - ${cert.municipio || ''}/${cert.uf || 'SP'}${cert.cep ? ' (CEP: ' + (cert.cep || '').replace(/^(\d{5})(\d{3})$/, "$1-$2") + ')' : ''}`
+        : "Endereço não configurado no certificado";
+
+    const crtTexto = cert.crt === 3 ? "CRT 3 - Regime Normal" : (cert.crt === 2 ? "CRT 2 - Simples c/ Excesso" : "CRT 1 - Simples Nacional");
 
     card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -103,12 +113,14 @@ function atualizarCardEmitenteInfo() {
                 <div class="card-ie-badge" style="background:var(--pastel-blue-bg);color:var(--pastel-blue-text);padding:2px 8px;border-radius:4px;border:1px solid var(--pastel-blue-border);display:flex;align-items:center;gap:4px;">
                     <span>🏛️ <b>Inscrição Estadual (IE):</b></span>
                     <code style="font-weight:bold;font-size:12px;color:var(--primary);background:var(--bg-surface);padding:1px 5px;border-radius:3px;border:1px solid var(--border-main);">${escapeHtml(ieFmt)}</code>
-                    <span style="font-size:10px;background:var(--primary);color:#fff;padding:1px 4px;border-radius:3px;">Obrigatório SEFAZ</span>
                 </div>
-                <div><b>⚖️ Regime Tributário:</b> <span class="badge-status-autorizada" style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">CRT 1 - Simples Nacional</span></div>
+                <div><b>⚖️ Regime Tributário:</b> <span class="badge-status-autorizada" style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${escapeHtml(crtTexto)}</span></div>
             </div>
-            <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
-                <span>📍 <b>Endereço Fiscal:</b> ${escapeHtml(endFmt)}</span>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;">
+                <div style="color:var(--text-muted);">
+                    <span>📍 <b>Endereço Fiscal:</b> ${escapeHtml(endFmt)}</span>
+                </div>
+                <button type="button" class="btn-action" onclick="abrirModalEditarDadosFiscaisCert('${cert.cnpj}');" style="font-size:10.5px;padding:2px 8px;" title="Editar Inscrição Estadual e Endereço desta empresa">✏️ Alterar</button>
             </div>
         </div>
     `;
@@ -699,6 +711,8 @@ function handleMudancaFinalidade(val) {
 
 function montarPayloadEmissao() {
     const emitCnpj = document.getElementById("emissao-empresa-emit")?.value || "";
+    const cleanEmitCnpj = emitCnpj.replace(/\D/g, "");
+    const cert = (AppState.certificados || []).find(c => (c.cnpj || "").replace(/\D/g, "") === cleanEmitCnpj);
     const natOp = document.getElementById("emissao-natureza-op")?.value || "VENDA DE MERCADORIA";
     const serie = document.getElementById("emissao-serie")?.value || "1";
     const numero = document.getElementById("emissao-numero")?.value || "";
@@ -757,7 +771,17 @@ function montarPayloadEmissao() {
 
     const homolog = AppState.ambiente === "homologacao";
     return {
-        emitente_cnpj: emitCnpj,
+        emitente_cnpj: cleanEmitCnpj,
+        emitente_ie: cert?.ie || "",
+        emitente_logradouro: cert?.logradouro || "",
+        emitente_numero: cert?.numero || "",
+        emitente_complemento: cert?.complemento || "",
+        emitente_bairro: cert?.bairro || "",
+        emitente_municipio: cert?.municipio || "",
+        emitente_cod_municipio: cert?.cod_municipio || "",
+        emitente_uf: cert?.uf || AppState.uf || "SP",
+        emitente_cep: cert?.cep || "",
+        regime_tributario: cert?.crt || 1,
         natureza_operacao: natOp,
         serie: serie,
         numero: numero ? parseInt(numero) : null,
@@ -953,7 +977,7 @@ function renderDanfePreviaModal(danfe) {
                     <div>${escapeHtml(emit.logradouro || "")}${emit.numero ? ", " + escapeHtml(emit.numero) : ""}${emit.bairro ? " - " + escapeHtml(emit.bairro) : ""}</div>
                     <div>${escapeHtml(emit.municipio || "")} / ${escapeHtml(emit.uf || "SP")} - CEP: ${escapeHtml(emit.cep || "")}</div>
                     <div style="margin-top:4px;font-size:10px;">
-                        <b>CNPJ:</b> ${escapeHtml(emit.cnpj || "—")} &nbsp;|&nbsp; <b>IE:</b> ${escapeHtml(emit.ie || "ISENTO")}
+                        <b>CNPJ:</b> ${escapeHtml(emit.cnpj || emit.cnpj_formatado || "—")} &nbsp;|&nbsp; <b>IE:</b> ${escapeHtml(emit.ie || "ISENTO")}
                     </div>
                 </div>
 

@@ -1,0 +1,79 @@
+{
+  "empresas": [
+    {
+      "cnpj": "34511185000110",
+      "razao_social": "JACKCELL CELULARES E IMPORTADOS LTDA",
+      "nome_fantasia": "JACKCELL CELULARES E IMPORTADOS LTDA",
+      "ie": "535758386119",
+      "logradouro": "RUA DOM PEDRO II",
+      "numero": "857",
+      "complemento": "",
+      "bairro": "CENTRO",
+      "municipio": "Piracicaba",
+      "cod_municipio": "3538709",
+      "uf": "SP",
+      "cep": "13400390",
+      "crt": 1
+    },
+    {
+      "cnpj": "13787408000105",
+      "razao_social": "FERNANDES COMERCIO DE CELULARES E IMPORTACAO LTDA",
+      "nome_fantasia": "MI PLACE XV",
+      "ie": "535891235110",
+      "logradouro": "RUA QUINZE DE NOVEMBRO",
+      "numero": "936",
+      "complemento": "",
+      "bairro": "CENTRO",
+      "municipio": "PIRACICABA",
+      "cod_municipio": "3538709",
+      "uf": "SP",
+      "cep": "13400370",
+      "crt": 1
+    },
+    {
+      "cnpj": "44739622000101",
+      "razao_social": "FILIPE ALMEIDA GIL DE SOUZA LTDA",
+      "nome_fantasia": "MI PLACE REALME",
+      "ie": "535911741117",
+      "logradouro": "RUA BENJAMIN CONSTANT",
+      "numero": "1230",
+      "complemento": "",
+      "bairro": "CENTRO",
+      "municipio": "Piracicaba",
+      "cod_municipio": "3538709",
+      "uf": "SP",
+      "cep": "13400053",
+      "crt": 1
+    },
+    {
+      "cnpj": "58186781000130",
+      "razao_social": "J DE A FERNANDES OPERACOES DE CREDITO",
+      "nome_fantasia": "MI PLACE PREMIUM",
+      "ie": "168197097116",
+      "logradouro": "RUA TREZE DE MAIO",
+      "numero": "26",
+      "complemento": "",
+      "bairro": "CENTRO",
+      "municipio": "Amparo",
+      "cod_municipio": "3501905",
+      "uf": "SP",
+      "cep": "13900005",
+      "crt": 1
+    },
+    {
+      "cnpj": "58495100000116",
+      "razao_social": "MI PLACE AMPARO LTDA",
+      "nome_fantasia": "MI PLACE KASSOUF",
+      "ie": "168197715110",
+      "logradouro": "RUA TREZE DE MAIO",
+      "numero": "218",
+      "complemento": "",
+      "bairro": "CENTRO",
+      "municipio": "Amparo",
+      "cod_municipio": "3501905",
+      "uf": "SP",
+      "cep": "13900005",
+      "crt": 1
+    }
+  ]
+}
