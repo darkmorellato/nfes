@@ -543,6 +543,8 @@ function initClientesRealtimeListener() {
 
     try {
         _unsubscribeClientes = firestoreDb.collection("clientes")
+            .orderBy("updated_at", "desc")
+            .limit(50)
             .onSnapshot(async (snapshot) => {
                 if (isFirstSnapshot) {
                     isFirstSnapshot = false;
@@ -741,6 +743,7 @@ function initProdutosRealtimeListener() {
 
     try {
         _unsubscribeProdutos = firestoreDb.collection("produtos")
+            .limit(50)
             .onSnapshot(async (snapshot) => {
                 if (isFirstSnapshot) {
                     isFirstSnapshot = false;

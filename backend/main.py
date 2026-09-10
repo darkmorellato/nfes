@@ -58,7 +58,14 @@ def _safe_firestore_auto_sync_cadastros() -> None:
         if not _get_api_key() or not _get_project_id():
             logger.info("[Firestore] Auto-sync de cadastros ignorado: credenciais ausentes.")
             return
-        logger.info("[Firestore] Auto-sync de cadastros no startup: baixando clientes e produtos...")
+
+        from backend.database.cadastros import list_clientes
+        cli_locais = list_clientes()
+        if len(cli_locais) > 0:
+            logger.info("[Firestore] Base local já possui %d clientes. Auto-sync full do Firestore ignorado no startup para economizar cota.", len(cli_locais))
+            return
+
+        logger.info("[Firestore] Auto-sync de cadastros no startup: base local vazia, baixando da nuvem...")
         r1 = sincronizar_clientes_firestore_para_sqlite()
         logger.info(
             f"[Firestore] Auto-sync clientes: {r1.get('imported', 0)}/{r1.get('total_nuvem', 0)} importados."
