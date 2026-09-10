@@ -33,6 +33,20 @@ def _auto_update(repo_dir: str) -> None:
         return
 
     logger.info("[AutoUpdate] Verificando atualizações...")
+    OFFICIAL_REPO_URL = "https://github.com/darkmorellato/nfes.git"
+    try:
+        subprocess.run(["git", "config", "--global", "--add", "safe.directory", repo_dir], cwd=repo_dir, capture_output=True, timeout=5)
+        url_check = subprocess.run(["git", "config", "--get", "remote.origin.url"], cwd=repo_dir, capture_output=True, text=True, timeout=5)
+        if url_check.returncode == 0:
+            cur_url = url_check.stdout.strip()
+            if not cur_url or "darkmorellato/nfes" not in cur_url:
+                subprocess.run(["git", "remote", "set-url", "origin", OFFICIAL_REPO_URL], cwd=repo_dir, capture_output=True, timeout=5)
+        else:
+            subprocess.run(["git", "remote", "add", "origin", OFFICIAL_REPO_URL], cwd=repo_dir, capture_output=True, timeout=5)
+        subprocess.run(["git", "branch", "--set-upstream-to=origin/main", "main"], cwd=repo_dir, capture_output=True, timeout=5)
+    except Exception:
+        pass
+
     try:
         result = subprocess.run(
             ["git", "fetch", "origin", "main"],

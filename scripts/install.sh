@@ -58,17 +58,40 @@ Keywords=nfe;sefaz;nota fiscal;danfe;impostos;
 EOF
 
 chmod +x "${DESKTOP_FILE}"
+
+# 4. Cria o atalho de Atualização Automática de 1 Clique
+UPDATE_DESKTOP_FILE="${APPS_DIR}/atualizar-nfe.desktop"
+cat > "${UPDATE_DESKTOP_FILE}" <<EOF
+[Desktop Entry]
+Version=1.0
+Name=Atualizar NFE Manager
+GenericName=Atualizador 1-Clique
+Comment=Atualiza o NFE Manager automaticamente pelo GitHub com 1 clique
+Exec=bash -c "cd '${REPO_DIR}'; ./atualizar_zorin.sh"
+Path=${REPO_DIR}
+Icon=system-software-update
+Terminal=true
+Type=Application
+Categories=Office;Finance;Utility;
+StartupNotify=true
+EOF
+
+chmod +x "${UPDATE_DESKTOP_FILE}"
 update-desktop-database "${APPS_DIR}" 2>/dev/null || true
 
-# 4. Copia opcionalmente para a Área de Trabalho se ela existir
+# 5. Copia os atalhos para a Área de Trabalho se ela existir
 if [ -d "${DESKTOP_DIR}" ]; then
     cp "${DESKTOP_FILE}" "${DESKTOP_DIR}/${APP}.desktop"
     chmod +x "${DESKTOP_DIR}/${APP}.desktop"
-    # Marca como confiável no GNOME/Ubuntu se gio estiver disponível
     gio set "${DESKTOP_DIR}/${APP}.desktop" metadata::trusted true 2>/dev/null || true
+
+    cp "${UPDATE_DESKTOP_FILE}" "${DESKTOP_DIR}/Atualizar_NFE.desktop"
+    chmod +x "${DESKTOP_DIR}/Atualizar_NFE.desktop"
+    gio set "${DESKTOP_DIR}/Atualizar_NFE.desktop" metadata::trusted true 2>/dev/null || true
 fi
 
-echo "✅ Atalho e ícone instalados com sucesso!"
-echo "   - Menu de Aplicativos: ${DESKTOP_FILE}"
-[ -d "${DESKTOP_DIR}" ] && echo "   - Área de Trabalho:    ${DESKTOP_DIR}/${APP}.desktop"
+echo "✅ Atalhos e ícones instalados com sucesso!"
+echo "   - Aplicativo: ${DESKTOP_FILE}"
+echo "   - Atualizador 1-Clique: ${UPDATE_DESKTOP_FILE}"
+[ -d "${DESKTOP_DIR}" ] && echo "   - Área de Trabalho:    ${DESKTOP_DIR}/${APP}.desktop e Atualizar_NFE.desktop"
 

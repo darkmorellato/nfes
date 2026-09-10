@@ -585,6 +585,20 @@ class TestNFEManager(unittest.TestCase):
         self.assertIsInstance(cmd, list)
         self.assertGreater(len(cmd), 0)
 
+    def test_updater_git_config_and_zorin_script(self):
+        """Valida que _ensure_git_config e os scripts de 1 clique para Zorin OS estão íntegros."""
+        from backend.services.updater_service import _ensure_git_config, _get_repo_dir, OFFICIAL_REPO_URL
+        repo_dir = _get_repo_dir()
+        self.assertEqual(OFFICIAL_REPO_URL, "https://github.com/darkmorellato/nfes.git")
+        _ensure_git_config(repo_dir)
+
+        # Verifica existência dos arquivos de atualização para Zorin OS / Linux
+        script_path = os.path.join(repo_dir, "atualizar_zorin.sh")
+        desktop_path = os.path.join(repo_dir, "Atualizar_Sistema.desktop")
+        self.assertTrue(os.path.isfile(script_path), "atualizar_zorin.sh deve existir")
+        self.assertTrue(os.path.isfile(desktop_path), "Atualizar_Sistema.desktop deve existir")
+        self.assertTrue(os.access(script_path, os.X_OK), "atualizar_zorin.sh deve ser executável")
+
 
 if __name__ == "__main__":
     unittest.main()

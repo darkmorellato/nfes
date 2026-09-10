@@ -11,15 +11,19 @@ from typing import Dict, Any, List
 logger = logging.getLogger("nfe.updater")
 
 
+OFFICIAL_REPO_URL = "https://github.com/darkmorellato/nfes.git"
+
+
 def _get_repo_dir() -> str:
     """Retorna o diretório raiz do repositório."""
     # backend/services/updater_service.py -> ../../
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-def _ensure_safe_directory(repo_dir: str) -> None:
-    """Evita erro 'fatal: detected dubious ownership' no Git para Linux/Zorin OS."""
+def _ensure_git_config(repo_dir: str) -> None:
+    """Garante safe.directory, URL do repositório remoto origin e tracking correto de branch."""
     try:
+        # 1. safe.directory para evitar erro 'detected dubious ownership'
         subprocess.run(
             ["git", "config", "--global", "--add", "safe.directory", repo_dir],
             cwd=repo_dir,
@@ -27,8 +31,54 @@ def _ensure_safe_directory(repo_dir: str) -> None:
             text=True,
             timeout=5,
         )
-    except Exception:
-        pass
+
+        # 2. Garante que remote.origin.url aponte para o repositório oficial correto
+        url_check = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if url_check.returncode == 0:
+            cur_url = url_check.stdout.strip()
+            if not cur_url or "darkmorellato/nfes" not in cur_url:
+                subprocess.run(
+                    ["git", "remote", "set-url", "origin", OFFICIAL_REPO_URL],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    timeout=5,
+                )
+        else:
+            subprocess.run(
+                ["git", "remote", "add", "origin", OFFICIAL_REPO_URL],
+                cwd=repo_dir,
+                capture_output=True,
+                timeout=5,
+            )
+
+        # 3. Garante tracking upstream da branch ativa
+        branch_proc = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        branch = branch_proc.stdout.strip() or "main"
+        subprocess.run(
+            ["git", "branch", f"--set-upstream-to=origin/{branch}", branch],
+            cwd=repo_dir,
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception as e:
+        logger.warning(f"Aviso ao verificar configuração do Git: {e}")
+
+
+def _ensure_safe_directory(repo_dir: str) -> None:
+    """Evita erro 'fatal: detected dubious ownership' no Git para Linux/Zorin OS."""
+    _ensure_git_config(repo_dir)
 
 
 def _get_pip_cmd(repo_dir: str) -> List[str]:
@@ -47,7 +97,7 @@ def _get_pip_cmd(repo_dir: str) -> List[str]:
 def check_update_status() -> Dict[str, Any]:
     """Verifica se há novas atualizações disponíveis no repositório remoto Git."""
     repo_dir = _get_repo_dir()
-    _ensure_safe_directory(repo_dir)
+    _ensure_git_config(repo_dir)
     git_dir = os.path.join(repo_dir, ".git")
 
     if not os.path.isdir(git_dir):

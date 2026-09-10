@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=Atualizar NFE Manager
+GenericName=Atualizador 1-Clique
+Comment=Atualiza o NFE Manager automaticamente pelo GitHub com 1 clique
+Exec=bash -c 'cd "$(dirname "%k")" 2>/dev/null || cd "$HOME/Codes/nfes-main" || cd "$HOME/nfes-main" || cd "$HOME/nfes"; ./atualizar_zorin.sh'
+Icon=system-software-update
+Terminal=true
+Type=Application
+Categories=Office;Finance;Utility;
+StartupNotify=true
