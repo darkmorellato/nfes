@@ -32,31 +32,20 @@ _API_KEY_MISSING_WARNED = False
 _PROJECT_ID_MISSING_WARNED = False
 
 
+DEFAULT_FIREBASE_API_KEY = "AIzaSyAoq7xuMCJde6AXHmVMKt8c7NGYQlHMsX4"
+DEFAULT_FIREBASE_PROJECT_ID = "nfes-dd7ab"
+
+
 def _get_api_key() -> str:
-    """Lê a API key do Firebase do ambiente. Não há fallback hardcoded."""
-    global _API_KEY_MISSING_WARNED
+    """Lê a API key do Firebase do ambiente com fallback para as credenciais oficiais."""
     key = (getattr(settings, "FIREBASE_API_KEY", "") or "").strip()
-    if not key and not _API_KEY_MISSING_WARNED:
-        logger.warning(
-            "[Firestore] FIREBASE_API_KEY não configurada em .env — "
-            "sincronização com a nuvem desativada. Defina a chave no .env "
-            "para habilitar."
-        )
-        _API_KEY_MISSING_WARNED = True
-    return key
+    return key or DEFAULT_FIREBASE_API_KEY
 
 
 def _get_project_id() -> str:
-    """Lê o project_id do Firebase do ambiente. Não há fallback hardcoded."""
-    global _PROJECT_ID_MISSING_WARNED
+    """Lê o project_id do Firebase do ambiente com fallback para o projeto oficial."""
     pid = (getattr(settings, "FIREBASE_PROJECT_ID", "") or "").strip()
-    if not pid and not _PROJECT_ID_MISSING_WARNED:
-        logger.warning(
-            "[Firestore] FIREBASE_PROJECT_ID não configurado em .env — "
-            "sincronização com a nuvem desativada."
-        )
-        _PROJECT_ID_MISSING_WARNED = True
-    return pid
+    return pid or DEFAULT_FIREBASE_PROJECT_ID
 
 def _py_to_firestore_value(val: Any) -> Dict[str, Any]:
     if val is None:

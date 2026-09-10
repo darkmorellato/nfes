@@ -923,9 +923,11 @@ async function abrirModalSyncRedeLocal() {
     const statusBox = document.getElementById("sync-rede-status");
     if (statusBox) statusBox.style.display = "none";
 
-    // Carrega URL salva no localStorage
+    // Carrega URL salva no localStorage ou usa o IP padrao da maquina principal
     const savedUrl = localStorage.getItem("nfe_p2p_sync_url") || "";
-    if (inputUrl && savedUrl) inputUrl.value = savedUrl;
+    if (inputUrl) {
+        inputUrl.value = savedUrl || "http://192.168.3.97:8000";
+    }
 
     try {
         const res = await apiGet("/api/gestao/rede/info");
@@ -1026,4 +1028,31 @@ async function executarSyncRedeLocal() {
         if (btn) { btn.disabled = false; btn.innerHTML = "🚀 Puxar Agora"; }
     }
 }
+
+// ====================================================================
+// AUTO-SYNC SILENCIOSO EM REDE LOCAL (P2P LAN)
+// ====================================================================
+async function autoSyncRedeLocalSilencioso() {
+    // Não sincroniza se estiver rodando na própria máquina principal
+    if (window.location.hostname === "192.168.3.97") return;
+    const targetUrl = localStorage.getItem("nfe_p2p_sync_url") || "http://192.168.3.97:8000";
+    try {
+        const res = await apiPost("/api/gestao/rede/puxar-dados", { url_origem: targetUrl });
+        const data = res.data || res;
+        if (res.success && (data.clientes_importados > 0 || data.produtos_importados > 0)) {
+            console.log(`[P2P LAN Auto-Sync] Sincronizados ${data.clientes_importados} novos clientes e ${data.produtos_importados} produtos da máquina principal (${targetUrl})!`);
+            if (typeof carregarTabelaCadClientes === "function") carregarTabelaCadClientes();
+            if (typeof carregarTabelaCadProdutos === "function") carregarTabelaCadProdutos();
+            if (typeof carregarSelectClientesEmissao === "function") carregarSelectClientesEmissao();
+            if (typeof carregarSelectProdutosEmissao === "function") carregarSelectProdutosEmissao();
+        }
+    } catch (e) {
+        // Silencioso se máquina principal estiver desligada
+    }
+}
+
+// Inicia após 5s e repete a cada 40s
+setTimeout(autoSyncRedeLocalSilencioso, 5000);
+setInterval(autoSyncRedeLocalSilencioso, 40000);
+
 

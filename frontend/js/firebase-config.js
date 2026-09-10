@@ -6,7 +6,17 @@
  * Não há credenciais hardcoded — se o backend não responder, o Firebase não inicializa.
  */
 
-const firebaseConfig = {};
+const DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAoq7xuMCJde6AXHmVMKt8c7NGYQlHMsX4",
+    authDomain: "nfes-dd7ab.firebaseapp.com",
+    projectId: "nfes-dd7ab",
+    storageBucket: "nfes-dd7ab.firebasestorage.app",
+    messagingSenderId: "845868073907",
+    appId: "1:845868073907:web:3075c8479fb4e34a5d01c6",
+    measurementId: "G-4346B1KGE7"
+};
+
+const firebaseConfig = Object.assign({}, DEFAULT_FIREBASE_CONFIG);
 
 let firebaseApp = null;
 let firestoreDb = null;
@@ -467,29 +477,43 @@ async function sincronizarProdutosLocal() {
 // Inicializa de forma robusta independente do momento do carregamento do script
 async function bootstrapFirebase() {
     try {
-        const resp = await fetch("/api/firebase-config");
-        if (resp.ok) {
-            const cfg = await resp.json();
-            if (cfg.apiKey) {
-                Object.assign(firebaseConfig, cfg);
-                initFirebase(); // resolve ou rejeita firebaseReadyPromise internamente
-            } else {
-                const msg = "Config do Firebase não disponível no backend. Sincronização com nuvem desativada.";
-                console.warn(msg);
-                updateFirestoreStatusUI(false, msg);
-                if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
+        let loaded = false;
+        try {
+            const resp = await fetch("/api/firebase-config");
+            if (resp.ok) {
+                const cfg = await resp.json();
+                if (cfg && cfg.apiKey) {
+                    Object.assign(firebaseConfig, cfg);
+                    loaded = true;
+                }
             }
+        } catch (netErr) {
+            console.warn("Backend /api/firebase-config indisponível, usando configuração padrão:", netErr);
+        }
+
+        // Se o backend retornou vazio ou falhou, usa o fallback padrão garantido
+        if (!loaded && DEFAULT_FIREBASE_CONFIG.apiKey) {
+            Object.assign(firebaseConfig, DEFAULT_FIREBASE_CONFIG);
+            loaded = true;
+        }
+
+        if (loaded && firebaseConfig.apiKey) {
+            initFirebase();
         } else {
-            const msg = `Backend retornou status ${resp.status} ao carregar config do Firebase.`;
+            const msg = "Configuração do Firebase indisponível.";
             console.warn(msg);
             updateFirestoreStatusUI(false, msg);
             if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
         }
     } catch (e) {
-        const msg = "Falha ao conectar ao backend para carregar config do Firebase. Sincronização com nuvem desativada.";
-        console.warn(msg, e);
-        updateFirestoreStatusUI(false, msg);
-        if (_firebaseReadyReject) _firebaseReadyReject(new Error(msg));
+        console.warn("Erro ao inicializar Firebase bootstrap:", e);
+        if (DEFAULT_FIREBASE_CONFIG.apiKey) {
+            Object.assign(firebaseConfig, DEFAULT_FIREBASE_CONFIG);
+            initFirebase();
+        } else {
+            updateFirestoreStatusUI(false, e.message);
+            if (_firebaseReadyReject) _firebaseReadyReject(e);
+        }
     }
 }
 

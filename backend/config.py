@@ -80,14 +80,16 @@ class Settings(BaseSettings):
     TIMEOUT: int = 60
     ALLOWED_ORIGINS: str = _default_origins()
 
-    FIREBASE_API_KEY: str = ""
-    FIREBASE_AUTH_DOMAIN: str = ""
-    FIREBASE_PROJECT_ID: str = ""
-    FIREBASE_STORAGE_BUCKET: str = ""
-    FIREBASE_MESSAGING_SENDER_ID: str = ""
-    FIREBASE_APP_ID: str = ""
-    FIREBASE_MEASUREMENT_ID: str = ""
-    FIREBASE_ENABLED: bool = False
+    FIREBASE_API_KEY: str = os.environ.get("FIREBASE_API_KEY", "AIzaSyAoq7xuMCJde6AXHmVMKt8c7NGYQlHMsX4")
+    FIREBASE_AUTH_DOMAIN: str = os.environ.get("FIREBASE_AUTH_DOMAIN", "nfes-dd7ab.firebaseapp.com")
+    FIREBASE_PROJECT_ID: str = os.environ.get("FIREBASE_PROJECT_ID", "nfes-dd7ab")
+    FIREBASE_STORAGE_BUCKET: str = os.environ.get("FIREBASE_STORAGE_BUCKET", "nfes-dd7ab.firebasestorage.app")
+    FIREBASE_MESSAGING_SENDER_ID: str = os.environ.get("FIREBASE_MESSAGING_SENDER_ID", "845868073907")
+    FIREBASE_APP_ID: str = os.environ.get("FIREBASE_APP_ID", "1:845868073907:web:3075c8479fb4e34a5d01c6")
+    FIREBASE_MEASUREMENT_ID: str = os.environ.get("FIREBASE_MEASUREMENT_ID", "G-4346B1KGE7")
+    FIREBASE_ENABLED: bool = True
+
+    PRIMARY_SERVER_URL: str = os.environ.get("PRIMARY_SERVER_URL", "http://192.168.3.97:8000")
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
