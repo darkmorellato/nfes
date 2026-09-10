@@ -909,3 +909,121 @@ async function executarCheckinEstoqueRapido(chave) {
 // ====================================================================
 // APURAÇÃO DO SIMPLES NACIONAL (LEI 123/2006)
 // ====================================================================
+
+// ====================================================================
+// SINCRONIZAÇÃO DIRETA EM REDE LOCAL (P2P LAN SYNC)
+// ====================================================================
+
+async function abrirModalSyncRedeLocal() {
+    const modal = document.getElementById("modal-sync-rede-local");
+    if (modal) modal.style.display = "flex";
+
+    const meuIpEl = document.getElementById("sync-rede-meu-ip");
+    const inputUrl = document.getElementById("sync-rede-url-origem");
+    const statusBox = document.getElementById("sync-rede-status");
+    if (statusBox) statusBox.style.display = "none";
+
+    // Carrega URL salva no localStorage
+    const savedUrl = localStorage.getItem("nfe_p2p_sync_url") || "";
+    if (inputUrl && savedUrl) inputUrl.value = savedUrl;
+
+    try {
+        const res = await apiGet("/api/gestao/rede/info");
+        const data = res.data || res;
+        if (data && meuIpEl) {
+            meuIpEl.textContent = data.url_sugerida || (data.ips && data.ips[0] ? `http://${data.ips[0]}:${data.porta}` : "http://127.0.0.1:8000");
+            if (inputUrl && !inputUrl.value && data.ips && data.ips[0]) {
+                inputUrl.placeholder = `Ex: http://${data.ips[0]}:${data.porta || 8000}`;
+            }
+        }
+    } catch (e) {
+        if (meuIpEl) meuIpEl.textContent = `http://${window.location.hostname || "127.0.0.1"}:8000`;
+    }
+}
+
+function fecharModalSyncRedeLocal() {
+    const modal = document.getElementById("modal-sync-rede-local");
+    if (modal) modal.style.display = "none";
+}
+
+function copiarMeuIpRede() {
+    const el = document.getElementById("sync-rede-meu-ip");
+    if (el && el.textContent) {
+        navigator.clipboard.writeText(el.textContent.trim());
+        if (typeof toast !== "undefined" && toast.info) {
+            toast.info("📋 Link copiado para a área de transferência!");
+        }
+    }
+}
+
+async function executarSyncRedeLocal() {
+    const inputUrl = document.getElementById("sync-rede-url-origem");
+    const btn = document.getElementById("btn-executar-sync-rede");
+    const statusBox = document.getElementById("sync-rede-status");
+    const rawUrl = (inputUrl?.value || "").trim();
+
+    if (!rawUrl) {
+        if (typeof toast !== "undefined" && toast.warning) {
+            toast.warning("Digite o IP ou URL da máquina de origem (ex: http://192.168.3.97:8000)");
+        }
+        return;
+    }
+
+    localStorage.setItem("nfe_p2p_sync_url", rawUrl);
+
+    if (btn) { btn.disabled = true; btn.innerHTML = "⏳ Sincronizando..."; }
+    if (statusBox) {
+        statusBox.style.display = "block";
+        statusBox.style.background = "#eff6ff";
+        statusBox.style.border = "1px solid #bfdbfe";
+        statusBox.style.color = "#1e40af";
+        statusBox.textContent = `Conectando a ${rawUrl} e baixando clientes e produtos...`;
+    }
+
+    try {
+        const res = await apiPost("/api/gestao/rede/puxar-dados", { url_origem: rawUrl });
+        const data = res.data || res;
+        if (res.success && data.success !== false) {
+            if (statusBox) {
+                statusBox.style.background = "#f0fdf4";
+                statusBox.style.border = "1px solid #bbf7d0";
+                statusBox.style.color = "#166534";
+                statusBox.innerHTML = `<b>✅ Sincronização concluída com sucesso!</b><br>
+                    👥 Clientes importados/atualizados: <b>${data.clientes_importados || 0}</b><br>
+                    📦 Produtos importados/atualizados: <b>${data.produtos_importados || 0}</b><br>
+                    🏢 Empresas/Certificados atualizados: <b>${data.empresas_importadas || 0}</b>`;
+            }
+            if (typeof toast !== "undefined" && toast.success) {
+                toast.success(`🎉 Sincronizados ${data.clientes_importados} clientes e ${data.produtos_importados} produtos!`);
+            }
+            if (typeof carregarTabelaCadClientes === "function") await carregarTabelaCadClientes();
+            if (typeof carregarTabelaCadProdutos === "function") await carregarTabelaCadProdutos();
+            if (typeof carregarSelectClientesEmissao === "function") await carregarSelectClientesEmissao();
+            if (typeof carregarSelectProdutosEmissao === "function") await carregarSelectProdutosEmissao();
+        } else {
+            const err = data.detail || data.error || data.message || "Erro desconhecido";
+            if (statusBox) {
+                statusBox.style.background = "#fef2f2";
+                statusBox.style.border = "1px solid #fecaca";
+                statusBox.style.color = "#991b1b";
+                statusBox.textContent = `❌ Falha ao sincronizar: ${err}`;
+            }
+            if (typeof toast !== "undefined" && toast.error) {
+                toast.error("Erro na sincronização: " + err);
+            }
+        }
+    } catch (e) {
+        if (statusBox) {
+            statusBox.style.background = "#fef2f2";
+            statusBox.style.border = "1px solid #fecaca";
+            statusBox.style.color = "#991b1b";
+            statusBox.textContent = `❌ Erro de conexão: ${e.message}. Verifique se a outra máquina está ligada na mesma rede e se o IP está correto.`;
+        }
+        if (typeof toast !== "undefined" && toast.error) {
+            toast.error("Falha ao conectar: " + e.message);
+        }
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = "🚀 Puxar Agora"; }
+    }
+}
+

@@ -68,4 +68,5 @@ scratch/
 data/.secret_key
 data/danfe_pdfs/
 data/backups/
+data/firestore_pending_queue.json
 *.zip

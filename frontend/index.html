@@ -1462,12 +1462,16 @@
 
                     <!-- ================= SUB-ABA 3: CADASTRO DE CLIENTES ================= -->
                     <div id="subtab-emissao-clientes" style="display:none;">
-                        <div class="painelSessao" style="margin-bottom:14px;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>👥 Clientes Cadastrados</span>
-                                <button type="button" class="botao botao-primario" onclick="abrirModalNovoCliente();" style="font-size:11.5px;padding:4px 12px;height:32px;">
-                                    ➕ Novo Cliente
-                                </button>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <button type="button" class="botao botao-secundario" onclick="abrirModalSyncRedeLocal();" style="font-size:11.5px;padding:4px 12px;height:32px;display:flex;align-items:center;gap:5px;" title="Importa clientes e produtos da outra máquina pela rede local sem depender da nuvem">
+                                        🔄 Sincronizar via Rede Local
+                                    </button>
+                                    <button type="button" class="botao botao-primario" onclick="abrirModalNovoCliente();" style="font-size:11.5px;padding:4px 12px;height:32px;">
+                                        ➕ Novo Cliente
+                                    </button>
+                                </div>
                             </div>
                             <div style="display:flex;gap:10px;margin-bottom:12px;">
                                 <input type="text" id="busca-cad-clientes" placeholder="Buscar por Razão Social, Nome Fantasia, CPF, CNPJ ou E-mail..." style="flex:1;" oninput="filtrarTabelaClientes(this.value);">
@@ -1499,9 +1503,14 @@
                         <div class="painelSessao" style="margin-bottom:14px;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>📦 Catálogo de Produtos & Serviços</span>
-                                <button type="button" class="botao botao-primario" onclick="abrirModalNovoProduto();" style="font-size:11.5px;padding:4px 12px;height:32px;">
-                                    ➕ Novo Produto
-                                </button>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <button type="button" class="botao botao-secundario" onclick="abrirModalSyncRedeLocal();" style="font-size:11.5px;padding:4px 12px;height:32px;display:flex;align-items:center;gap:5px;" title="Importa clientes e produtos da outra máquina pela rede local sem depender da nuvem">
+                                        🔄 Sincronizar via Rede Local
+                                    </button>
+                                    <button type="button" class="botao botao-primario" onclick="abrirModalNovoProduto();" style="font-size:11.5px;padding:4px 12px;height:32px;">
+                                        ➕ Novo Produto
+                                    </button>
+                                </div>
                             </div>
                             <div style="display:flex;gap:10px;margin-bottom:12px;">
                                 <input type="text" id="busca-cad-produtos" placeholder="Buscar por Descrição, Código, NCM ou Código de Barras (GTIN)..." style="flex:1;" oninput="filtrarTabelaProdutos(this.value);">
@@ -3869,6 +3878,51 @@
             </div>
             <div class="drawer-footer" id="drawer-doc-acoes">
                 <!-- Ações rápidas -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Sincronização Direta em Rede Local (P2P) -->
+    <div id="modal-sync-rede-local" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.65);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+        <div style="background:#fff;width:560px;max-width:94vw;border-radius:10px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.4);">
+            <div style="background:#0f172a;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:20px;">🔄</span>
+                    <b style="font-size:14px;">Sincronização Direta via Rede Local</b>
+                </div>
+                <button type="button" onclick="fecharModalSyncRedeLocal();" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+            </div>
+            <div style="padding:20px;max-height:85vh;overflow-y:auto;">
+                <!-- Info desta máquina -->
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+                    <div style="font-size:11.5px;font-weight:bold;color:#475569;text-transform:uppercase;">📍 Endereço desta máquina nesta rede:</div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                        <code id="sync-rede-meu-ip" style="background:#0f172a;color:#38bdf8;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:bold;">Identificando IP...</code>
+                        <button type="button" class="botao botao-pequeno" onclick="copiarMeuIpRede();" style="font-size:11px;padding:3px 8px;">📋 Copiar</button>
+                    </div>
+                    <small style="color:#64748b;font-size:11px;margin-top:4px;display:block;">Se quiser acessar o sistema direto desta máquina no outro computador, basta abrir o navegador e digitar o link acima.</small>
+                </div>
+
+                <!-- Formulário de puxar dados da outra máquina -->
+                <div style="border:1px solid #cbd5e1;border-radius:8px;padding:14px;background:#ffffff;">
+                    <label for="sync-rede-url-origem" style="display:block;font-size:12.5px;font-weight:bold;color:#0f172a;margin-bottom:6px;">
+                        📥 Importar dados de outra máquina (ex: Máquina Principal):
+                    </label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="sync-rede-url-origem" placeholder="Ex: http://192.168.3.97:8000" style="flex:1;font-size:13px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
+                        <button type="button" id="btn-executar-sync-rede" class="botao botao-primario" onclick="executarSyncRedeLocal();" style="padding:8px 16px;font-weight:bold;display:flex;align-items:center;gap:6px;">
+                            🚀 Puxar Agora
+                        </button>
+                    </div>
+                    <small style="color:#64748b;font-size:11px;margin-top:6px;display:block;">
+                        💡 Transfere instantaneamente todos os clientes cadastrados, produtos e parâmetros fiscais sem depender da internet ou da cota da nuvem.
+                    </small>
+                </div>
+
+                <div id="sync-rede-status" style="margin-top:14px;display:none;padding:12px;border-radius:6px;font-size:12.5px;"></div>
+            </div>
+            <div style="background:#f1f5f9;padding:12px 18px;display:flex;justify-content:flex-end;border-top:1px solid #e2e8f0;">
+                <button type="button" class="botao botao-secundario" onclick="fecharModalSyncRedeLocal();">Fechar</button>
             </div>
         </div>
     </div>

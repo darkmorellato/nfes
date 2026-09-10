@@ -1,7 +1,9 @@
+import os
 import io
 import csv
 import logging
 import re
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Form, Depends, Request
@@ -1424,4 +1426,127 @@ async def rota_reiniciar_sistema():
     """Reinicia o servidor em segundo plano após uma atualização."""
     from backend.services.updater_service import restart_server_process
     return restart_server_process()
+
+
+@router.get("/rede/info")
+async def rota_obter_info_rede():
+    """Retorna o IP da rede local e porta desta máquina para sincronização direta."""
+    import socket
+    ips = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.1)
+        s.connect(('8.8.8.8', 1))
+        local_ip = s.getsockname()[0]
+        if local_ip and not local_ip.startswith("127."):
+            ips.append(local_ip)
+        s.close()
+    except Exception:
+        pass
+
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if not ip.startswith("127.") and ip not in ips:
+                ips.append(ip)
+    except Exception:
+        pass
+
+    port = int(os.environ.get("NFE_PORT", "8000"))
+    primary_ip = ips[0] if ips else "127.0.0.1"
+    return {
+        "success": True,
+        "ips": ips,
+        "porta": port,
+        "url_sugerida": f"http://{primary_ip}:{port}",
+    }
+
+
+@router.get("/rede/exportar-dados")
+async def rota_exportar_dados_rede():
+    """Exporta clientes, produtos e dados fiscais de certificados para sincronização direta em rede."""
+    from backend.database.cadastros import list_clientes, list_produtos
+    from backend.database.certificates import list_certificates_db
+
+    clientes = list_clientes()
+    produtos = list_produtos()
+    certs = list_certificates_db()
+
+    certs_sanitized = []
+    for c in certs:
+        c_copy = dict(c)
+        c_copy["password_encrypted"] = ""
+        certs_sanitized.append(c_copy)
+
+    return {
+        "success": True,
+        "total_clientes": len(clientes),
+        "total_produtos": len(produtos),
+        "clientes": clientes,
+        "produtos": produtos,
+        "certificados_fiscais": certs_sanitized,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.post("/rede/puxar-dados")
+async def rota_puxar_dados_de_outra_maquina(payload: Dict[str, Any] = Body(...)):
+    """Conecta à outra máquina na rede local via HTTP e sincroniza clientes e produtos instantaneamente."""
+    import httpx
+    from backend.database.cadastros import save_cliente, save_produto
+    from backend.database.certificates import update_certificate_fiscal_data
+
+    url_origem = str(payload.get("url_origem") or "").strip().rstrip("/")
+    if not url_origem:
+        raise HTTPException(status_code=400, detail="URL de origem é obrigatória (ex: http://192.168.3.97:8000)")
+
+    if not url_origem.startswith("http://") and not url_origem.startswith("https://"):
+        url_origem = "http://" + url_origem
+
+    fetch_url = f"{url_origem}/api/gestao/rede/exportar-dados"
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            resp = await client.get(fetch_url, headers={"User-Agent": "NFE-Manager-P2P-Sync"})
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=f"Máquina remota retornou erro {resp.status_code}: {resp.text[:200]}")
+            data = resp.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha ao conectar à máquina {url_origem}: {str(e)}")
+
+    clientes_importados = 0
+    for cli in data.get("clientes", []):
+        try:
+            save_cliente(cli, sync_remote=False)
+            clientes_importados += 1
+        except Exception:
+            pass
+
+    produtos_importados = 0
+    for prod in data.get("produtos", []):
+        try:
+            save_produto(prod, sync_remote=False)
+            produtos_importados += 1
+        except Exception:
+            pass
+
+    empresas_importadas = 0
+    for cert in data.get("certificados_fiscais", []):
+        cnpj = cert.get("cnpj")
+        if cnpj:
+            try:
+                update_certificate_fiscal_data(cnpj, cert, sync_remote=False)
+                empresas_importadas += 1
+            except Exception:
+                pass
+
+    return {
+        "success": True,
+        "message": f"Sincronização concluída com sucesso da máquina {url_origem}!",
+        "clientes_importados": clientes_importados,
+        "produtos_importados": produtos_importados,
+        "empresas_importadas": empresas_importadas,
+    }
+
 

@@ -115,6 +115,20 @@ async def lifespan(app: FastAPI):
             daemon=True,
             name="firestore-auto-sync-cadastros",
         ).start()
+
+    # Reenvio automático de itens enfileirados por limite de cota do Firestore
+    def _periodic_firestore_queue_flush():
+        import time
+        from backend.services.firestore_service import flush_firestore_pending_queue
+        while True:
+            time.sleep(180)
+            try:
+                flush_firestore_pending_queue()
+            except Exception:
+                pass
+
+    import threading
+    threading.Thread(target=_periodic_firestore_queue_flush, daemon=True, name="firestore-queue-flush").start()
     yield
     # Finaliza tarefas em segundo plano
     stop_background_sync()
@@ -131,6 +145,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins_list(),
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

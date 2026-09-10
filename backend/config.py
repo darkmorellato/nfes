@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     CERT_DIR: str = _resolve_cert_dir()
     DATA_DIR: str = _resolve_data_dir()
     PORT: int = int(os.environ.get("NFE_PORT", "8000"))
-    HOST: str = os.environ.get("NFE_HOST", "127.0.0.1")
+    HOST: str = os.environ.get("NFE_HOST", "0.0.0.0")
     HOMOLOGACAO: bool = True
     DEFAULT_UF: str = "SP"
     TIMEOUT: int = 60

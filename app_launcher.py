@@ -157,17 +157,18 @@ def _open_ui(url: str, chrome: str | None) -> None:
 
 
 def main() -> int:
-    host = os.environ.get("NFE_HOST", "127.0.0.1")
+    host = os.environ.get("NFE_HOST", "0.0.0.0")
     try:
         port = int(os.environ.get("NFE_PORT", "8000"))
     except ValueError:
         port = 8000
-    url = f"http://{host}:{port}"
+    ui_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    url = f"http://{ui_host}:{port}"
 
     # Auto-update antes de subir o servidor
     _auto_update(os.path.dirname(os.path.abspath(__file__)))
 
-    if _port_in_use(host, port):
+    if _port_in_use(ui_host, port):
         # Já há um servidor rodando: apenas abre a UI.
         _open_ui(url, os.environ.get("NFE_CHROME_BIN"))
         return 0

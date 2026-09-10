@@ -577,8 +577,82 @@ def _norm_nome(s: str) -> str:
     return " ".join((s or "").upper().split())
 
 
-def _upsert_firestore_doc(collection: str, doc_id: str, payload: Dict[str, Any]) -> bool:
-    """PATCH em /v1/.../documents/{collection}/{doc_id} — idempotente."""
+_PENDING_QUEUE_LOCK = threading.Lock()
+
+def _enqueue_pending_firestore_upsert(collection: str, doc_id: str, payload: Dict[str, Any]) -> None:
+    """Enfileira documento que falhou por cota (429) ou rede para reenvio automático."""
+    from backend.config import settings
+    queue_file = os.path.join(settings.DATA_DIR, "firestore_pending_queue.json")
+    with _PENDING_QUEUE_LOCK:
+        queue = []
+        if os.path.exists(queue_file):
+            try:
+                with open(queue_file, "r", encoding="utf-8") as f:
+                    queue = json.load(f)
+            except Exception:
+                queue = []
+        queue = [item for item in queue if not (item.get("col") == collection and item.get("id") == str(doc_id))]
+        queue.append({
+            "col": collection,
+            "id": str(doc_id),
+            "payload": payload,
+            "enqueued_at": datetime.now().isoformat()
+        })
+        try:
+            with open(queue_file, "w", encoding="utf-8") as f:
+                json.dump(queue, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+
+def flush_firestore_pending_queue() -> int:
+    """Tenta reenviar documentos enfileirados pendentes de cota do Firestore."""
+    from backend.config import settings
+    queue_file = os.path.join(settings.DATA_DIR, "firestore_pending_queue.json")
+    if not os.path.exists(queue_file):
+        return 0
+
+    with _PENDING_QUEUE_LOCK:
+        try:
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+        except Exception:
+            return 0
+
+    if not queue:
+        return 0
+
+    remaining = []
+    success_count = 0
+    quota_blocked = False
+    for item in queue:
+        col = item.get("col")
+        doc_id = item.get("id")
+        payload = item.get("payload")
+        if not col or not doc_id or not payload:
+            continue
+        if quota_blocked:
+            remaining.append(item)
+            continue
+        ok = _upsert_firestore_doc(col, doc_id, payload, enqueue_on_fail=False)
+        if ok:
+            success_count += 1
+        else:
+            remaining.append(item)
+            quota_blocked = True
+
+    with _PENDING_QUEUE_LOCK:
+        try:
+            with open(queue_file, "w", encoding="utf-8") as f:
+                json.dump(remaining, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    return success_count
+
+
+def _upsert_firestore_doc(collection: str, doc_id: str, payload: Dict[str, Any], enqueue_on_fail: bool = True) -> bool:
+    """PATCH em /v1/.../documents/{collection}/{doc_id} — idempotente com fila de autorrecuperação."""
     import unicodedata
 
     api_key = _get_api_key()
@@ -604,7 +678,10 @@ def _upsert_firestore_doc(collection: str, doc_id: str, payload: Dict[str, Any])
             return resp.status in (200, 201)
     except Exception as e:
         logger.warning(f"[Firestore] Erro upsert {collection}/{safe_id}: {e}")
+        if enqueue_on_fail:
+            _enqueue_pending_firestore_upsert(collection, safe_id, payload)
         return False
+
 
 
 def _delete_firestore_doc(collection: str, doc_id: str) -> bool:
