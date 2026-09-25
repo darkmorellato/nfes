@@ -22,22 +22,22 @@
         <!-- Cabeçalho -->
         <div id="cabecalho">
             <div id="menuAcessibilidade">
-                <a href="#" onclick="abrirCommandPalette(); return false;" class="btn-header-pill" style="display:inline-flex;align-items:center;gap:6px;" title="Buscar ou executar comando (Ctrl+K)">
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;abrirCommandPalette&quot;,&quot;args&quot;:[],&quot;ret&quot;:true}" class="btn-header-pill" style="display:inline-flex;align-items:center;gap:6px;" title="Buscar ou executar comando (Ctrl+K)">
                     🔍 <span>Busca Rápida</span> <span style="font-size:9.5px;padding:1px 5px;border:1px solid currentColor;border-radius:4px;opacity:0.8;font-family:monospace;">Ctrl+K</span>
                 </a>
-                <a href="#" onclick="toggleNotificationsModal(); return false;" id="btn-notif-bell" class="btn-header-pill">🔔 Alertas <span id="notif-unread-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;display:none;font-weight:bold;">0</span></a>
-                <a href="#" onclick="abrirModalAtualizacao(); return false;" id="btn-header-update" class="btn-header-pill" title="Atualizar sistema via GitHub" style="display:inline-flex;align-items:center;gap:5px;">
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;toggleNotificationsModal&quot;,&quot;args&quot;:[],&quot;ret&quot;:true}" id="btn-notif-bell" class="btn-header-pill">🔔 Alertas <span id="notif-unread-badge" style="background:#ef4444;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;display:none;font-weight:bold;">0</span></a>
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;abrirModalAtualizacao&quot;,&quot;args&quot;:[],&quot;ret&quot;:true}" id="btn-header-update" class="btn-header-pill" title="Atualizar sistema via GitHub" style="display:inline-flex;align-items:center;gap:5px;">
                     🔄 <span>Atualizar</span> <span id="badge-update-available" style="display:none;background:#22c55e;color:#fff;font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:bold;">NOVO</span>
                 </a>
-                <a href="#" onclick="showSection('gestao-intercompany'); return false;" class="btn-header-pill">🔄 Intercompany</a>
-                <a href="#" onclick="showSection('certificado'); return false;" class="btn-header-pill">🏢 Certificados</a>
-                <a href="#" onclick="showSection('config'); return false;" class="btn-header-pill">⚙️ Configurações</a>
-                <a href="#" onclick="toggleTheme(); return false;" class="btn-header-pill" id="btn-theme-toggle"
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-intercompany&quot;],&quot;ret&quot;:true}" class="btn-header-pill">🔄 Intercompany</a>
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;certificado&quot;],&quot;ret&quot;:true}" class="btn-header-pill">🏢 Certificados</a>
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;config&quot;],&quot;ret&quot;:true}" class="btn-header-pill">⚙️ Configurações</a>
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;toggleTheme&quot;,&quot;args&quot;:[],&quot;ret&quot;:true}" class="btn-header-pill" id="btn-theme-toggle"
                    title="Alternar entre tema claro e escuro">🌙</a>
                 <span id="header-user-info" style="font-size:12px;color:#736f66;padding:4px 10px;background:#f7f5f0;border-radius:99px;border:1px solid #e6e1d8;display:none;align-items:center;gap:5px;">
                     👤 <span id="header-user-nome">Usuário</span>
                 </span>
-                <a href="#" onclick="logout(); return false;" class="btn-header-pill" style="background:#faebec;color:#8b1a22;border-color:#edd2d4;" title="Sair do sistema">🚪 Sair</a>
+                <a href="#" data-onclick="{&quot;fn&quot;:&quot;logout&quot;,&quot;args&quot;:[],&quot;ret&quot;:true}" class="btn-header-pill" style="background:#faebec;color:#8b1a22;border-color:#edd2d4;" title="Sair do sistema">🚪 Sair</a>
             </div>
 
 
@@ -116,7 +116,7 @@
                 <div id="caminho">
                     <a href="#" data-section-link="inicio">Portal da NF-e</a> &gt;
                     <span id="breadcrumb-atual">Início</span>
-                    <span id="breadcrumb-ambiente" class="badge-ambiente" onclick="alternarAmbienteRapido();" style="cursor:pointer;" title="Clique para alternar entre Homologação e Produção">Homologação</span>
+                    <span id="breadcrumb-ambiente" class="badge-ambiente" data-onclick="{&quot;fn&quot;:&quot;alternarAmbienteRapido&quot;,&quot;args&quot;:[]}" style="cursor:pointer;" title="Clique para alternar entre Homologação e Produção">Homologação</span>
                     <span id="breadcrumb-uf" class="badge-uf">UF: SP</span>
                     <span id="badgeStatusFirestore" class="badge-firestore">☁️ Firestore OK</span>
                 </div>
@@ -133,8 +133,8 @@
                             <p style="font-size:12.5px;color:var(--text-muted);">Monitoramento em tempo real de emissões, compras, estoque e apuração tributária para as 5 filiais.</p>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;">
-                            <button type="button" class="botao botao-primario" onclick="showSection('emissor-rapido');">➕ Nova Emissão NF-e</button>
-                            <button type="button" class="botao botao-secundario" onclick="showSection('gestao-sync');">⚡ Sincronizar SEFAZ</button>
+                            <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;emissor-rapido&quot;]}">➕ Nova Emissão NF-e</button>
+                            <button type="button" class="botao botao-secundario" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-sync&quot;]}">⚡ Sincronizar SEFAZ</button>
                         </div>
                     </div>
 
@@ -167,7 +167,7 @@
                     <div class="painelSessao" style="margin-bottom:22px;">
                         <div class="painelSessaoTitulo">
                             <span>🏢 Filiais do Grupo & Certificados Digitais A1</span>
-                            <button type="button" class="botao botao-secundario" onclick="showSection('certificado');" style="font-size:11.5px;padding:3px 10px;">+ Gerenciar Certificados</button>
+                            <button type="button" class="botao botao-secundario" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;certificado&quot;]}" style="font-size:11.5px;padding:3px 10px;">+ Gerenciar Certificados</button>
                         </div>
                         <div style="padding:16px;">
                             <div id="inicio-cards-certificados" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px;">
@@ -182,7 +182,7 @@
                             <span>🚀 Acesso Rápido aos Módulos do Sistema</span>
                         </div>
                         <div style="padding:16px;display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:14px;">
-                            <div class="card-kpi" onclick="showSection('gestao-docs');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-docs&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-blue-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-blue-border);">📑</div>
                                     <div>
@@ -193,7 +193,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Controle de notas recebidas, download de XMLs, manifestação e check-in.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('emissor-rapido');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;emissor-rapido&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-rose-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-rose-border);">📤</div>
                                     <div>
@@ -204,7 +204,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Emissão profissional com cálculo de IBPT, envio por WhatsApp e e-mail.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('gestao-financeiro');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-financeiro&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-amber-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-amber-border);">💳</div>
                                     <div>
@@ -215,7 +215,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Contas a pagar, cálculo do Simples Nacional (LC 123) e margem real por produto.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('gestao-conferencia');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-conferencia&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-green-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-green-border);">📦</div>
                                     <div>
@@ -226,7 +226,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Check-in rápido de mercadorias com cadastro automático de novos produtos.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('gestao-sync');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-sync&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-cyan-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-cyan-border);">⚡</div>
                                     <div>
@@ -237,7 +237,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Download automático de notas a partir do último NSU em segundo plano.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('gestao-contabil');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-contabil&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-purple-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-purple-border);">📊</div>
                                     <div>
@@ -248,7 +248,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Geração do pacote contábil mensal com XMLs, DANFEs em PDF e apuração.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('gestao-analytics');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-analytics&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-blue-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-blue-border);">📈</div>
                                     <div>
@@ -259,7 +259,7 @@
                                 <div style="font-size:11.5px;color:var(--text-muted);">Auditoria de divergência de compras, inflação de fornecedores e ranking.</div>
                             </div>
 
-                            <div class="card-kpi" onclick="showSection('gestao-intercompany');" style="cursor:pointer;">
+                            <div class="card-kpi" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-intercompany&quot;]}" style="cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                                     <div style="font-size:20px;background:var(--pastel-amber-bg);padding:7px;border-radius:8px;border:1px solid var(--pastel-amber-border);">🔄</div>
                                     <div>
@@ -343,15 +343,15 @@
                         <div class="card-kpi" style="border-left:4px solid #8e44ad;">
                             <div style="font-size:11px;color:#666;font-weight:bold;">AÇÕES RÁPIDAS</div>
                             <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-                                <button type="button" class="btn-action" onclick="showSection('gestao-sync');">⚡ Sincronizar SEFAZ</button>
-                                <button type="button" class="btn-action" onclick="document.getElementById('gestao-input-xml-lote').click();" title="Importar múltiplos XMLs do seu computador">📁 Importar XMLs</button>
-                                <button type="button" class="btn-action" onclick="showSection('gestao-contabil');">📦 Exportar ZIP</button>
-                                <button type="button" class="btn-action" id="btn-sync-firestore-all" onclick="syncAllToFirestore();" style="background:#f39c12;border-color:#e67e22;color:#fff;font-weight:bold;" title="Sincronizar todas as notas com o Cloud Firestore">☁️ Nuvem Firestore</button>
-                                <button type="button" class="btn-action" id="btn-firestore-pull" onclick="pullFromFirestore();" style="background:#16a085;border-color:#138d75;color:#fff;font-weight:bold;" title="Baixar todas as NF-es do Cloud Firestore para o banco local">⬇️ Baixar do Firestore</button>
-                                <button type="button" class="btn-action" id="btn-firestore-consolidar-clientes" onclick="consolidarClientesFirestore();" style="background:#2980b9;border-color:#1f6391;color:#fff;font-weight:bold;" title="Consolidar todos os clientes (emitentes+destinatários) das NF-es no Firestore">👥 Consolidar Clientes</button>
-                                <button type="button" class="btn-action" id="btn-firestore-consolidar-produtos" onclick="consolidarProdutosFirestore();" style="background:#8e44ad;border-color:#6c3483;color:#fff;font-weight:bold;" title="Consolidar todos os produtos (das NF-es com XML) no Firestore">📦 Consolidar Produtos</button>
-                                <button type="button" class="btn-action" id="btn-firestore-sync-clientes-local" onclick="sincronizarClientesLocal();" style="background:#27ae60;border-color:#1e8449;color:#fff;font-weight:bold;" title="Copiar 1.744 clientes do Firestore para o banco local (aparece na aba Cadastro de Clientes)">📥 Copiar Clientes → Local</button>
-                                <button type="button" class="btn-action" id="btn-firestore-sync-produtos-local" onclick="sincronizarProdutosLocal();" style="background:#d35400;border-color:#a04000;color:#fff;font-weight:bold;" title="Copiar 46 produtos do Firestore para o banco local (aparece na aba Catálogo de Produtos)">📥 Copiar Produtos → Local</button>
+                                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-sync&quot;]}">⚡ Sincronizar SEFAZ</button>
+                                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;abrirInputXmlLote&quot;,&quot;args&quot;:[]}" title="Importar múltiplos XMLs do seu computador">📁 Importar XMLs</button>
+                                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-contabil&quot;]}">📦 Exportar ZIP</button>
+                                <button type="button" class="btn-action" id="btn-sync-firestore-all" data-onclick="{&quot;fn&quot;:&quot;syncAllToFirestore&quot;,&quot;args&quot;:[]}" style="background:#f39c12;border-color:#e67e22;color:#fff;font-weight:bold;" title="Sincronizar todas as notas com o Cloud Firestore">☁️ Nuvem Firestore</button>
+                                <button type="button" class="btn-action" id="btn-firestore-pull" data-onclick="{&quot;fn&quot;:&quot;pullFromFirestore&quot;,&quot;args&quot;:[]}" style="background:#16a085;border-color:#138d75;color:#fff;font-weight:bold;" title="Baixar todas as NF-es do Cloud Firestore para o banco local">⬇️ Baixar do Firestore</button>
+                                <button type="button" class="btn-action" id="btn-firestore-consolidar-clientes" data-onclick="{&quot;fn&quot;:&quot;consolidarClientesFirestore&quot;,&quot;args&quot;:[]}" style="background:#2980b9;border-color:#1f6391;color:#fff;font-weight:bold;" title="Consolidar todos os clientes (emitentes+destinatários) das NF-es no Firestore">👥 Consolidar Clientes</button>
+                                <button type="button" class="btn-action" id="btn-firestore-consolidar-produtos" data-onclick="{&quot;fn&quot;:&quot;consolidarProdutosFirestore&quot;,&quot;args&quot;:[]}" style="background:#8e44ad;border-color:#6c3483;color:#fff;font-weight:bold;" title="Consolidar todos os produtos (das NF-es com XML) no Firestore">📦 Consolidar Produtos</button>
+                                <button type="button" class="btn-action" id="btn-firestore-sync-clientes-local" data-onclick="{&quot;fn&quot;:&quot;sincronizarClientesLocal&quot;,&quot;args&quot;:[]}" style="background:#27ae60;border-color:#1e8449;color:#fff;font-weight:bold;" title="Copiar 1.744 clientes do Firestore para o banco local (aparece na aba Cadastro de Clientes)">📥 Copiar Clientes → Local</button>
+                                <button type="button" class="btn-action" id="btn-firestore-sync-produtos-local" data-onclick="{&quot;fn&quot;:&quot;sincronizarProdutosLocal&quot;,&quot;args&quot;:[]}" style="background:#d35400;border-color:#a04000;color:#fff;font-weight:bold;" title="Copiar 46 produtos do Firestore para o banco local (aparece na aba Catálogo de Produtos)">📥 Copiar Produtos → Local</button>
                                 <input type="file" id="gestao-input-xml-lote" multiple accept=".xml" style="display:none;">
                             </div>
                         </div>
@@ -364,8 +364,8 @@
                             <b style="color:#0c5460;"><span id="gestao-lote-selecionadas-count">0</span> nota(s) selecionada(s)</b>
                         </div>
                         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            <button type="button" class="botao botao-primario" onclick="executarManifestacaoEmLote('210210');" style="font-size:11px;padding:4px 10px;background:#3498db;border-color:#2980b9;">⚡ Dar Ciência em Lote</button>
-                            <button type="button" class="botao botao-primario" onclick="executarManifestacaoEmLote('210200');" style="font-size:11px;padding:4px 10px;background:#27ae60;border-color:#219653;">✅ Confirmar Operação em Lote</button>
+                            <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarManifestacaoEmLote&quot;,&quot;args&quot;:[&quot;210210&quot;]}" style="font-size:11px;padding:4px 10px;background:#3498db;border-color:#2980b9;">⚡ Dar Ciência em Lote</button>
+                            <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarManifestacaoEmLote&quot;,&quot;args&quot;:[&quot;210200&quot;]}" style="font-size:11px;padding:4px 10px;background:#27ae60;border-color:#219653;">✅ Confirmar Operação em Lote</button>
                         </div>
                     </div>
 
@@ -558,7 +558,7 @@
                     <div class="painelSessao" style="margin-top:15px;">
                         <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                             <span>🚨 Auditor Automático de Preços & Alertas de Variação de Custos</span>
-                            <button type="button" class="botao" onclick="carregarDivergenciasPreco();" style="font-size:11px;padding:3px 8px;">🔄 Atualizar Auditoria</button>
+                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;carregarDivergenciasPreco&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:3px 8px;">🔄 Atualizar Auditoria</button>
                         </div>
                         <div id="analytics-divergencias-painel">
                             <div style="padding:15px;text-align:center;color:#666;">Carregando auditoria de compras...</div>
@@ -579,7 +579,7 @@
                     <div class="painelSessao" style="margin-top:15px;">
                         <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                             <span>🛡️ Auditoria de Risco Fiscal & Idoneidade dos Fornecedores</span>
-                            <button type="button" class="botao" onclick="carregarAuditoriaFornecedores();" style="font-size:11px;padding:3px 8px;">🔄 Atualizar Auditoria</button>
+                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;carregarAuditoriaFornecedores&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:3px 8px;">🔄 Atualizar Auditoria</button>
                         </div>
                         <div id="analytics-fornecedores-painel">
                             <div style="padding:15px;text-align:center;color:#666;">Auditando fornecedores ativos...</div>
@@ -666,16 +666,16 @@
                             </select>
                         </div>
                         <div style="margin-left:auto;display:flex;gap:6px;">
-                            <button type="button" class="botao" onclick="exportarFinanceiroCSV();" title="Exportar dados visíveis em CSV">📥 Exportar CSV</button>
-                            <button type="button" class="botao" onclick="carregarFinanceiro();" style="background:#2980b9;border-color:#2980b9;color:#fff;">🔄 Atualizar</button>
+                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;exportarFinanceiroCSV&quot;,&quot;args&quot;:[]}" title="Exportar dados visíveis em CSV">📥 Exportar CSV</button>
+                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;carregarFinanceiro&quot;,&quot;args&quot;:[]}" style="background:#2980b9;border-color:#2980b9;color:#fff;">🔄 Atualizar</button>
                         </div>
                     </div>
 
                     <!-- ================= SUB-NAVEGAÇÃO EM ABAS ================= -->
                     <div class="subnav-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin:22px 0 14px;border-bottom:2px solid #e0e0e0;padding-bottom:0;">
-                        <button type="button" class="subnav-btn active" id="btn-tab-fin-pagar" onclick="switchFinTab('pagar');">📤 Contas a Pagar</button>
-                        <button type="button" class="subnav-btn" id="btn-tab-fin-receber" onclick="switchFinTab('receber');">📥 Contas a Receber</button>
-                        <button type="button" class="subnav-btn" id="btn-tab-fin-dre" onclick="switchFinTab('dre');">📊 DRE Consolidado</button>
+                        <button type="button" class="subnav-btn active" id="btn-tab-fin-pagar" data-onclick="{&quot;fn&quot;:&quot;switchFinTab&quot;,&quot;args&quot;:[&quot;pagar&quot;]}">📤 Contas a Pagar</button>
+                        <button type="button" class="subnav-btn" id="btn-tab-fin-receber" data-onclick="{&quot;fn&quot;:&quot;switchFinTab&quot;,&quot;args&quot;:[&quot;receber&quot;]}">📥 Contas a Receber</button>
+                        <button type="button" class="subnav-btn" id="btn-tab-fin-dre" data-onclick="{&quot;fn&quot;:&quot;switchFinTab&quot;,&quot;args&quot;:[&quot;dre&quot;]}">📊 DRE Consolidado</button>
                     </div>
 
                     <!-- ============ SUBTAB: CONTAS A PAGAR ============ -->
@@ -684,9 +684,9 @@
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>Relação de Duplicatas a Pagar (Entradas / Fornecedores)</span>
                                 <div style="display:flex;gap:6px;">
-                                    <button type="button" class="botao" onclick="filtrarStatusContas('');">Todas</button>
-                                    <button type="button" class="botao botao-primario" onclick="filtrarStatusContas('aberto');" style="background:#e74c3c;border-color:#e74c3c;">Em Aberto</button>
-                                    <button type="button" class="botao" onclick="filtrarStatusContas('pago');" style="background:#27ae60;border-color:#27ae60;color:#fff;">Pagas</button>
+                                    <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;filtrarStatusContas&quot;,&quot;args&quot;:[&quot;&quot;]}">Todas</button>
+                                    <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;filtrarStatusContas&quot;,&quot;args&quot;:[&quot;aberto&quot;]}" style="background:#e74c3c;border-color:#e74c3c;">Em Aberto</button>
+                                    <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;filtrarStatusContas&quot;,&quot;args&quot;:[&quot;pago&quot;]}" style="background:#27ae60;border-color:#27ae60;color:#fff;">Pagas</button>
                                 </div>
                             </div>
                             <div id="financeiro-lista-resultado" style="margin-top:10px;">
@@ -698,7 +698,7 @@
                         <div class="painelSessao" style="margin-top:20px;border-top:3px solid #e67e22;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>⏱️ Aging de Pagáveis (0–30 / 31–60 / 61–90 / >90 dias)</span>
-                                <button type="button" class="botao" onclick="carregarAging();" style="font-size:11px;padding:4px 10px;background:#e67e22;border-color:#e67e22;color:#fff;">🔄 Atualizar</button>
+                                <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;carregarAging&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#e67e22;border-color:#e67e22;color:#fff;">🔄 Atualizar</button>
                             </div>
                             <div id="aging-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Carregando aging...</div>
@@ -709,7 +709,7 @@
                         <div class="painelSessao" style="margin-top:20px;border-top:3px solid #8e44ad;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>🌐 Impostos Interestaduais a Recolher (DIFAL / ICMS "fora do estado")</span>
-                                <button type="button" class="botao botao-primario" onclick="carregarImpostosInterestaduais();" style="font-size:11px;padding:4px 10px;background:#8e44ad;border-color:#8e44ad;">🔄 Calcular DIFAL</button>
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarImpostosInterestaduais&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#8e44ad;border-color:#8e44ad;">🔄 Calcular DIFAL</button>
                             </div>
                             <div id="impostos-interestaduais-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Calculando impostos a recolher de NF-e interestaduais...</div>
@@ -723,9 +723,9 @@
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>Relação de Contas a Receber (Saídas / Clientes)</span>
                                 <div style="display:flex;gap:6px;">
-                                    <button type="button" class="botao" onclick="filtrarStatusReceber('');">Todas</button>
-                                    <button type="button" class="botao botao-primario" onclick="filtrarStatusReceber('aberto');" style="background:#2980b9;border-color:#2980b9;">Em Aberto</button>
-                                    <button type="button" class="botao" onclick="filtrarStatusReceber('recebido');" style="background:#16a085;border-color:#16a085;color:#fff;">Recebidas</button>
+                                    <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;filtrarStatusReceber&quot;,&quot;args&quot;:[&quot;&quot;]}">Todas</button>
+                                    <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;filtrarStatusReceber&quot;,&quot;args&quot;:[&quot;aberto&quot;]}" style="background:#2980b9;border-color:#2980b9;">Em Aberto</button>
+                                    <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;filtrarStatusReceber&quot;,&quot;args&quot;:[&quot;recebido&quot;]}" style="background:#16a085;border-color:#16a085;color:#fff;">Recebidas</button>
                                 </div>
                             </div>
                             <div id="financeiro-lista-receber" style="margin-top:10px;">
@@ -737,7 +737,7 @@
                         <div class="painelSessao" style="margin-top:20px;border-top:3px solid #c0392b;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>⚠️ Inadimplência por Cliente (Contas a Receber)</span>
-                                <button type="button" class="botao botao-primario" onclick="carregarInadimplencia();" style="font-size:11px;padding:4px 10px;background:#c0392b;border-color:#c0392b;">🔄 Atualizar</button>
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarInadimplencia&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#c0392b;border-color:#c0392b;">🔄 Atualizar</button>
                             </div>
                             <div id="inadimplencia-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Carregando inadimplência...</div>
@@ -751,7 +751,7 @@
                         <div class="painelSessao" style="margin-top:0;border-top:3px solid #8e44ad;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>📊 DRE Consolidado (Resultado do Exercício)</span>
-                                <button type="button" class="botao botao-primario" onclick="carregarDreConsolidado();" style="font-size:11px;padding:4px 10px;background:#8e44ad;border-color:#8e44ad;">🔄 Atualizar DRE</button>
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarDreConsolidado&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#8e44ad;border-color:#8e44ad;">🔄 Atualizar DRE</button>
                             </div>
                             <div id="dre-consolidado-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Calculando DRE consolidado...</div>
@@ -762,7 +762,7 @@
                         <div class="painelSessao" style="margin-top:20px;border-top:3px solid #2980b9;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>🏛️ Apuração Fiscal Estimada - Simples Nacional (Lei Complementar 123/2006)</span>
-                                <button type="button" class="botao botao-primario" onclick="carregarApuracaoSimplesNacional();" style="font-size:11px;padding:4px 10px;background:#2980b9;border-color:#2980b9;">🔄 Recalcular DAS</button>
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarApuracaoSimplesNacional&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#2980b9;border-color:#2980b9;">🔄 Recalcular DAS</button>
                             </div>
                             <div id="simples-nacional-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Calculando alíquotas do Simples Nacional...</div>
@@ -773,7 +773,7 @@
                         <div class="painelSessao" style="margin-top:20px;border-top:3px solid #27ae60;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>📈 DRE & Margem Real de Lucro por Produto (Custo de Compra vs. Preço de Venda)</span>
-                                <button type="button" class="botao botao-primario" onclick="carregarDreMargens();" style="font-size:11px;padding:4px 10px;background:#27ae60;border-color:#27ae60;">🔄 Atualizar DRE</button>
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarDreMargens&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#27ae60;border-color:#27ae60;">🔄 Atualizar DRE</button>
                             </div>
                             <div id="dre-margens-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Carregando margens de produtos...</div>
@@ -784,7 +784,7 @@
                         <div class="painelSessao" style="margin-top:20px;border-top:3px solid #8e44ad;">
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>📊 Tendência Mensal (Receita, CPV, Lucro)</span>
-                                <button type="button" class="botao botao-primario" onclick="carregarTendencia();" style="font-size:11px;padding:4px 10px;background:#8e44ad;border-color:#8e44ad;">🔄 Atualizar</button>
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarTendencia&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#8e44ad;border-color:#8e44ad;">🔄 Atualizar</button>
                             </div>
                             <div id="tendencia-painel" style="padding:10px 0;">
                                 <div style="padding:15px;text-align:center;color:#666;">Carregando tendência...</div>
@@ -804,13 +804,13 @@
 
                     <div class="painelSessao">
                         <div class="painelSessaoTitulo">Localizar NF-e para Conferência</div>
-                        <form id="form-conferencia-buscar" style="display:flex;gap:10px;align-items:flex-end;" onsubmit="handleBuscarConferencia(event);">
+                        <form id="form-conferencia-buscar" style="display:flex;gap:10px;align-items:flex-end;" data-onsubmit="{&quot;fn&quot;:&quot;handleBuscarConferencia&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
                             <div class="form-group" style="flex:1;">
                                 <label for="conf-chave-input">Chave de Acesso da NF-e (44 dígitos ou bipe o código de barras):</label>
                                 <input type="text" id="conf-chave-input" placeholder="Bipe ou digite a chave de acesso" required>
                             </div>
                             <button type="submit" class="botao botao-primario" style="margin-bottom:0;">🔍 Abrir Conferência</button>
-                            <button type="button" class="botao" onclick="abrirBipadorModal();">📱 Bipador Câmera/USB</button>
+                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;abrirBipadorModal&quot;,&quot;args&quot;:[]}">📱 Bipador Câmera/USB</button>
                         </form>
                     </div>
 
@@ -834,21 +834,21 @@
                     <!-- Sub-Navegação em Abas com Monitor SEFAZ -->
                     <div class="subnav-tabs" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                         <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                            <button type="button" class="subnav-btn active" id="btn-tab-emissao-form" onclick="switchEmissaoTab('form');">
+                            <button type="button" class="subnav-btn active" id="btn-tab-emissao-form" data-onclick="{&quot;fn&quot;:&quot;switchEmissaoTab&quot;,&quot;args&quot;:[&quot;form&quot;]}">
                                 📄 Emitir Nova NF-e
                             </button>
-                            <button type="button" class="subnav-btn" id="btn-tab-emissao-saidas" onclick="switchEmissaoTab('saidas');">
+                            <button type="button" class="subnav-btn" id="btn-tab-emissao-saidas" data-onclick="{&quot;fn&quot;:&quot;switchEmissaoTab&quot;,&quot;args&quot;:[&quot;saidas&quot;]}">
                                 🗃️ NF-e Emitidas (Saídas / Clientes)
                             </button>
-                            <button type="button" class="subnav-btn" id="btn-tab-emissao-clientes" onclick="switchEmissaoTab('clientes');">
+                            <button type="button" class="subnav-btn" id="btn-tab-emissao-clientes" data-onclick="{&quot;fn&quot;:&quot;switchEmissaoTab&quot;,&quot;args&quot;:[&quot;clientes&quot;]}">
                                 👥 Cadastro de Clientes
                             </button>
-                            <button type="button" class="subnav-btn" id="btn-tab-emissao-produtos" onclick="switchEmissaoTab('produtos');">
+                            <button type="button" class="subnav-btn" id="btn-tab-emissao-produtos" data-onclick="{&quot;fn&quot;:&quot;switchEmissaoTab&quot;,&quot;args&quot;:[&quot;produtos&quot;]}">
                                 📦 Catálogo de Produtos
                             </button>
                         </div>
                         <!-- Monitor de Status SEFAZ em Tempo Real (Semáforo com Radar Pulse) -->
-                        <div id="badge-sefaz-status" style="display:inline-flex;align-items:center;gap:8px;padding:5px 14px;border-radius:20px;font-size:11.5px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer;user-select:none;" onclick="verificarStatusSefazRealtime(true);" title="Clique para testar o tempo de resposta da SEFAZ-SP agora">
+                        <div id="badge-sefaz-status" style="display:inline-flex;align-items:center;gap:8px;padding:5px 14px;border-radius:20px;font-size:11.5px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer;user-select:none;" data-onclick="{&quot;fn&quot;:&quot;verificarStatusSefazRealtime&quot;,&quot;args&quot;:[true]}" title="Clique para testar o tempo de resposta da SEFAZ-SP agora">
                             <span id="sefaz-status-dot" class="pulse-radar-dot"></span>
                             <b id="sefaz-status-label">SEFAZ-SP: Online</b>
                         </div>
@@ -857,7 +857,7 @@
 
                     <!-- ================= SUB-ABA 1: EMITIR NOVA NF-E ================= -->
                     <div id="subtab-emissao-form">
-                        <form id="form-emissao-profissional" onsubmit="handleEmitirNfeProfissional(event);">
+                        <form id="form-emissao-profissional" data-onsubmit="{&quot;fn&quot;:&quot;handleEmitirNfeProfissional&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
                             <!-- Banner de Legenda dos Campos Obrigatórios -->
                             <div style="background:#fff1f2;border:1px solid #fecdd3;border-left:4px solid #e11d48;border-radius:6px;padding:8px 14px;margin-bottom:14px;font-size:12px;color:#9f1239;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                                 <div style="display:flex;align-items:center;gap:8px;">
@@ -871,18 +871,18 @@
                             <div class="painelSessao" style="margin-bottom:14px;">
                                 <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                     <span>1. Dados da Operação & Empresa Emitente</span>
-                                    <button type="button" class="btn-action" onclick="toggleNfeReferenciada();" style="font-size:11px;font-weight:normal;padding:2px 8px;" title="Adicionar chave de NF-e de Entrada / Origem">
+                                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;toggleNfeReferenciada&quot;,&quot;args&quot;:[]}" style="font-size:11px;font-weight:normal;padding:2px 8px;" title="Adicionar chave de NF-e de Entrada / Origem">
                                         🔗 + NF-e Referenciada
                                     </button>
                                 </div>
                                 <div style="display:flex;gap:12px;flex-wrap:wrap;">
                                     <div class="form-group" style="flex:2;min-width:240px;">
                                         <label for="emissao-empresa-emit" class="label-obrigatorio">Empresa Emitente (Certificado A1): <span class="obrigatorio-badge">*</span></label>
-                                        <select id="emissao-empresa-emit" class="input-obrigatorio" onchange="atualizarProximoNumeroNfe(); atualizarCardEmitenteInfo();" required></select>
+                                        <select id="emissao-empresa-emit" class="input-obrigatorio" data-onchange="{&quot;fn&quot;:&quot;aoMudarSerieEmissao&quot;,&quot;args&quot;:[]}" required></select>
                                     </div>
                                     <div class="form-group" style="flex:2;min-width:220px;">
                                         <label for="emissao-natureza-op" class="label-obrigatorio">Natureza da Operação: <span class="obrigatorio-badge">*</span></label>
-                                        <select id="emissao-natureza-op" class="input-obrigatorio" onchange="sugerirCfopPorNatureza();">
+                                        <select id="emissao-natureza-op" class="input-obrigatorio" data-onchange="{&quot;fn&quot;:&quot;sugerirCfopPorNatureza&quot;,&quot;args&quot;:[]}">
                                             <option value="VENDA DE MERCADORIA">Venda de Mercadoria Adquirida de Terceiros</option>
                                             <option value="DEVOLUCAO DE COMPRA PARA COMERCIALIZACAO">Devolução de Compra para Comercialização</option>
                                             <option value="TRANSFERENCIA DE MERCADORIA">Transferência entre Filiais / Matriz</option>
@@ -892,7 +892,7 @@
                                     </div>
                                     <div class="form-group" style="flex:1.2;min-width:140px;">
                                         <label for="emissao-finalidade" class="label-obrigatorio">Finalidade: <span class="obrigatorio-badge">*</span></label>
-                                        <select id="emissao-finalidade" class="input-obrigatorio" onchange="handleMudancaFinalidade(this.value);">
+                                        <select id="emissao-finalidade" class="input-obrigatorio" data-onchange="{&quot;fn&quot;:&quot;handleMudancaFinalidade&quot;,&quot;args&quot;:[&quot;$this&quot;]}">
                                             <option value="1" selected>1 - Normal</option>
                                             <option value="4">4 - Devolução de Mercadorias</option>
                                             <option value="2">2 - Complementar</option>
@@ -917,7 +917,7 @@
                                     </div>
                                     <div class="form-group" style="flex:0.8;min-width:90px;">
                                         <label for="emissao-serie" class="label-obrigatorio">Série: <span class="obrigatorio-badge">*</span></label>
-                                        <input type="text" id="emissao-serie" class="input-obrigatorio" value="1" onchange="atualizarProximoNumeroNfe();" style="text-align:center;" required>
+                                        <input type="text" id="emissao-serie" class="input-obrigatorio" value="1" data-onchange="{&quot;fn&quot;:&quot;atualizarProximoNumeroNfe&quot;,&quot;args&quot;:[]}" style="text-align:center;" required>
                                     </div>
                                     <div class="form-group" style="flex:1;min-width:110px;">
                                         <label for="emissao-numero" class="label-obrigatorio">Número: <span class="obrigatorio-badge">*</span></label>
@@ -942,7 +942,7 @@
                                     </div>
                                     <div style="display:flex;gap:8px;align-items:center;">
                                         <input type="text" id="emissao-chave-referenciada" class="input-opcional" placeholder="Ex: 3526 0834 5111 8500 0110 5500 1000 0005 3210 0290 4291" maxlength="54" style="font-family:monospace;font-size:11.5px;flex:1;">
-                                        <button type="button" class="btn-action" onclick="document.getElementById('emissao-chave-referenciada').value='';" title="Limpar chave">✕</button>
+                                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;limparChaveReferenciada&quot;,&quot;args&quot;:[]}" title="Limpar chave">✕</button>
                                     </div>
                                 </div>
                             </div>
@@ -954,10 +954,10 @@
                                     <div style="font-size:11px;font-weight:normal;display:flex;align-items:center;gap:6px;">
                                         <label style="display:inline;font-weight:600;color:var(--text-muted);">Carregar Cliente:</label>
                                         <div style="position:relative;width:300px;">
-                                             <input type="text" id="emissao-busca-cliente" placeholder="🔍 Buscar por Nome, CPF, E-mail ou Tel..." autocomplete="off" oninput="filtrarClientesEmissao(this.value);" onfocus="filtrarClientesEmissao(this.value);" style="height:28px;font-size:11px;padding:2px 8px;width:100%;border-radius:4px;border:1px solid #cbd5e1;background:#fff;" />
+                                             <input type="text" id="emissao-busca-cliente" placeholder="🔍 Buscar por Nome, CPF, E-mail ou Tel..." autocomplete="off" data-oninput="{&quot;fn&quot;:&quot;filtrarClientesEmissao&quot;,&quot;args&quot;:[&quot;$this&quot;]}" data-onfocus="{&quot;fn&quot;:&quot;filtrarClientesEmissao&quot;,&quot;args&quot;:[&quot;$this&quot;]}" style="height:28px;font-size:11px;padding:2px 8px;width:100%;border-radius:4px;border:1px solid #cbd5e1;background:#fff;" />
                                             <div id="emissao-dropdown-clientes" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:240px;overflow-y:auto;background:#ffffff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.12);z-index:1050;margin-top:3px;text-align:left;"></div>
                                         </div>
-                                        <select id="emissao-select-cliente-rapido" onchange="selecionarClientePreCadastrado(this.value);" style="height:28px;font-size:11px;padding:2px 8px;max-width:180px;">
+                                        <select id="emissao-select-cliente-rapido" data-onchange="{&quot;fn&quot;:&quot;selecionarClientePreCadastrado&quot;,&quot;args&quot;:[&quot;$this&quot;]}" style="height:28px;font-size:11px;padding:2px 8px;max-width:180px;">
                                             <option value="">-- Ou Selecionar Salvo --</option>
                                         </select>
                                     </div>
@@ -967,8 +967,8 @@
                                     <div class="form-group" style="flex:1.4;min-width:210px;">
                                         <label for="emissao-dest-cpf-cnpj" class="label-obrigatorio">CPF / CNPJ do Destinatário: <span class="obrigatorio-badge">*</span></label>
                                         <div style="display:flex;gap:4px;">
-                                            <input type="text" id="emissao-dest-cpf-cnpj" class="input-obrigatorio" placeholder="Digite apenas os dígitos" onblur="identificarTipoPessoaDest();" required>
-                                            <button type="button" class="btn-action" onclick="consultarCnpjReceitaFederal('emissao-dest-cpf-cnpj');" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;font-weight:bold;font-size:11px;padding:2px 8px;white-space:nowrap;" title="Buscar dados da empresa na Receita Federal">🔍 Receita</button>
+                                            <input type="text" id="emissao-dest-cpf-cnpj" class="input-obrigatorio" placeholder="Digite apenas os dígitos" data-onblur="{&quot;fn&quot;:&quot;identificarTipoPessoaDest&quot;,&quot;args&quot;:[]}" required>
+                                            <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;consultarCnpjReceitaFederal&quot;,&quot;args&quot;:[&quot;emissao-dest-cpf-cnpj&quot;]}" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;font-weight:bold;font-size:11px;padding:2px 8px;white-space:nowrap;" title="Buscar dados da empresa na Receita Federal">🔍 Receita</button>
                                         </div>
                                     </div>
                                     <div class="form-group" style="flex:2;min-width:240px;">
@@ -993,8 +993,8 @@
                                     <div class="form-group" style="flex:1;min-width:130px;">
                                         <label for="emissao-dest-cep" class="label-obrigatorio">CEP: <span class="obrigatorio-badge">*</span></label>
                                         <div style="display:flex;gap:4px;">
-                                            <input type="text" id="emissao-dest-cep" class="input-obrigatorio" placeholder="00000-000" maxlength="9" onblur="buscarCepViaCep(this.value);" required>
-                                            <button type="button" class="btn-action" onclick="buscarCepViaCep(document.getElementById('emissao-dest-cep').value);" title="Buscar endereço pelo CEP">🔍</button>
+                                            <input type="text" id="emissao-dest-cep" class="input-obrigatorio" placeholder="00000-000" maxlength="9" data-onblur="{&quot;fn&quot;:&quot;buscarCepViaCep&quot;,&quot;args&quot;:[&quot;$this&quot;]}" required>
+                                            <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;buscarCepDestinoInformando&quot;,&quot;args&quot;:[]}" title="Buscar endereço pelo CEP">🔍</button>
                                         </div>
                                     </div>
                                     <div class="form-group" style="flex:2;min-width:200px;">
@@ -1018,7 +1018,7 @@
                                     </div>
                                     <div class="form-group" style="flex:1;min-width:70px;">
                                         <label for="emissao-dest-uf" class="label-obrigatorio">UF: <span class="obrigatorio-badge">*</span></label>
-                                        <input type="text" id="emissao-dest-uf" class="input-obrigatorio" value="SP" maxlength="2" style="text-align:center;text-transform:uppercase;" onchange="sugerirCfopPorNatureza();" required>
+                                        <input type="text" id="emissao-dest-uf" class="input-obrigatorio" value="SP" maxlength="2" style="text-align:center;text-transform:uppercase;" data-onchange="{&quot;fn&quot;:&quot;sugerirCfopPorNatureza&quot;,&quot;args&quot;:[]}" required>
                                     </div>
                                     <div class="form-group" style="flex:2;min-width:180px;">
                                         <label for="emissao-dest-email">E-mail (para envio do DANFE/XML):</label>
@@ -1045,10 +1045,10 @@
                                     <div style="font-size:11px;font-weight:normal;display:flex;align-items:center;gap:6px;">
                                         <label style="display:inline;font-weight:600;color:var(--text-muted);">Do Catálogo:</label>
                                         <div style="position:relative;width:300px;">
-                                            <input type="text" id="emissao-busca-produto" placeholder="🔍 Buscar item por Nome, Código, NCM..." autocomplete="off" oninput="filtrarProdutosEmissao(this.value);" onfocus="filtrarProdutosEmissao(this.value);" style="height:28px;font-size:11px;padding:2px 8px;width:100%;border-radius:4px;border:1px solid #cbd5e1;background:#fff;" />
+                                            <input type="text" id="emissao-busca-produto" placeholder="🔍 Buscar item por Nome, Código, NCM..." autocomplete="off" data-oninput="{&quot;fn&quot;:&quot;filtrarProdutosEmissao&quot;,&quot;args&quot;:[&quot;$this&quot;]}" data-onfocus="{&quot;fn&quot;:&quot;filtrarProdutosEmissao&quot;,&quot;args&quot;:[&quot;$this&quot;]}" style="height:28px;font-size:11px;padding:2px 8px;width:100%;border-radius:4px;border:1px solid #cbd5e1;background:#fff;" />
                                             <div id="emissao-dropdown-produtos" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:240px;overflow-y:auto;background:#ffffff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.12);z-index:1050;margin-top:3px;text-align:left;"></div>
                                         </div>
-                                        <select id="emissao-select-prod-rapido" onchange="selecionarProdutoCatalogo(this.value);" style="height:28px;font-size:11px;padding:2px 8px;max-width:180px;">
+                                        <select id="emissao-select-prod-rapido" data-onchange="{&quot;fn&quot;:&quot;selecionarProdutoCatalogo&quot;,&quot;args&quot;:[&quot;$this&quot;]}" style="height:28px;font-size:11px;padding:2px 8px;max-width:180px;">
                                             <option value="">-- Ou Selecionar Salvo --</option>
                                         </select>
                                     </div>
@@ -1085,22 +1085,22 @@
                                         </div>
                                         <div class="form-group" style="flex:0.8;min-width:80px;">
                                             <label for="item-add-qtd" class="label-obrigatorio">Qtd: <span class="obrigatorio-badge">*</span></label>
-                                            <input type="number" id="item-add-qtd" class="input-obrigatorio" value="1" min="1" step="1" oninput="calcularTotalItemTemp();">
+                                            <input type="number" id="item-add-qtd" class="input-obrigatorio" value="1" min="1" step="1" data-oninput="{&quot;fn&quot;:&quot;calcularTotalItemTemp&quot;,&quot;args&quot;:[]}">
                                         </div>
                                         <div class="form-group" style="flex:1;min-width:110px;">
                                             <label for="item-add-preco" class="label-obrigatorio">Valor Unit. (R$): <span class="obrigatorio-badge">*</span></label>
-                                            <input type="number" id="item-add-preco" class="input-obrigatorio" placeholder="0.00" step="0.01" oninput="calcularTotalItemTemp();">
+                                            <input type="number" id="item-add-preco" class="input-obrigatorio" placeholder="0.00" step="0.01" data-oninput="{&quot;fn&quot;:&quot;calcularTotalItemTemp&quot;,&quot;args&quot;:[]}">
                                         </div>
                                         <div class="form-group" style="flex:0.9;min-width:90px;">
                                             <label for="item-add-desconto">Desconto (R$):</label>
-                                            <input type="number" id="item-add-desconto" class="input-opcional" value="0.00" step="0.01" oninput="calcularTotalItemTemp();">
+                                            <input type="number" id="item-add-desconto" class="input-opcional" value="0.00" step="0.01" data-oninput="{&quot;fn&quot;:&quot;calcularTotalItemTemp&quot;,&quot;args&quot;:[]}">
                                         </div>
                                         <div class="form-group" style="flex:1;min-width:110px;">
                                             <label>Total Item (R$):</label>
                                             <input type="text" id="item-add-total-display" value="R$ 0,00" readonly style="background:#e2e8f0;font-weight:bold;">
                                         </div>
                                         <div style="margin-bottom:0;">
-                                            <button type="button" class="botao botao-primario" onclick="adicionarItemNfeEmissao();" style="height:38px;padding:0 16px;">
+                                            <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;adicionarItemNfeEmissao&quot;,&quot;args&quot;:[]}" style="height:38px;padding:0 16px;">
                                                 ➕ Adicionar
                                             </button>
                                         </div>
@@ -1145,7 +1145,7 @@
                                 <div style="display:flex;gap:12px;flex-wrap:wrap;">
                                     <div class="form-group" style="flex:2;min-width:220px;">
                                         <label for="emissao-transp-modalidade">Modalidade do Frete:</label>
-                                        <select id="emissao-transp-modalidade" onchange="toggleTransporteFields(this.value);">
+                                        <select id="emissao-transp-modalidade" data-onchange="{&quot;fn&quot;:&quot;toggleTransporteFields&quot;,&quot;args&quot;:[&quot;$this&quot;]}">
                                             <option value="9" selected>9 - Sem Ocorrência de Transporte (Retirada em Balcão)</option>
                                             <option value="0">0 - Por Conta do Remetente (CIF)</option>
                                             <option value="1">1 - Por Conta do Destinatário (FOB)</option>
@@ -1156,11 +1156,11 @@
                                     </div>
                                     <div class="form-group" style="flex:1;min-width:120px;">
                                         <label for="emissao-transp-valor-frete">Valor do Frete (R$):</label>
-                                        <input type="number" id="emissao-transp-valor-frete" value="0.00" step="0.01" oninput="atualizarTotaisNfeEmissao();">
+                                        <input type="number" id="emissao-transp-valor-frete" value="0.00" step="0.01" data-oninput="{&quot;fn&quot;:&quot;atualizarTotaisNfeEmissao&quot;,&quot;args&quot;:[]}">
                                     </div>
                                     <div class="form-group" style="flex:1;min-width:120px;">
                                         <label for="emissao-transp-outras-desp">Outras Despesas (R$):</label>
-                                        <input type="number" id="emissao-transp-outras-desp" value="0.00" step="0.01" oninput="atualizarTotaisNfeEmissao();">
+                                        <input type="number" id="emissao-transp-outras-desp" value="0.00" step="0.01" data-oninput="{&quot;fn&quot;:&quot;atualizarTotaisNfeEmissao&quot;,&quot;args&quot;:[]}">
                                     </div>
                                 </div>
 
@@ -1223,7 +1223,7 @@
                                         <div style="display:flex;gap:12px;flex-wrap:wrap;">
                                             <div class="form-group" style="flex:1;min-width:140px;">
                                                 <label for="emissao-condicao-pagamento">Condição:</label>
-                                                <select id="emissao-condicao-pagamento" onchange="toggleCondicaoPagamento(this.value);">
+                                                <select id="emissao-condicao-pagamento" data-onchange="{&quot;fn&quot;:&quot;toggleCondicaoPagamento&quot;,&quot;args&quot;:[&quot;$this&quot;]}">
                                                     <option value="a_vista" selected>Pagamento À Vista</option>
                                                     <option value="a_prazo">Faturamento A Prazo (Parcelado)</option>
                                                 </select>
@@ -1247,7 +1247,7 @@
                                             <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;">
                                                 <div class="form-group" style="flex:1;margin-bottom:0;">
                                                     <label for="emissao-qtd-parcelas">Qtd Parcelas:</label>
-                                                    <select id="emissao-qtd-parcelas" onchange="gerarParcelasNfe();">
+                                                    <select id="emissao-qtd-parcelas" data-onchange="{&quot;fn&quot;:&quot;gerarParcelasNfe&quot;,&quot;args&quot;:[]}">
                                                         <option value="1">1x (30 dias)</option>
                                                         <option value="2" selected>2x (30 / 60 dias)</option>
                                                         <option value="3">3x (30 / 60 / 90 dias)</option>
@@ -1259,9 +1259,9 @@
                                                 </div>
                                                 <div class="form-group" style="flex:1;margin-bottom:0;">
                                                     <label for="emissao-intervalo-dias">Intervalo (Dias):</label>
-                                                    <input type="number" id="emissao-intervalo-dias" value="30" min="1" onchange="gerarParcelasNfe();">
+                                                    <input type="number" id="emissao-intervalo-dias" value="30" min="1" data-onchange="{&quot;fn&quot;:&quot;gerarParcelasNfe&quot;,&quot;args&quot;:[]}">
                                                 </div>
-                                                <button type="button" class="btn-action" onclick="gerarParcelasNfe();" style="height:34px;">🔄 Recalcular</button>
+                                                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;gerarParcelasNfe&quot;,&quot;args&quot;:[]}" style="height:34px;">🔄 Recalcular</button>
                                             </div>
                                             <div id="lista-parcelas-dinamicas" style="max-height:140px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:4px;padding:6px;">
                                                 <!-- Parcelas geradas via JS -->
@@ -1271,6 +1271,30 @@
                                         <div class="form-group" style="margin-top:8px;">
                                             <label for="emissao-info-compl">Informações Complementares / Interesse do Fisco:</label>
                                             <textarea id="emissao-info-compl" rows="2" style="width:100%;font-size:12px;padding:6px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;">Documento emitido por ME ou EPP optante pelo Simples Nacional. Nao gera direito a credito fiscal de IPI.</textarea>
+                                        </div>
+
+                                        <!-- MODO DE EMISSÃO: NORMAL x CONTINGÊNCIA (tpEmis) -->
+                                        <div style="margin-top:12px;border:1px dashed #f59e0b;border-radius:6px;padding:12px;background:#fffbeb;">
+                                            <label for="emissao-modo-emissao" style="display:block;font-size:12.5px;font-weight:bold;color:#92400e;margin-bottom:4px;">
+                                                🛰️ Modo de Emissão
+                                            </label>
+                                            <select id="emissao-modo-emissao" style="width:100%;font-size:13px;padding:7px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;box-sizing:border-box;">
+                                                <option value="normal">1 — Emissão normal</option>
+                                                <option value="contingencia">Contingência — SEFAZ Virtual (SVC)</option>
+                                            </select>
+
+                                            <div id="bloco-contingencia-emissao" style="display:none;margin-top:10px;">
+                                                <label for="emissao-contingencia-justificativa" style="display:block;font-size:12.5px;font-weight:bold;color:#92400e;margin-bottom:4px;">
+                                                    Justificativa da contingência <span style="color:#dc2626;">* (15 a 255 caracteres)</span>
+                                                </label>
+                                                <textarea id="emissao-contingencia-justificativa" rows="2" maxlength="255" placeholder="Ex.: Indisponibilidade do servidor da SEFAZ-SP, emitindo em contingência conforme MOC." style="width:100%;font-size:12px;padding:6px;box-sizing:border-box;border:1px solid #f59e0b;border-radius:4px;background:#fff;"></textarea>
+                                                <small style="color:#78716c;font-size:11px;display:block;margin-top:4px;line-height:1.5;">
+                                                    O código <code>tpEmis</code> (6 = SVC-AN, 7 = SVC-RS) é derivado automaticamente
+                                                    da UF do emitente. O XML sai com <code>dhCont</code> e <code>xJust</code>,
+                                                    a chave de acesso muda (posição 34) e a transmissão vai para o
+                                                    <b>endpoint de contingência</b> da SEFAZ Virtual.
+                                                </small>
+                                            </div>
                                         </div>
                                     </div>
                                     <div style="flex:1;min-width:240px;background:#f8fafc;padding:14px;border-radius:6px;border:1px solid #cbd5e1;">
@@ -1302,10 +1326,10 @@
                                     <button type="submit" id="btn-transmitir-nfe" class="botao botao-primario" style="background:#27ae60;border-color:#27ae60;font-size:13px;padding:10px 22px;height:42px;display:inline-flex;align-items:center;gap:6px;font-weight:bold;">
                                         🚀 Assinar e Transmitir à SEFAZ
                                     </button>
-                                    <button type="button" id="btn-previa-danfe-emissao" class="botao" onclick="visualizarPreviaDanfeEmissao();" style="background:var(--pastel-blue-bg);color:var(--pastel-blue-text);border:1px solid var(--pastel-blue-border);font-size:13px;padding:10px 18px;height:42px;display:inline-flex;align-items:center;gap:6px;font-weight:600;" title="Visualizar prévia do DANFE e imprimir antes de transmitir">
+                                    <button type="button" id="btn-previa-danfe-emissao" class="botao" data-onclick="{&quot;fn&quot;:&quot;visualizarPreviaDanfeEmissao&quot;,&quot;args&quot;:[]}" style="background:var(--pastel-blue-bg);color:var(--pastel-blue-text);border:1px solid var(--pastel-blue-border);font-size:13px;padding:10px 18px;height:42px;display:inline-flex;align-items:center;gap:6px;font-weight:600;" title="Visualizar prévia do DANFE e imprimir antes de transmitir">
                                         👁️ Visualizar / Imprimir Prévia
                                     </button>
-                                    <button type="button" id="btn-limpar-formulario-emissao" class="botao" onclick="limparFormularioEmissaoCompleto();" style="background:var(--surface-card);color:var(--text-muted);border:1px solid var(--border-subtle);font-size:13px;padding:10px 16px;height:42px;display:inline-flex;align-items:center;gap:6px;" title="Limpar todos os campos e produtos preenchidos">
+                                    <button type="button" id="btn-limpar-formulario-emissao" class="botao" data-onclick="{&quot;fn&quot;:&quot;limparFormularioEmissaoCompleto&quot;,&quot;args&quot;:[]}" style="background:var(--surface-card);color:var(--text-muted);border:1px solid var(--border-subtle);font-size:13px;padding:10px 16px;height:42px;display:inline-flex;align-items:center;gap:6px;" title="Limpar todos os campos e produtos preenchidos">
                                         🧹 Limpar Dados
                                     </button>
                                     <span style="font-size:11.5px;color:var(--text-muted);margin-left:6px;">O XML será assinado pelo Certificado Digital A1 da loja e arquivado com o protocolo SEFAZ.</span>
@@ -1336,7 +1360,7 @@
                                     <textarea id="importar-saida-chaves" rows="3" placeholder="Cole aqui as chaves de 44 dígitos das NF-es que você emitiu no ERP HostMundo..." style="font-family:monospace;font-size:12px;"></textarea>
                                 </div>
                                 <div style="margin-bottom:0;display:flex;gap:6px;">
-                                    <button type="button" class="botao botao-primario" onclick="importarSaidasExternas();" style="background:#0284c7;border-color:#0284c7;">📥 Importar via SEFAZ</button>
+                                    <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;importarSaidasExternas&quot;,&quot;args&quot;:[]}" style="background:#0284c7;border-color:#0284c7;">📥 Importar via SEFAZ</button>
                                 </div>
                             </div>
                             <div id="importar-saida-feedback" style="margin-top:10px;font-size:12px;"></div>
@@ -1346,13 +1370,13 @@
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                                 <span>Filtros de Busca de NF-e Emitidas</span>
                                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                    <button type="button" class="btn-action" onclick="abrirModalFechamentoContabil();" style="font-size:12px;padding:4px 12px;background:#0f766e;color:#fff;border-color:#0f766e;font-weight:600;" title="Exportar XMLs e Relatório para a Contabilidade">
+                                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;abrirModalFechamentoContabil&quot;,&quot;args&quot;:[]}" style="font-size:12px;padding:4px 12px;background:#0f766e;color:#fff;border-color:#0f766e;font-weight:600;" title="Exportar XMLs e Relatório para a Contabilidade">
                                         📦 Fechamento Contábil Mensal
                                     </button>
-                                    <button type="button" class="btn-action" onclick="abrirModalInutilizarNfe();" style="font-size:12px;padding:4px 12px;background:#fef2f2;color:#991b1b;border-color:#fecaca;font-weight:600;" title="Inutilizar quebras de numeração perante a SEFAZ">
+                                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;abrirModalInutilizarNfe&quot;,&quot;args&quot;:[]}" style="font-size:12px;padding:4px 12px;background:#fef2f2;color:#991b1b;border-color:#fecaca;font-weight:600;" title="Inutilizar quebras de numeração perante a SEFAZ">
                                         🚫 Inutilizar Numeração Pulada
                                     </button>
-                                    <button type="button" class="btn-action btn-action-success" onclick="abrirModalImportarSaidas();" style="font-size:12px;padding:4px 12px;">
+                                    <button type="button" class="btn-action btn-action-success" data-onclick="{&quot;fn&quot;:&quot;abrirModalImportarSaidas&quot;,&quot;args&quot;:[]}" style="font-size:12px;padding:4px 12px;">
                                         📥 Importar XMLs / Backup ZIP
                                     </button>
                                 </div>
@@ -1360,7 +1384,7 @@
                             <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
                                 <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0;">
                                     <label for="filtro-saidas-empresa">Empresa Emitente:</label>
-                                    <select id="filtro-saidas-empresa" onchange="carregarNfeSaidas(1);"></select>
+                                    <select id="filtro-saidas-empresa" data-onchange="{&quot;fn&quot;:&quot;carregarNfeSaidas&quot;,&quot;args&quot;:[1]}"></select>
                                 </div>
                                 <div class="form-group" style="flex:2;min-width:200px;margin-bottom:0;">
                                     <label for="filtro-saidas-busca">Buscar Cliente / Chave / Número:</label>
@@ -1368,7 +1392,7 @@
                                 </div>
                                 <div class="form-group" style="flex:1.3;min-width:150px;margin-bottom:0;">
                                     <label for="filtro-saidas-situacao">Situação:</label>
-                                    <select id="filtro-saidas-situacao" onchange="sincronizarAbaSituacao(this.value); carregarNfeSaidas(1);" style="font-weight:600;">
+                                    <select id="filtro-saidas-situacao" data-onchange="{&quot;fn&quot;:&quot;aoMudarFiltroSituacao&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="font-weight:600;">
                                         <option value="">Todas</option>
                                         <option value="autorizada">🟢 Autorizadas</option>
                                         <option value="pendente">🟡 Pendentes</option>
@@ -1385,8 +1409,8 @@
                                     <input type="date" id="filtro-saidas-fim" value="">
                                 </div>
                                 <div style="margin-bottom:0;display:flex;gap:6px;">
-                                    <button type="button" class="botao botao-primario" onclick="carregarNfeSaidas(1);">🔍 Filtrar</button>
-                                    <button type="button" class="btn-action" onclick="limparFiltrosSaidas();">Limpar</button>
+                                    <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarNfeSaidas&quot;,&quot;args&quot;:[1]}">🔍 Filtrar</button>
+                                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;limparFiltrosSaidas&quot;,&quot;args&quot;:[]}">Limpar</button>
                                 </div>
                             </div>
                         </div>
@@ -1410,19 +1434,19 @@
                         <!-- Abas / Filtros Rápidos por Situação da NF-e -->
                         <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
                             <span style="font-size:12px;font-weight:bold;color:#475569;margin-right:4px;">Filtrar Situação:</span>
-                            <button type="button" class="subnav-btn active btn-tab-situacao" id="tab-sit-todas" onclick="filtrarPorSituacaoRapida('');" style="font-size:11.5px;padding:4px 12px;border-radius:20px;">
+                            <button type="button" class="subnav-btn active btn-tab-situacao" id="tab-sit-todas" data-onclick="{&quot;fn&quot;:&quot;filtrarPorSituacaoRapida&quot;,&quot;args&quot;:[&quot;&quot;]}" style="font-size:11.5px;padding:4px 12px;border-radius:20px;">
                                 Todas
                             </button>
-                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-autorizada" onclick="filtrarPorSituacaoRapida('autorizada');" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#166534;">
+                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-autorizada" data-onclick="{&quot;fn&quot;:&quot;filtrarPorSituacaoRapida&quot;,&quot;args&quot;:[&quot;autorizada&quot;]}" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#166534;">
                                 🟢 Autorizadas
                             </button>
-                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-pendente" onclick="filtrarPorSituacaoRapida('pendente');" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#92400e;">
+                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-pendente" data-onclick="{&quot;fn&quot;:&quot;filtrarPorSituacaoRapida&quot;,&quot;args&quot;:[&quot;pendente&quot;]}" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#92400e;">
                                 🟡 Pendentes
                             </button>
-                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-cancelada" onclick="filtrarPorSituacaoRapida('cancelada');" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#991b1b;">
+                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-cancelada" data-onclick="{&quot;fn&quot;:&quot;filtrarPorSituacaoRapida&quot;,&quot;args&quot;:[&quot;cancelada&quot;]}" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#991b1b;">
                                 🔴 Canceladas
                             </button>
-                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-rejeitada" onclick="filtrarPorSituacaoRapida('rejeitada');" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#c2410c;">
+                            <button type="button" class="subnav-btn btn-tab-situacao" id="tab-sit-rejeitada" data-onclick="{&quot;fn&quot;:&quot;filtrarPorSituacaoRapida&quot;,&quot;args&quot;:[&quot;rejeitada&quot;]}" style="font-size:11.5px;padding:4px 12px;border-radius:20px;color:#c2410c;">
                                 🟠 Rejeitadas
                             </button>
                         </div>
@@ -1432,8 +1456,8 @@
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>Notas Fiscais de Saída / Vendas Emitidas</span>
                                 <div style="display:flex;gap:6px;">
-                                    <button type="button" class="btn-action" onclick="pullFromFirestore();" style="background:#16a085;border-color:#138d75;color:#fff;font-weight:600;" title="Baixar notas emitidas em outros computadores via Cloud Firestore">☁️ Sincronizar da Nuvem</button>
-                                    <button type="button" class="btn-action" onclick="carregarNfeSaidas(1);">🔄 Atualizar Lista</button>
+                                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;pullFromFirestore&quot;,&quot;args&quot;:[]}" style="background:#16a085;border-color:#138d75;color:#fff;font-weight:600;" title="Baixar notas emitidas em outros computadores via Cloud Firestore">☁️ Sincronizar da Nuvem</button>
+                                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;carregarNfeSaidas&quot;,&quot;args&quot;:[1]}">🔄 Atualizar Lista</button>
                                 </div>
                             </div>
                             <div class="table-responsive">
@@ -1465,16 +1489,16 @@
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>👥 Clientes Cadastrados</span>
                                 <div style="display:flex;gap:8px;align-items:center;">
-                                    <button type="button" class="botao botao-secundario" onclick="abrirModalSyncRedeLocal();" style="font-size:11.5px;padding:4px 12px;height:32px;display:flex;align-items:center;gap:5px;" title="Importa clientes e produtos da outra máquina pela rede local sem depender da nuvem">
+                                    <button type="button" class="botao botao-secundario" data-onclick="{&quot;fn&quot;:&quot;abrirModalSyncRedeLocal&quot;,&quot;args&quot;:[]}" style="font-size:11.5px;padding:4px 12px;height:32px;display:flex;align-items:center;gap:5px;" title="Importa clientes e produtos da outra máquina pela rede local sem depender da nuvem">
                                         🔄 Sincronizar via Rede Local
                                     </button>
-                                    <button type="button" class="botao botao-primario" onclick="abrirModalNovoCliente();" style="font-size:11.5px;padding:4px 12px;height:32px;">
+                                    <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;abrirModalNovoCliente&quot;,&quot;args&quot;:[]}" style="font-size:11.5px;padding:4px 12px;height:32px;">
                                         ➕ Novo Cliente
                                     </button>
                                 </div>
                             </div>
                             <div style="display:flex;gap:10px;margin-bottom:12px;">
-                                <input type="text" id="busca-cad-clientes" placeholder="Buscar por Razão Social, Nome Fantasia, CPF, CNPJ ou E-mail..." style="flex:1;" oninput="filtrarTabelaClientes(this.value);">
+                                <input type="text" id="busca-cad-clientes" placeholder="Buscar por Razão Social, Nome Fantasia, CPF, CNPJ ou E-mail..." style="flex:1;" data-oninput="{&quot;fn&quot;:&quot;filtrarTabelaClientes&quot;,&quot;args&quot;:[&quot;$this&quot;]}">
                             </div>
                             <div class="table-responsive">
                                 <table class="tabelaGrupo">
@@ -1504,16 +1528,16 @@
                             <div class="painelSessaoTitulo" style="display:flex;justify-content:space-between;align-items:center;">
                                 <span>📦 Catálogo de Produtos & Serviços</span>
                                 <div style="display:flex;gap:8px;align-items:center;">
-                                    <button type="button" class="botao botao-secundario" onclick="abrirModalSyncRedeLocal();" style="font-size:11.5px;padding:4px 12px;height:32px;display:flex;align-items:center;gap:5px;" title="Importa clientes e produtos da outra máquina pela rede local sem depender da nuvem">
+                                    <button type="button" class="botao botao-secundario" data-onclick="{&quot;fn&quot;:&quot;abrirModalSyncRedeLocal&quot;,&quot;args&quot;:[]}" style="font-size:11.5px;padding:4px 12px;height:32px;display:flex;align-items:center;gap:5px;" title="Importa clientes e produtos da outra máquina pela rede local sem depender da nuvem">
                                         🔄 Sincronizar via Rede Local
                                     </button>
-                                    <button type="button" class="botao botao-primario" onclick="abrirModalNovoProduto();" style="font-size:11.5px;padding:4px 12px;height:32px;">
+                                    <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;abrirModalNovoProduto&quot;,&quot;args&quot;:[]}" style="font-size:11.5px;padding:4px 12px;height:32px;">
                                         ➕ Novo Produto
                                     </button>
                                 </div>
                             </div>
                             <div style="display:flex;gap:10px;margin-bottom:12px;">
-                                <input type="text" id="busca-cad-produtos" placeholder="Buscar por Descrição, Código, NCM ou Código de Barras (GTIN)..." style="flex:1;" oninput="filtrarTabelaProdutos(this.value);">
+                                <input type="text" id="busca-cad-produtos" placeholder="Buscar por Descrição, Código, NCM ou Código de Barras (GTIN)..." style="flex:1;" data-oninput="{&quot;fn&quot;:&quot;filtrarTabelaProdutos&quot;,&quot;args&quot;:[&quot;$this&quot;]}">
                             </div>
                             <div class="table-responsive">
                                 <table class="tabelaGrupo">
@@ -1556,11 +1580,11 @@
                         <form id="form-contabil-exportar" style="display:flex;gap:15px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
                             <div class="form-group" style="min-width:240px;flex:1.5;">
                                 <label for="contabil-empresa" style="font-weight:bold;">Certificado Digital / Empresa Emitente:</label>
-                                <select id="contabil-empresa" onchange="loadContabilPrevia();" style="font-weight:600;"></select>
+                                <select id="contabil-empresa" data-onchange="{&quot;fn&quot;:&quot;loadContabilPrevia&quot;,&quot;args&quot;:[]}" style="font-weight:600;"></select>
                             </div>
                             <div class="form-group" style="min-width:140px;flex:1;">
                                 <label for="contabil-mes" style="font-weight:bold;">Mês de Competência:</label>
-                                <select id="contabil-mes" onchange="loadContabilPrevia();">
+                                <select id="contabil-mes" data-onchange="{&quot;fn&quot;:&quot;loadContabilPrevia&quot;,&quot;args&quot;:[]}">
                                     <option value="1">01 - Janeiro</option><option value="2">02 - Fevereiro</option>
                                     <option value="3">03 - Março</option><option value="4">04 - Abril</option>
                                     <option value="5">05 - Maio</option><option value="6">06 - Junho</option>
@@ -1571,7 +1595,7 @@
                             </div>
                             <div class="form-group" style="min-width:100px;flex:0.8;">
                                 <label for="contabil-ano" style="font-weight:bold;">Ano:</label>
-                                <select id="contabil-ano" onchange="loadContabilPrevia();">
+                                <select id="contabil-ano" data-onchange="{&quot;fn&quot;:&quot;loadContabilPrevia&quot;,&quot;args&quot;:[]}">
                                     <option value="2026" selected>2026</option>
                                     <option value="2025">2025</option>
                                     <option value="2024">2024</option>
@@ -1581,16 +1605,16 @@
                                 <button type="submit" class="botao botao-primario" style="background:#0f766e;border-color:#0f766e;font-size:12.5px;padding:8px 14px;font-weight:bold;" title="Baixar ZIP com pastas separadas por Certificado, XMLs e Relatórios">
                                     📦 Baixar Pacote ZIP (.ZIP)
                                 </button>
-                                <button type="button" class="botao botao-primario" id="btn-exportar-excel-contabil" onclick="baixarPlanilhaExcelContabil();" style="background:#27ae60;border-color:#27ae60;font-size:12.5px;padding:8px 14px;font-weight:bold;">
+                                <button type="button" class="botao botao-primario" id="btn-exportar-excel-contabil" data-onclick="{&quot;fn&quot;:&quot;baixarPlanilhaExcelContabil&quot;,&quot;args&quot;:[]}" style="background:#27ae60;border-color:#27ae60;font-size:12.5px;padding:8px 14px;font-weight:bold;">
                                     📊 Planilha Detalhada (.XLSX)
                                 </button>
-                                <button type="button" class="botao" id="btn-exportar-excel-resumo" onclick="baixarPlanilhaExcelContabilResumo();" style="background:#16a085;border-color:#16a085;font-size:12.5px;padding:8px 14px;font-weight:bold;color:#fff;" title="Planilha resumo por empresa (sem itens)">
+                                <button type="button" class="botao" id="btn-exportar-excel-resumo" data-onclick="{&quot;fn&quot;:&quot;baixarPlanilhaExcelContabilResumo&quot;,&quot;args&quot;:[]}" style="background:#16a085;border-color:#16a085;font-size:12.5px;padding:8px 14px;font-weight:bold;color:#fff;" title="Planilha resumo por empresa (sem itens)">
                                     📋 Planilha Resumo
                                 </button>
-                                <button type="button" class="botao" id="btn-recuperar-itens-contabil" onclick="recuperarItensContabeis();" style="background:#8e44ad;border-color:#8e44ad;font-size:12.5px;padding:8px 14px;font-weight:bold;color:#fff;" title="Recupera via SEFAZ os XMLs/itens das NF-e que ainda não têm produtos salvos">
+                                <button type="button" class="botao" id="btn-recuperar-itens-contabil" data-onclick="{&quot;fn&quot;:&quot;recuperarItensContabeis&quot;,&quot;args&quot;:[]}" style="background:#8e44ad;border-color:#8e44ad;font-size:12.5px;padding:8px 14px;font-weight:bold;color:#fff;" title="Recupera via SEFAZ os XMLs/itens das NF-e que ainda não têm produtos salvos">
                                     🔄 Recuperar Itens via SEFAZ
                                 </button>
-                                <button type="button" class="btn-action" onclick="abrirModalFechamentoContabil();" style="background:#0284c7;color:#fff;border-color:#0284c7;font-size:12.5px;padding:8px 14px;font-weight:bold;">
+                                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;abrirModalFechamentoContabil&quot;,&quot;args&quot;:[]}" style="background:#0284c7;color:#fff;border-color:#0284c7;font-size:12.5px;padding:8px 14px;font-weight:bold;">
                                     ✉️ Disparar ao Contador
                                 </button>
                             </div>
@@ -1628,7 +1652,7 @@
                                 Conforme o Art. 173 do CTN e legislação do SPED, os documentos fiscais eletrônicos devem ser armazenados pelo prazo decadencial de 5 anos.
                             </p>
                             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                                <button type="button" class="botao botao-primario" onclick="executarBackupFiscalNuvem();" style="background:#1b4f72;border-color:#1b4f72;font-size:12px;padding:6px 14px;">
+                                <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarBackupFiscalNuvem&quot;,&quot;args&quot;:[]}" style="background:#1b4f72;border-color:#1b4f72;font-size:12px;padding:6px 14px;">
                                     ☁️ Executar Backup Fiscal Agora
                                 </button>
                                 <span id="backup-fiscal-status-msg" style="font-size:12px;color:#27ae60;font-weight:bold;"></span>
@@ -2121,7 +2145,7 @@
                             (RecepcaoEPEC) não exposto pela biblioteca PyNFe. Para registrar um EPEC de fato,
                             utilize diretamente o portal da SEFAZ ou um cliente que implemente o schema EPEC 1.01.
                         </div>
-                        <form id="form-epec-registro" onsubmit="event.preventDefault(); toast.warning('Registro de EPEC não implementado: requer webservice dedicado não exposto pela PyNFe.');">
+                        <form id="form-epec-registro" data-onsubmit="{&quot;fn&quot;:&quot;epecNaoImplementada&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
                             <div class="form-group">
                                 <label for="epec-reg-chave">Chave de Acesso da NF-e:</label>
                                 <input type="text" id="epec-reg-chave" name="chave" maxlength="44" placeholder="44 dígitos">
@@ -2328,10 +2352,10 @@
                                                 </div>
                                             </div>
                                             <div style="display:flex;gap:8px;">
-                                                <button type="button" class="botao" onclick="verificarAtualizacoes(true)">
+                                                <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;verificarAtualizacoes&quot;,&quot;args&quot;:[true]}">
                                                     🔍 Verificar no GitHub
                                                 </button>
-                                                <button type="button" id="btn-cfg-executar-update" class="botao botao-primario" onclick="executarAtualizacaoSistema()" style="background:#16a34a;border-color:#16a34a;color:#fff;display:none;">
+                                                <button type="button" id="btn-cfg-executar-update" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarAtualizacaoSistema&quot;,&quot;args&quot;:[]}" style="background:#16a34a;border-color:#16a34a;color:#fff;display:none;">
                                                     🚀 Atualizar Agora
                                                 </button>
                                             </div>
@@ -2422,16 +2446,16 @@
                                             </div>
                                             <div style="display:flex;gap:8px;align-items:center;">
                                                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-                                                    <input type="checkbox" id="cfg-audio-alert-enabled" checked onchange="toggleAudioAlerts(this.checked);"> Som Ativado
+                                                    <input type="checkbox" id="cfg-audio-alert-enabled" checked data-onchange="{&quot;fn&quot;:&quot;toggleAudioAlerts&quot;,&quot;args&quot;:[&quot;$this&quot;]}"> Som Ativado
                                                 </label>
-                                                <button type="button" class="botao" onclick="testarSomAlertaWeb();" style="font-size:11px;padding:4px 10px;background:#f1f5f9;color:#334155;border-color:#cbd5e1;">
+                                                <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;testarSomAlertaWeb&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:4px 10px;background:#f1f5f9;color:#334155;border-color:#cbd5e1;">
                                                     🔊 Testar Som
                                                 </button>
                                             </div>
                                         </div>
                                         <div style="display:flex;gap:8px;margin-top:12px;">
                                             <button type="submit" class="botao botao-primario">Salvar Canais de Alerta</button>
-                                            <button type="button" class="botao" onclick="solicitarPermissaoNavegador();">🔔 Ativar Notificações no Navegador</button>
+                                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;solicitarPermissaoNavegador&quot;,&quot;args&quot;:[]}">🔔 Ativar Notificações no Navegador</button>
                                         </div>
                                     </form>
                                     <div id="result-config-notif" style="display:none;margin-top:10px;"></div>
@@ -2449,11 +2473,11 @@
                                     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
                                         <div class="form-group" style="min-width:260px;flex:1.5;">
                                             <label for="gaps-filtro-empresa">Empresa / Filial Emitente:</label>
-                                            <select id="gaps-filtro-empresa" onchange="carregarAuditoriaGaps();"></select>
+                                            <select id="gaps-filtro-empresa" data-onchange="{&quot;fn&quot;:&quot;carregarAuditoriaGaps&quot;,&quot;args&quot;:[]}"></select>
                                         </div>
                                         <div class="form-group" style="min-width:120px;flex:0.8;">
                                             <label for="gaps-filtro-serie">Série:</label>
-                                            <select id="gaps-filtro-serie" onchange="carregarAuditoriaGaps();">
+                                            <select id="gaps-filtro-serie" data-onchange="{&quot;fn&quot;:&quot;carregarAuditoriaGaps&quot;,&quot;args&quot;:[]}">
                                                 <option value="">Todas as Séries</option>
                                                 <option value="1" selected>Série 1</option>
                                                 <option value="2">Série 2</option>
@@ -2461,7 +2485,7 @@
                                             </select>
                                         </div>
                                         <div class="form-group">
-                                            <button type="button" class="botao botao-primario" onclick="carregarAuditoriaGaps();" style="background:#2563eb;border-color:#2563eb;">
+                                            <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarAuditoriaGaps&quot;,&quot;args&quot;:[]}" style="background:#2563eb;border-color:#2563eb;">
                                                 🔍 Executar Auditoria de Saltos
                                             </button>
                                         </div>
@@ -2512,14 +2536,14 @@
                                     <div style="margin-bottom:10px;">
                                         <span style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Presets Rápidos de 1 Clique:</span>
                                         <div class="preset-btn-group">
-                                            <button type="button" class="btn-preset active" id="preset-btn-homologacao" onclick="aplicarPresetLimpeza('homologacao')">🧪 Testes / Homologação</button>
-                                            <button type="button" class="btn-preset" id="preset-btn-zeradas" onclick="aplicarPresetLimpeza('zeradas')">💰 Valores Zerados (R$ 0,00)</button>
-                                            <button type="button" class="btn-preset" id="preset-btn-sem-itens" onclick="aplicarPresetLimpeza('sem_itens')">📦 Sem Itens / Incompletas</button>
-                                            <button type="button" class="btn-preset" id="preset-btn-limpar" onclick="aplicarPresetLimpeza('limpar')">🔄 Limpar Filtros</button>
+                                            <button type="button" class="btn-preset active" id="preset-btn-homologacao" data-onclick="{&quot;fn&quot;:&quot;aplicarPresetLimpeza&quot;,&quot;args&quot;:[&quot;homologacao&quot;]}">🧪 Testes / Homologação</button>
+                                            <button type="button" class="btn-preset" id="preset-btn-zeradas" data-onclick="{&quot;fn&quot;:&quot;aplicarPresetLimpeza&quot;,&quot;args&quot;:[&quot;zeradas&quot;]}">💰 Valores Zerados (R$ 0,00)</button>
+                                            <button type="button" class="btn-preset" id="preset-btn-sem-itens" data-onclick="{&quot;fn&quot;:&quot;aplicarPresetLimpeza&quot;,&quot;args&quot;:[&quot;sem_itens&quot;]}">📦 Sem Itens / Incompletas</button>
+                                            <button type="button" class="btn-preset" id="preset-btn-limpar" data-onclick="{&quot;fn&quot;:&quot;aplicarPresetLimpeza&quot;,&quot;args&quot;:[&quot;limpar&quot;]}">🔄 Limpar Filtros</button>
                                         </div>
                                     </div>
 
-                                    <form id="form-limpeza-filtros" onsubmit="event.preventDefault(); carregarLimpezaPreview();">
+                                    <form id="form-limpeza-filtros" data-onsubmit="{&quot;fn&quot;:&quot;aoEnviarPreviewLimpeza&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
                                         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
                                             <div class="form-group">
                                                 <label for="limpeza-empresa">Empresa / Certificado:</label>
@@ -2565,7 +2589,7 @@
 
                                         <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap;">
                                             <button type="submit" class="botao botao-primario" id="btn-limpeza-preview">🔍 Simular / Localizar NF-es</button>
-                                            <button type="button" class="botao botao-perigo" id="btn-limpeza-executar" onclick="executarLimpezaNfesConfirmada()" style="display:none;">🗑️ Excluir Selecionadas (<span id="limpeza-count-badge">0</span>)</button>
+                                            <button type="button" class="botao botao-perigo" id="btn-limpeza-executar" data-onclick="{&quot;fn&quot;:&quot;executarLimpezaNfesConfirmada&quot;,&quot;args&quot;:[]}" style="display:none;">🗑️ Excluir Selecionadas (<span id="limpeza-count-badge">0</span>)</button>
                                             <span id="limpeza-status-msg" style="font-size:12px;color:var(--text-muted);"></span>
                                         </div>
                                     </form>
@@ -2578,8 +2602,8 @@
                                             <span style="margin-left:12px;"><strong>Valor Total:</strong> <span id="limpeza-valor-total" style="font-weight:600;color:var(--primary);">R$ 0,00</span></span>
                                         </div>
                                         <div style="display:flex;gap:8px;align-items:center;">
-                                            <button type="button" class="botao" onclick="marcarTodasLimpeza(true)" style="padding:4px 10px;font-size:11px;">Marcar Todas</button>
-                                            <button type="button" class="botao" onclick="marcarTodasLimpeza(false)" style="padding:4px 10px;font-size:11px;">Desmarcar Todas</button>
+                                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;marcarTodasLimpeza&quot;,&quot;args&quot;:[true]}" style="padding:4px 10px;font-size:11px;">Marcar Todas</button>
+                                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;marcarTodasLimpeza&quot;,&quot;args&quot;:[false]}" style="padding:4px 10px;font-size:11px;">Desmarcar Todas</button>
                                         </div>
                                     </div>
 
@@ -2587,7 +2611,7 @@
                                         <table class="tabelaGrupo" id="tabela-limpeza-preview">
                                             <thead>
                                                 <tr>
-                                                    <th style="width:36px;text-align:center;"><input type="checkbox" id="chk-limpeza-master" onchange="toggleMasterLimpeza(this)"></th>
+                                                    <th style="width:36px;text-align:center;"><input type="checkbox" id="chk-limpeza-master" data-onchange="{&quot;fn&quot;:&quot;toggleMasterLimpeza&quot;,&quot;args&quot;:[&quot;$this&quot;]}"></th>
                                                     <th>Número / Série</th>
                                                     <th>Emitente</th>
                                                     <th>Destinatário</th>
@@ -2634,8 +2658,8 @@
                                 <div class="painelSessao" style="margin-top:15px;">
                                     <div class="painelSessaoTitulo">Ações de Verificação e Limpeza</div>
                                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                                        <button type="button" class="botao botao-primario" onclick="carregarAuditoriaXmlsOrfaos()">🔍 Analisar Pasta de XMLs</button>
-                                        <button type="button" class="botao botao-perigo" id="btn-apagar-orfaos" onclick="apagarXmlsOrfaosConfirmado()" style="display:none;">🧹 Apagar XMLs Órfãos do Disco</button>
+                                        <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;carregarAuditoriaXmlsOrfaos&quot;,&quot;args&quot;:[]}">🔍 Analisar Pasta de XMLs</button>
+                                        <button type="button" class="botao botao-perigo" id="btn-apagar-orfaos" data-onclick="{&quot;fn&quot;:&quot;apagarXmlsOrfaosConfirmado&quot;,&quot;args&quot;:[]}" style="display:none;">🧹 Apagar XMLs Órfãos do Disco</button>
                                         <span id="orfaos-status-msg" style="font-size:12px;color:var(--text-muted);"></span>
                                     </div>
                                     <div id="orfaos-feedback-alert" style="display:none;margin-top:12px;"></div>
@@ -2666,7 +2690,7 @@
                                         <h3 style="font-size:15px;font-weight:600;color:var(--text-main);margin:0;">Diagnóstico em Tempo Real da Base de Dados</h3>
                                         <span style="font-size:11.5px;color:var(--text-muted);" id="auditoria-data-hora">Última checagem: --</span>
                                     </div>
-                                    <button type="button" class="botao" onclick="carregarAuditoriaBase()">🔄 Atualizar Diagnóstico</button>
+                                    <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;carregarAuditoriaBase&quot;,&quot;args&quot;:[]}">🔄 Atualizar Diagnóstico</button>
                                 </div>
 
                                 <div class="grid-kpis">
@@ -2755,10 +2779,10 @@
                                             <div style="font-size:12px;color:var(--text-muted);">Snapshots gravados localmente no diretório seguro de backups.</div>
                                         </div>
                                         <div style="display:flex;gap:10px;">
-                                            <button type="button" class="botao botao-secundario" id="btn-recarregar-backups" onclick="carregarListaBackups()">
+                                            <button type="button" class="botao botao-secundario" id="btn-recarregar-backups" data-onclick="{&quot;fn&quot;:&quot;carregarListaBackups&quot;,&quot;args&quot;:[]}">
                                                 🔄 Atualizar Lista
                                             </button>
-                                            <button type="button" class="botao" id="btn-gerar-backup-manual" onclick="executarBackupFiscalManual()">
+                                            <button type="button" class="botao" id="btn-gerar-backup-manual" data-onclick="{&quot;fn&quot;:&quot;executarBackupFiscalManual&quot;,&quot;args&quot;:[]}">
                                                 ⚡ Criar Backup Agora
                                             </button>
                                         </div>
@@ -2816,7 +2840,7 @@
                                             <input type="text" id="filtro-audit-usuario" class="input-form" placeholder="Filtrar por usuário..." style="width:100%;">
                                         </div>
                                         <div>
-                                            <button type="button" class="botao" onclick="carregarTrilhaAuditoria(1)">
+                                            <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;carregarTrilhaAuditoria&quot;,&quot;args&quot;:[1]}">
                                                 🔍 Filtrar
                                             </button>
                                         </div>
@@ -2940,11 +2964,11 @@
         <div id="modal-notificacoes" style="display:none;position:fixed;top:60px;right:30px;width:380px;max-width:92vw;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,0.2);z-index:99999;overflow:hidden;">
             <div style="background:#1b4f72;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
                 <b style="font-size:13px;">🔔 Feed de Notificações Fiscais</b>
-                <button type="button" onclick="toggleNotificationsModal();" style="background:transparent;border:none;color:#fff;font-size:16px;cursor:pointer;">✕</button>
+                <button type="button" data-onclick="{&quot;fn&quot;:&quot;toggleNotificationsModal&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:16px;cursor:pointer;">✕</button>
             </div>
             <div style="padding:10px 14px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#f8f9fa;">
-                <button type="button" class="btn-action" onclick="marcarTodasNotificacoesLidas();" style="font-size:11px;">✓ Marcar lidas</button>
-                <button type="button" class="btn-action" onclick="solicitarPermissaoNavegador();" style="font-size:11px;">🔔 Notificações no Navegador</button>
+                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;marcarTodasNotificacoesLidas&quot;,&quot;args&quot;:[]}" style="font-size:11px;">✓ Marcar lidas</button>
+                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;solicitarPermissaoNavegador&quot;,&quot;args&quot;:[]}" style="font-size:11px;">🔔 Notificações no Navegador</button>
             </div>
             <div id="notif-feed-lista" style="max-height:380px;overflow-y:auto;padding:12px;">
                 <div style="text-align:center;color:#888;padding:15px;">Nenhuma notificação recente.</div>
@@ -2956,14 +2980,14 @@
             <div style="background:#fff;width:520px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#1b4f72;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;">📱 Bipador de DANFE (Leitor USB / Câmera)</b>
-                    <button type="button" onclick="fecharBipadorModal();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharBipadorModal&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
                 <div style="padding:20px;">
                     <p style="font-size:12.5px;color:#555;margin-top:0;">Posicione o cursor no campo abaixo e use seu <b>leitor óptico USB</b> ou digite a chave de 44 dígitos:</p>
-                    <input type="text" id="bipador-input-rapido" placeholder="Aguardando bip do leitor de código de barras..." style="width:100%;font-size:14px;padding:10px 14px;font-family:monospace;border:2px solid #2980b9;border-radius:6px;box-sizing:border-box;" onkeydown="handleBipadorKey(event);">
+                    <input type="text" id="bipador-input-rapido" placeholder="Aguardando bip do leitor de código de barras..." style="width:100%;font-size:14px;padding:10px 14px;font-family:monospace;border:2px solid #2980b9;border-radius:6px;box-sizing:border-box;" data-onkeydown="{&quot;fn&quot;:&quot;handleBipadorKey&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
                     
                     <div style="margin-top:16px;text-align:center;">
-                        <button type="button" class="botao botao-primario" onclick="processarBipChave();" style="width:100%;padding:10px;font-size:13px;height:42px;">
+                        <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;processarBipChave&quot;,&quot;args&quot;:[]}" style="width:100%;padding:10px;font-size:13px;height:42px;">
                             ⚡ Abrir Conferência / DANFE
                         </button>
                     </div>
@@ -2976,9 +3000,9 @@
             <div style="background:#fff;width:680px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#1b4f72;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;" id="modal-cliente-titulo">👥 Cadastrar Novo Cliente / Destinatário</b>
-                    <button type="button" onclick="fecharModalCliente();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalCliente&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
-                <form id="form-modal-cliente" onsubmit="salvarClienteModal(event);" style="padding:20px;">
+                <form id="form-modal-cliente" data-onsubmit="{&quot;fn&quot;:&quot;salvarClienteModal&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;">
                     <input type="hidden" id="modal-cli-id">
                     <!-- Banner de Legenda -->
                     <div style="background:#fff1f2;border:1px solid #fecdd3;border-left:4px solid #e11d48;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:11.5px;color:#9f1239;display:flex;align-items:center;gap:6px;">
@@ -2990,7 +3014,7 @@
                             <label for="modal-cli-doc" class="label-obrigatorio">CPF ou CNPJ: <span class="obrigatorio-badge">*</span></label>
                             <div style="display:flex;gap:4px;">
                                 <input type="text" id="modal-cli-doc" class="input-obrigatorio" placeholder="Apenas números" required>
-                                <button type="button" class="btn-action" onclick="consultarCnpjReceitaFederal('modal-cli-doc');" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;font-weight:bold;font-size:11px;padding:2px 8px;white-space:nowrap;" title="Buscar dados cadastrais da empresa na Receita Federal">🔍 Receita</button>
+                                <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;consultarCnpjReceitaFederal&quot;,&quot;args&quot;:[&quot;modal-cli-doc&quot;]}" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;font-weight:bold;font-size:11px;padding:2px 8px;white-space:nowrap;" title="Buscar dados cadastrais da empresa na Receita Federal">🔍 Receita</button>
                             </div>
                         </div>
                         <div class="form-group" style="flex:2;min-width:240px;">
@@ -3027,7 +3051,7 @@
                     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
                         <div class="form-group" style="flex:1;min-width:130px;">
                             <label for="modal-cli-cep" class="label-obrigatorio">CEP: <span class="obrigatorio-badge">*</span></label>
-                            <input type="text" id="modal-cli-cep" class="input-obrigatorio" placeholder="00000-000" onblur="buscarCepViaCep(this.value, true);" required>
+                            <input type="text" id="modal-cli-cep" class="input-obrigatorio" placeholder="00000-000" data-onblur="{&quot;fn&quot;:&quot;buscarCepViaCep&quot;,&quot;args&quot;:[&quot;$this&quot;,true]}" required>
                         </div>
                         <div class="form-group" style="flex:2;min-width:200px;">
                             <label for="modal-cli-logr" class="label-obrigatorio">Logradouro: <span class="obrigatorio-badge">*</span></label>
@@ -3053,7 +3077,7 @@
                         </div>
                     </div>
                     <div style="margin-top:18px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalCliente();">Cancelar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalCliente&quot;,&quot;args&quot;:[]}">Cancelar</button>
                         <button type="submit" id="btn-salvar-modal-cliente" class="botao botao-primario">💾 Salvar Cliente</button>
                     </div>
                 </form>
@@ -3065,13 +3089,13 @@
             <div style="background:#fff;width:680px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#1b4f72;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;">👁️ Ficha Cadastral do Cliente / Destinatário</b>
-                    <button type="button" onclick="fecharModalVisualizarCliente();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalVisualizarCliente&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
                 <div style="padding:20px;max-height:80vh;overflow-y:auto;" id="conteudo-modal-visualizar-cliente">
                     <!-- Preenchido dinamicamente via JS -->
                 </div>
                 <div style="background:#f8fafc;padding:12px 18px;border-top:1px solid #e2e8f0;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                    <button type="button" class="btn-action" onclick="fecharModalVisualizarCliente();">Fechar</button>
+                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalVisualizarCliente&quot;,&quot;args&quot;:[]}">Fechar</button>
                     <button type="button" class="btn-action" id="btn-vis-usar-emissao" style="background:#0284c7;color:#fff;border-color:#0284c7;">📄 Usar na Emissão</button>
                     <button type="button" class="botao botao-primario" id="btn-vis-editar-cliente">✏️ Editar Dados</button>
                 </div>
@@ -3083,9 +3107,9 @@
             <div style="background:#fff;width:720px;max-width:94vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#1b4f72;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;" id="modal-produto-titulo">📦 Cadastrar Novo Produto / Item</b>
-                    <button type="button" onclick="fecharModalProduto();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalProduto&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
-                <form id="form-modal-produto" onsubmit="salvarProdutoModal(event);" style="padding:20px;max-height:82vh;overflow-y:auto;">
+                <form id="form-modal-produto" data-onsubmit="{&quot;fn&quot;:&quot;salvarProdutoModal&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;max-height:82vh;overflow-y:auto;">
                     <input type="hidden" id="modal-prod-id">
 
                     <!-- Banner de Legenda -->
@@ -3101,7 +3125,7 @@
                         </div>
                         <div class="form-group" style="flex:2.5;min-width:260px;">
                             <label for="modal-prod-desc" class="label-obrigatorio">Descrição do Produto: <span class="obrigatorio-badge">*</span></label>
-                            <input type="text" id="modal-prod-desc" class="input-obrigatorio" placeholder="Ex: Smartphone Galaxy A16 5G 128GB" oninput="handleDescricaoProdutoInput(this.value);" required>
+                            <input type="text" id="modal-prod-desc" class="input-obrigatorio" placeholder="Ex: Smartphone Galaxy A16 5G 128GB" data-oninput="{&quot;fn&quot;:&quot;handleDescricaoProdutoInput&quot;,&quot;args&quot;:[&quot;$this&quot;]}" required>
                         </div>
                     </div>
 
@@ -3110,7 +3134,7 @@
                         <div id="texto-sugestao-fiscal" style="display:flex;align-items:center;gap:6px;">
                             <span>⚡ <b>Sugestão Automática:</b> <span id="sug-detalhes">NCM 85171300 | CFOP 5102 | UN</span></span>
                         </div>
-                        <button type="button" class="btn-action" onclick="aplicarSugestaoFiscalProduto();" style="background:#16a34a;color:#fff;border-color:#16a34a;font-size:11px;padding:2px 8px;">✓ Aplicar Sugestão</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;aplicarSugestaoFiscalProduto&quot;,&quot;args&quot;:[]}" style="background:#16a34a;color:#fff;border-color:#16a34a;font-size:11px;padding:2px 8px;">✓ Aplicar Sugestão</button>
                     </div>
 
                     <!-- Tributação e Enquadramento Fiscal SEFAZ -->
@@ -3193,7 +3217,7 @@
                     </div>
 
                     <div style="margin-top:18px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalProduto();">Cancelar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalProduto&quot;,&quot;args&quot;:[]}">Cancelar</button>
                         <button type="submit" id="btn-salvar-modal-produto" class="botao botao-primario">💾 Salvar Produto</button>
                     </div>
                 </form>
@@ -3205,13 +3229,13 @@
             <div style="background:#fff;width:680px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#1b4f72;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;">👁️ Ficha Fiscal & Técnica do Produto</b>
-                    <button type="button" onclick="fecharModalVisualizarProduto();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalVisualizarProduto&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
                 <div style="padding:20px;max-height:80vh;overflow-y:auto;" id="conteudo-modal-visualizar-produto">
                     <!-- Preenchido dinamicamente via JS -->
                 </div>
                 <div style="background:#f8fafc;padding:12px 18px;border-top:1px solid #e2e8f0;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                    <button type="button" class="btn-action" onclick="fecharModalVisualizarProduto();">Fechar</button>
+                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalVisualizarProduto&quot;,&quot;args&quot;:[]}">Fechar</button>
                     <button type="button" class="btn-action" id="btn-vis-usar-produto" style="background:#0284c7;color:#fff;border-color:#0284c7;">➕ Adicionar à NF-e</button>
                     <button type="button" class="botao botao-primario" id="btn-vis-editar-produto">✏️ Editar Produto</button>
                 </div>
@@ -3223,9 +3247,9 @@
             <div style="background:#fff;width:550px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#c0392b;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;">❌ Cancelamento Oficial de NF-e na SEFAZ</b>
-                    <button type="button" onclick="fecharModalCancelarNfe();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalCancelarNfe&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
-                <form id="form-modal-cancelar-nfe" onsubmit="handleCancelarNfeModal(event);" style="padding:20px;">
+                <form id="form-modal-cancelar-nfe" data-onsubmit="{&quot;fn&quot;:&quot;handleCancelarNfeModal&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;">
                     <input type="hidden" id="modal-cancelar-chave">
                     <div style="background:#fef2f2;border:1px solid #fecaca;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:12.5px;color:#991b1b;">
                         <b>Atenção:</b> O cancelamento de NF-e perante a SEFAZ é uma operação irreversível (Evento 110111). Certifique-se de que a mercadoria ainda não circulou.
@@ -3240,7 +3264,7 @@
                         <small style="color:#64748b;font-size:11px;">Mínimo 15 caracteres exigidos pela SEFAZ.</small>
                     </div>
                     <div style="margin-top:16px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalCancelarNfe();">Voltar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalCancelarNfe&quot;,&quot;args&quot;:[]}">Voltar</button>
                         <button type="submit" class="botao" style="background:#c0392b;color:#fff;border-color:#c0392b;">Confirmar Cancelamento na SEFAZ</button>
                     </div>
                 </form>
@@ -3255,9 +3279,9 @@
                         <span style="font-size:18px;">✍️</span>
                         <b style="font-size:14px;">Carta de Correção Eletrônica (CC-e - Evento 110110)</b>
                     </div>
-                    <button type="button" onclick="fecharModalCceNfe();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalCceNfe&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
-                <form id="form-modal-cce-nfe" onsubmit="handleCceModalSubmit(event);" style="padding:20px;">
+                <form id="form-modal-cce-nfe" data-onsubmit="{&quot;fn&quot;:&quot;handleCceModalSubmit&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;">
                     <input type="hidden" id="modal-cce-chave">
                     <div style="background:#f0f9ff;border:1px solid #bae6fd;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:12px;color:#0369a1;line-height:1.4;">
                         <b>O que pode ser corrigido?</b> Apenas dados não cadastrais e observações operacionais. <b>É expressamente proibido</b> corrigir valores/impostos, dados que modifiquem emitente/destinatário ou datas de emissão/saída.
@@ -3272,7 +3296,7 @@
                         <small style="color:#64748b;font-size:11px;">Mínimo 15 caracteres exigidos pela SEFAZ.</small>
                     </div>
                     <div style="margin-top:16px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalCceNfe();">Cancelar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalCceNfe&quot;,&quot;args&quot;:[]}">Cancelar</button>
                         <button type="submit" id="btn-transmitir-cce" class="botao" style="background:#0284c7;color:#fff;border-color:#0284c7;font-weight:bold;">✍️ Transmitir CC-e à SEFAZ</button>
                     </div>
                 </form>
@@ -3287,9 +3311,9 @@
                         <span style="font-size:18px;">📧</span>
                         <b style="font-size:14px;">Enviar NF-e por E-mail (XML + DANFE PDF)</b>
                     </div>
-                    <button type="button" onclick="fecharModalEmailNfe();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalEmailNfe&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
-                <form id="form-modal-email-nfe" onsubmit="handleEnviarEmailNfe(event);" style="padding:20px;">
+                <form id="form-modal-email-nfe" data-onsubmit="{&quot;fn&quot;:&quot;handleEnviarEmailNfe&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;">
                     <input type="hidden" id="modal-email-chave">
                     <div class="form-group" style="margin-bottom:10px;">
                         <label for="modal-email-destinatario-email" class="label-obrigatorio">E-mail do Destinatário / Contador: <span class="obrigatorio-badge">*</span></label>
@@ -3308,7 +3332,7 @@
                     </div>
                     <div id="resultado-envio-email" style="display:none;margin-bottom:12px;padding:10px;border-radius:6px;font-size:12px;"></div>
                     <div style="margin-top:16px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalEmailNfe();">Cancelar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalEmailNfe&quot;,&quot;args&quot;:[]}">Cancelar</button>
                         <button type="submit" id="btn-confirmar-envio-email" class="botao botao-primario" style="font-weight:bold;">📧 Confirmar e Enviar E-mail</button>
                     </div>
                 </form>
@@ -3320,9 +3344,9 @@
             <div style="background:#fff;width:600px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#b91c1c;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;">🚫 Inutilização Oficial de Faixa de Numeração na SEFAZ</b>
-                    <button type="button" onclick="fecharModalInutilizarNfe();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalInutilizarNfe&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
-                <form id="form-modal-inutilizar-nfe" onsubmit="handleInutilizarNfeModal(event);" style="padding:20px;max-height:85vh;overflow-y:auto;">
+                <form id="form-modal-inutilizar-nfe" data-onsubmit="{&quot;fn&quot;:&quot;handleInutilizarNfeModal&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;max-height:85vh;overflow-y:auto;">
                     <div style="background:#fef2f2;border:1px solid #fecaca;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:12px;color:#991b1b;line-height:1.5;">
                         <b>O que é a Inutilização?</b> Conforme o Art. 18 do Convênio S/N de 1970 e MOC SEFAZ, caso ocorra quebra de sequência numérica (números pulados que não foram e não serão emitidos), a empresa deve obrigatoriamente inutilizar essa numeração perante o Fisco.
                     </div>
@@ -3363,7 +3387,7 @@
                     <div id="resultado-inutilizacao-nfe" style="display:none;margin-top:12px;padding:12px;border-radius:6px;font-size:12px;"></div>
 
                     <div style="margin-top:16px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalInutilizarNfe();">Cancelar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalInutilizarNfe&quot;,&quot;args&quot;:[]}">Cancelar</button>
                         <button type="submit" id="btn-confirmar-inutilizacao" class="botao" style="background:#b91c1c;color:#fff;border-color:#b91c1c;">🚫 Transmitir Inutilização à SEFAZ</button>
                     </div>
                 </form>
@@ -3375,24 +3399,24 @@
             <div style="background:#fff;width:580px;max-width:92vw;border-radius:8px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
                 <div style="background:#1b4f72;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
                     <b style="font-size:14px;">📥 Importar Histórico de NF-e (XMLs / Backup ZIP)</b>
-                    <button type="button" onclick="fecharModalImportarSaidas();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalImportarSaidas&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
                 <div style="padding:20px;">
                     <p style="font-size:12.5px;color:#555;margin-top:0;">
                         Selecione um arquivo <b>.ZIP contendo XMLs</b> ou selecione múltiplos <b>arquivos .XML</b> emitidos no passado (do Bling, Tiny, emissor gratuito ou backup contábil). O sistema indexará tudo no banco de dados e gerará os DANFEs.
                     </p>
-                    <div style="border:2px dashed #94a3b8;border-radius:8px;padding:24px;text-align:center;background:#f8fafc;cursor:pointer;" onclick="document.getElementById('input-arquivos-import-saidas').click();">
+                    <div style="border:2px dashed #94a3b8;border-radius:8px;padding:24px;text-align:center;background:#f8fafc;cursor:pointer;" data-onclick="{&quot;fn&quot;:&quot;abrirSeletorArquivosSaidas&quot;,&quot;args&quot;:[]}">
                         <div style="font-size:32px;margin-bottom:8px;">📦</div>
                         <b style="color:#1b4f72;font-size:13.5px;">Clique aqui ou arraste seus arquivos XML / ZIP</b>
                         <div style="font-size:11.5px;color:#64748b;margin-top:4px;">Suporta múltiplos arquivos .xml ou pastas compactadas em .zip</div>
-                        <input type="file" id="input-arquivos-import-saidas" multiple accept=".xml,.zip" style="display:none;" onchange="handleSelecionarArquivosImport(this.files);">
+                        <input type="file" id="input-arquivos-import-saidas" multiple accept=".xml,.zip" style="display:none;" data-onchange="{&quot;fn&quot;:&quot;handleSelecionarArquivosImport&quot;,&quot;args&quot;:[&quot;$this&quot;]}">
                     </div>
 
                     <div id="status-import-saidas" style="display:none;margin-top:14px;padding:12px;border-radius:6px;font-size:12px;"></div>
 
                     <div style="margin-top:18px;text-align:right;display:flex;justify-content:flex-end;gap:10px;">
-                        <button type="button" class="btn-action" onclick="fecharModalImportarSaidas();">Fechar</button>
-                        <button type="button" id="btn-iniciar-import-saidas" class="botao botao-primario" onclick="executarImportacaoSaidas();" style="display:none;">
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalImportarSaidas&quot;,&quot;args&quot;:[]}">Fechar</button>
+                        <button type="button" id="btn-iniciar-import-saidas" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarImportacaoSaidas&quot;,&quot;args&quot;:[]}" style="display:none;">
                             ⚡ Iniciar Importação
                         </button>
                     </div>
@@ -3412,7 +3436,7 @@
                             <div id="retorno-sefaz-subtitulo" style="font-size:11.5px;opacity:0.9;">Validação e Status Oficial do Documento Fiscal</div>
                         </div>
                     </div>
-                    <button type="button" onclick="fecharModalRetornoSefaz();" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalRetornoSefaz&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
                 </div>
 
                 <div style="padding:22px;max-height:80vh;overflow-y:auto;">
@@ -3462,7 +3486,7 @@
                         <div id="retorno-sefaz-botoes-extras" style="display:flex;gap:6px;flex-wrap:wrap;">
                             <!-- Botões dinâmicos como Ver DANFE ou Clonar -->
                         </div>
-                        <button type="button" class="btn-action" onclick="fecharModalRetornoSefaz();" style="padding:6px 16px;font-size:12.5px;">Fechar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalRetornoSefaz&quot;,&quot;args&quot;:[]}" style="padding:6px 16px;font-size:12.5px;">Fechar</button>
                     </div>
                 </div>
             </div>
@@ -3480,10 +3504,10 @@
                         </span>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button type="button" class="btn-action" onclick="imprimirDanfePreviaModal();" style="background:#334155;color:#fff;border-color:#475569;font-size:12px;padding:5px 12px;display:inline-flex;align-items:center;gap:4px;" title="Imprimir esta prévia">
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;imprimirDanfePreviaModal&quot;,&quot;args&quot;:[]}" style="background:#334155;color:#fff;border-color:#475569;font-size:12px;padding:5px 12px;display:inline-flex;align-items:center;gap:4px;" title="Imprimir esta prévia">
                             🖨️ Imprimir Prévia
                         </button>
-                        <button type="button" onclick="fecharModalPreviaNfe();" style="background:transparent;border:none;color:#94a3b8;font-size:20px;cursor:pointer;padding:0 4px;line-height:1;" title="Fechar prévia">✕</button>
+                        <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalPreviaNfe&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#94a3b8;font-size:20px;cursor:pointer;padding:0 4px;line-height:1;" title="Fechar prévia">✕</button>
                     </div>
                 </div>
 
@@ -3500,14 +3524,14 @@
 
                 <!-- Rodapé do Modal -->
                 <div style="background:#f1f5f9;border-top:1px solid #e2e8f0;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-                    <button type="button" class="btn-action" onclick="fecharModalPreviaNfe();" style="font-size:12.5px;padding:6px 14px;">
+                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalPreviaNfe&quot;,&quot;args&quot;:[]}" style="font-size:12.5px;padding:6px 14px;">
                         ← Voltar ao Formulário e Ajustar
                     </button>
                     <div style="display:flex;gap:10px;">
-                        <button type="button" class="botao" onclick="imprimirDanfePreviaModal();" style="background:#ffffff;border:1px solid #cbd5e1;font-size:12.5px;padding:6px 14px;">
+                        <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;imprimirDanfePreviaModal&quot;,&quot;args&quot;:[]}" style="background:#ffffff;border:1px solid #cbd5e1;font-size:12.5px;padding:6px 14px;">
                             🖨️ Imprimir
                         </button>
-                        <button type="button" class="botao botao-primario" onclick="transmitirNfeDiretoDoModalPrevia();" style="background:#15803d;border-color:#15803d;font-size:12.5px;padding:6px 18px;font-weight:bold;">
+                        <button type="button" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;transmitirNfeDiretoDoModalPrevia&quot;,&quot;args&quot;:[]}" style="background:#15803d;border-color:#15803d;font-size:12.5px;padding:6px 18px;font-weight:bold;">
                             🚀 Confirmar e Transmitir à SEFAZ
                         </button>
                     </div>
@@ -3524,7 +3548,7 @@
                         <span style="font-size:18px;">⚠️</span>
                         <b style="font-size:14px;">Confirmar Transmissão de NF-e à SEFAZ?</b>
                     </div>
-                    <button type="button" onclick="fecharModalConfirmacaoTransmissao();" style="background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalConfirmacaoTransmissao&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;">✕</button>
                 </div>
 
                 <div style="padding:20px;">
@@ -3565,10 +3589,10 @@
                     </div>
 
                     <div style="display:flex;gap:12px;justify-content:space-between;">
-                        <button type="button" class="btn-action" onclick="fecharModalConfirmacaoTransmissao();" style="flex:1;padding:9px;font-size:13px;font-weight:600;color:#475569;background:#f1f5f9;border-color:#cbd5e1;text-align:center;">
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalConfirmacaoTransmissao&quot;,&quot;args&quot;:[]}" style="flex:1;padding:9px;font-size:13px;font-weight:600;color:#475569;background:#f1f5f9;border-color:#cbd5e1;text-align:center;">
                             ✕ Não, Voltar e Revisar
                         </button>
-                        <button type="button" id="btn-executar-transmissao-sefaz" class="botao" onclick="executarTransmissaoSefazConfirmada();" style="flex:1.4;padding:9px;font-size:13px;font-weight:bold;background:#15803d;border-color:#15803d;color:#fff;text-align:center;">
+                        <button type="button" id="btn-executar-transmissao-sefaz" class="botao" data-onclick="{&quot;fn&quot;:&quot;executarTransmissaoSefazConfirmada&quot;,&quot;args&quot;:[]}" style="flex:1.4;padding:9px;font-size:13px;font-weight:bold;background:#15803d;border-color:#15803d;color:#fff;text-align:center;">
                             🚀 Sim, Transmitir à SEFAZ
                         </button>
                     </div>
@@ -3584,7 +3608,7 @@
                         <span style="font-size:18px;">📦</span>
                         <b style="font-size:14px;">Fechamento Fiscal & Contábil Mensal</b>
                     </div>
-                    <button type="button" onclick="fecharModalFechamentoContabil();" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
+                    <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalFechamentoContabil&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;">✕</button>
                 </div>
                 <div style="padding:20px;">
                     <div style="background:#f0fdfa;border:1px solid #ccfbf1;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:12px;color:#115e59;line-height:1.4;">
@@ -3593,13 +3617,13 @@
 
                     <div class="form-group" style="margin-bottom:12px;">
                         <label for="fechamento-empresa-select" class="label-obrigatorio">Certificado Digital / Empresa Emitente: <span class="obrigatorio-badge">*</span></label>
-                        <select id="fechamento-empresa-select" class="input-obrigatorio" onchange="atualizarResumoFechamentoContabil();" style="font-weight:600;"></select>
+                        <select id="fechamento-empresa-select" class="input-obrigatorio" data-onchange="{&quot;fn&quot;:&quot;atualizarResumoFechamentoContabil&quot;,&quot;args&quot;:[]}" style="font-weight:600;"></select>
                     </div>
 
                     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
                         <div class="form-group" style="flex:1;min-width:140px;">
                             <label for="fechamento-mes-select" class="label-obrigatorio">Mês de Competência: <span class="obrigatorio-badge">*</span></label>
-                            <select id="fechamento-mes-select" class="input-obrigatorio" onchange="atualizarResumoFechamentoContabil();">
+                            <select id="fechamento-mes-select" class="input-obrigatorio" data-onchange="{&quot;fn&quot;:&quot;atualizarResumoFechamentoContabil&quot;,&quot;args&quot;:[]}">
                                 <option value="1">01 - Janeiro</option>
                                 <option value="2">02 - Fevereiro</option>
                                 <option value="3">03 - Março</option>
@@ -3616,7 +3640,7 @@
                         </div>
                         <div class="form-group" style="flex:1;min-width:100px;">
                             <label for="fechamento-ano-select" class="label-obrigatorio">Ano: <span class="obrigatorio-badge">*</span></label>
-                            <select id="fechamento-ano-select" class="input-obrigatorio" onchange="atualizarResumoFechamentoContabil();">
+                            <select id="fechamento-ano-select" class="input-obrigatorio" data-onchange="{&quot;fn&quot;:&quot;atualizarResumoFechamentoContabil&quot;,&quot;args&quot;:[]}">
                                 <option value="2026" selected>2026</option>
                                 <option value="2025">2025</option>
                                 <option value="2024">2024</option>
@@ -3655,12 +3679,12 @@
                     <div id="resultado-fechamento-contabil" style="display:none;margin-bottom:14px;padding:10px;border-radius:6px;font-size:12px;"></div>
 
                     <div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--border-main);padding-top:14px;">
-                        <button type="button" class="btn-action" onclick="fecharModalFechamentoContabil();">Fechar</button>
+                        <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalFechamentoContabil&quot;,&quot;args&quot;:[]}">Fechar</button>
                         <div style="display:flex;gap:8px;">
-                            <button type="button" id="btn-enviar-contador" class="btn-action" onclick="enviarFechamentoContadorModal();" style="background:#0284c7;color:#fff;border-color:#0284c7;font-weight:bold;">
+                            <button type="button" id="btn-enviar-contador" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;enviarFechamentoContadorModal&quot;,&quot;args&quot;:[]}" style="background:#0284c7;color:#fff;border-color:#0284c7;font-weight:bold;">
                                 ✉️ Enviar para o Contador
                             </button>
-                            <button type="button" id="btn-baixar-fechamento-zip" class="botao botao-primario" onclick="baixarFechamentoContabilZip();" style="background:#0f766e;border-color:#0f766e;font-weight:bold;">
+                            <button type="button" id="btn-baixar-fechamento-zip" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;baixarFechamentoContabilZip&quot;,&quot;args&quot;:[]}" style="background:#0f766e;border-color:#0f766e;font-weight:bold;">
                                 📥 Baixar Pacote ZIP (.zip)
                             </button>
                         </div>
@@ -3678,7 +3702,7 @@
                     <span style="font-size:22px;">🔄</span>
                     <h3 style="margin:0; font-size:17px; color:var(--text-main, #0f172a);">Atualização do Sistema (GitHub)</h3>
                 </div>
-                <button type="button" onclick="fecharModalAtualizacao()" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-muted, #64748b);">✕</button>
+                <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalAtualizacao&quot;,&quot;args&quot;:[]}" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-muted, #64748b);">✕</button>
             </div>
 
             <div id="modal-update-loading" style="text-align:center; padding:30px 10px;">
@@ -3712,15 +3736,15 @@
                 <div id="modal-update-terminal" style="display:none; background:#0f172a; color:#38bdf8; font-family:monospace; font-size:12px; padding:12px; border-radius:6px; max-height:200px; overflow-y:auto; white-space:pre-wrap; margin-bottom:14px;"></div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:15px; border-top:1px solid #e2e8f0; padding-top:14px;">
-                    <button type="button" class="botao" onclick="verificarAtualizacoes(true)">
+                    <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;verificarAtualizacoes&quot;,&quot;args&quot;:[true]}">
                         🔄 Checar Novamente
                     </button>
                     <div style="display:flex; gap:8px;">
-                        <button type="button" class="botao" onclick="fecharModalAtualizacao()">Fechar</button>
-                        <button type="button" id="btn-modal-executar-update" class="botao botao-primario" onclick="executarAtualizacaoSistema()" style="background:#16a34a; border-color:#16a34a; color:#fff; font-weight:bold;">
+                        <button type="button" class="botao" data-onclick="{&quot;fn&quot;:&quot;fecharModalAtualizacao&quot;,&quot;args&quot;:[]}">Fechar</button>
+                        <button type="button" id="btn-modal-executar-update" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarAtualizacaoSistema&quot;,&quot;args&quot;:[]}" style="background:#16a34a; border-color:#16a34a; color:#fff; font-weight:bold;">
                             🚀 Atualizar Agora (1-Clique)
                         </button>
-                        <button type="button" id="btn-modal-recarregar" class="botao botao-primario" onclick="location.reload()" style="background:#2563eb; border-color:#2563eb; color:#fff; display:none;">
+                        <button type="button" id="btn-modal-recarregar" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;recarregarPagina&quot;,&quot;args&quot;:[]}" style="background:#2563eb; border-color:#2563eb; color:#fff; display:none;">
                             🔄 Recarregar Página
                         </button>
                     </div>
@@ -3737,9 +3761,9 @@
                     <span style="font-size:20px;">🏢</span>
                     <b style="font-size:14px;">Dados Fiscais da Empresa Emitente</b>
                 </div>
-                <button type="button" onclick="fecharModalEditarDadosFiscaisCert();" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+                <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalEditarDadosFiscaisCert&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
             </div>
-            <form id="form-modal-editar-dados-fiscais-cert" onsubmit="salvarDadosFiscaisCertModal(event);" style="padding:20px;max-height:85vh;overflow-y:auto;">
+            <form id="form-modal-editar-dados-fiscais-cert" data-onsubmit="{&quot;fn&quot;:&quot;salvarDadosFiscaisCertModal&quot;,&quot;args&quot;:[&quot;$event&quot;]}" style="padding:20px;max-height:85vh;overflow-y:auto;">
                 <input type="hidden" id="modal-cert-fiscal-cnpj">
                 <input type="hidden" id="modal-cert-fiscal-razao">
 
@@ -3778,8 +3802,8 @@
                     <div class="form-group" style="flex:1;min-width:140px;">
                         <label for="modal-cert-fiscal-cep" class="label-obrigatorio">CEP: <span class="obrigatorio-badge">*</span></label>
                         <div style="display:flex;gap:6px;">
-                            <input type="text" id="modal-cert-fiscal-cep" class="input-obrigatorio" placeholder="00000-000" maxlength="9" onblur="buscarCepCertViaCep(this.value);" required style="font-size:12px;">
-                            <button type="button" class="btn-action" onclick="buscarCepCertViaCep(document.getElementById('modal-cert-fiscal-cep').value);" title="Buscar endereço no ViaCEP">🔍</button>
+                            <input type="text" id="modal-cert-fiscal-cep" class="input-obrigatorio" placeholder="00000-000" maxlength="9" data-onblur="{&quot;fn&quot;:&quot;buscarCepCertViaCep&quot;,&quot;args&quot;:[&quot;$this&quot;]}" required style="font-size:12px;">
+                            <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;buscarCepCertificadoInformando&quot;,&quot;args&quot;:[]}" title="Buscar endereço no ViaCEP">🔍</button>
                         </div>
                     </div>
                     <div class="form-group" style="flex:2.2;min-width:200px;">
@@ -3819,7 +3843,7 @@
                 </div>
 
                 <div style="margin-top:16px;text-align:right;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #e2e8f0;padding-top:14px;">
-                    <button type="button" class="btn-action" onclick="fecharModalEditarDadosFiscaisCert();">Cancelar</button>
+                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharModalEditarDadosFiscaisCert&quot;,&quot;args&quot;:[]}">Cancelar</button>
                     <button type="submit" class="botao botao-primario" style="font-weight:bold;background:#1e40af;border-color:#1e40af;">💾 Salvar Dados Fiscais</button>
                 </div>
             </form>
@@ -3831,7 +3855,7 @@
         <div style="background:var(--bg-surface); width:95%; max-width:1200px; max-height:90vh; overflow:auto; border-radius:8px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.5); border:1px solid var(--border-main);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h2 style="margin:0; color:var(--text-main);">🔍 Debug NF-e - Monitoramento Completo</h2>
-                <button onclick="document.getElementById('modal-debug-nfe').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--text-muted);">✕</button>
+                <button data-onclick="{&quot;fn&quot;:&quot;fecharModalDebugNfe&quot;,&quot;args&quot;:[]}" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--text-muted);">✕</button>
             </div>
             <div id="debug-conteudo">Carregando dados de debug...</div>
         </div>
@@ -3839,11 +3863,11 @@
 
 
     <!-- 1. COMMAND PALETTE (CTRL + K / SPOTLIGHT) -->
-    <div id="modal-command-palette" onclick="if(event.target===this) fecharCommandPalette();">
-        <div class="cmd-palette-container" onclick="event.stopPropagation();">
+    <div id="modal-command-palette" data-onclick="{&quot;fn&quot;:&quot;aoClicarOverlayCommandPalette&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
+        <div class="cmd-palette-container" data-onclick="{&quot;fn&quot;:&quot;pararPropagacao&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
             <div class="cmd-input-wrapper">
                 <span style="font-size:16px;color:var(--text-muted);">🔍</span>
-                <input type="text" id="cmd-palette-input" class="cmd-search-input" placeholder="Digite uma ação, filial, relatório, chave ou número..." autocomplete="off" oninput="filtrarCommandPalette(this.value);" onkeydown="handleCommandKeydown(event);">
+                <input type="text" id="cmd-palette-input" class="cmd-search-input" placeholder="Digite uma ação, filial, relatório, chave ou número..." autocomplete="off" data-oninput="{&quot;fn&quot;:&quot;filtrarCommandPalette&quot;,&quot;args&quot;:[&quot;$this&quot;]}" data-onkeydown="{&quot;fn&quot;:&quot;handleCommandKeydown&quot;,&quot;args&quot;:[&quot;$event&quot;]}">
                 <span class="cmd-shortcut-tag">ESC</span>
             </div>
             <div class="cmd-list" id="cmd-palette-list">
@@ -3858,7 +3882,7 @@
 
     <!-- 2. DRAWER LATERAL DESLIZANTE PARA DETALHES DE NF-E -->
     <div id="drawer-nfe-detalhes">
-        <div class="drawer-backdrop" onclick="fecharDrawerDetalhes();"></div>
+        <div class="drawer-backdrop" data-onclick="{&quot;fn&quot;:&quot;fecharDrawerDetalhes&quot;,&quot;args&quot;:[]}"></div>
         <div class="drawer-panel">
             <div class="drawer-header">
                 <div style="display:flex;align-items:center;gap:10px;">
@@ -3870,7 +3894,7 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span id="drawer-doc-situacao" class="badge-real-tag">Autorizada</span>
-                    <button type="button" class="btn-action" onclick="fecharDrawerDetalhes();" style="padding:4px 8px;font-size:14px;border:none;background:transparent;cursor:pointer;color:var(--text-muted);" title="Fechar">✕</button>
+                    <button type="button" class="btn-action" data-onclick="{&quot;fn&quot;:&quot;fecharDrawerDetalhes&quot;,&quot;args&quot;:[]}" style="padding:4px 8px;font-size:14px;border:none;background:transparent;cursor:pointer;color:var(--text-muted);" title="Fechar">✕</button>
                 </div>
             </div>
             <div class="drawer-body" id="drawer-doc-corpo">
@@ -3890,7 +3914,7 @@
                     <span style="font-size:20px;">🔄</span>
                     <b style="font-size:14px;">Sincronização Direta via Rede Local</b>
                 </div>
-                <button type="button" onclick="fecharModalSyncRedeLocal();" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+                <button type="button" data-onclick="{&quot;fn&quot;:&quot;fecharModalSyncRedeLocal&quot;,&quot;args&quot;:[]}" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
             </div>
             <div style="padding:20px;max-height:85vh;overflow-y:auto;">
                 <!-- Info desta máquina -->
@@ -3898,9 +3922,19 @@
                     <div style="font-size:11.5px;font-weight:bold;color:#475569;text-transform:uppercase;">📍 Endereço desta máquina nesta rede:</div>
                     <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
                         <code id="sync-rede-meu-ip" style="background:#0f172a;color:#38bdf8;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:bold;">Identificando IP...</code>
-                        <button type="button" class="botao botao-pequeno" onclick="copiarMeuIpRede();" style="font-size:11px;padding:3px 8px;">📋 Copiar</button>
+                        <button type="button" class="botao botao-pequeno" data-onclick="{&quot;fn&quot;:&quot;copiarMeuIpRede&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:3px 8px;">📋 Copiar</button>
                     </div>
                     <small style="color:#64748b;font-size:11px;margin-top:4px;display:block;">Se quiser acessar o sistema direto desta máquina no outro computador, basta abrir o navegador e digitar o link acima.</small>
+                    <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #cbd5e1;">
+                        <div style="font-size:11.5px;font-weight:bold;color:#475569;text-transform:uppercase;">🔑 Token de sincronização desta máquina:</div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                            <code id="sync-rede-token" style="background:#0f172a;color:#4ade80;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:bold;word-break:break-all;flex:1;">carregando...</code>
+                            <button type="button" class="botao botao-pequeno" data-onclick="{&quot;fn&quot;:&quot;copiarMeuTokenSync&quot;,&quot;args&quot;:[]}" style="font-size:11px;padding:3px 8px;">📋 Copiar</button>
+                        </div>
+                        <small style="color:#64748b;font-size:11px;margin-top:4px;display:block;">
+                            Exige este token quando <b>outra máquina</b> for importar dados <b>desta</b>. Copie ele no computador de origem.
+                        </small>
+                    </div>
                 </div>
 
                 <!-- Formulário de puxar dados da outra máquina -->
@@ -3910,42 +3944,46 @@
                     </label>
                     <div style="display:flex;gap:8px;">
                         <input type="text" id="sync-rede-url-origem" placeholder="Ex: http://192.168.3.97:8000" style="flex:1;font-size:13px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
-                        <button type="button" id="btn-executar-sync-rede" class="botao botao-primario" onclick="executarSyncRedeLocal();" style="padding:8px 16px;font-weight:bold;display:flex;align-items:center;gap:6px;">
+                        <button type="button" id="btn-executar-sync-rede" class="botao botao-primario" data-onclick="{&quot;fn&quot;:&quot;executarSyncRedeLocal&quot;,&quot;args&quot;:[]}" style="padding:8px 16px;font-weight:bold;display:flex;align-items:center;gap:6px;">
                             🚀 Puxar Agora
                         </button>
                     </div>
+                    <label for="sync-rede-token-origem" style="display:block;font-size:12.5px;font-weight:bold;color:#0f172a;margin:12px 0 6px;">
+                        🔑 Token exibido na máquina de origem:
+                    </label>
+                    <input type="text" id="sync-rede-token-origem" placeholder="Cole aqui o token mostrado na outra máquina" autocomplete="off" style="width:100%;font-size:13px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-family:monospace;">
                     <small style="color:#64748b;font-size:11px;margin-top:6px;display:block;">
-                        💡 Transfere instantaneamente todos os clientes cadastrados, produtos e parâmetros fiscais sem depender da internet ou da cota da nuvem.
+                        💡 Transfere clientes, produtos e parâmetros fiscais sem depender da internet. Por segurança, a máquina de origem só entrega os dados para quem apresenta este token.
                     </small>
                 </div>
 
                 <div id="sync-rede-status" style="margin-top:14px;display:none;padding:12px;border-radius:6px;font-size:12.5px;"></div>
             </div>
             <div style="background:#f1f5f9;padding:12px 18px;display:flex;justify-content:flex-end;border-top:1px solid #e2e8f0;">
-                <button type="button" class="botao botao-secundario" onclick="fecharModalSyncRedeLocal();">Fechar</button>
+                <button type="button" class="botao botao-secundario" data-onclick="{&quot;fn&quot;:&quot;fecharModalSyncRedeLocal&quot;,&quot;args&quot;:[]}">Fechar</button>
             </div>
         </div>
     </div>
 
     <!-- 3. MOBILE BOTTOM NAVIGATION BAR -->
     <div id="mobile-bottom-nav">
-        <div class="mobile-nav-item active" onclick="showSection('inicio'); return false;">
+        <div class="mobile-nav-item active" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;inicio&quot;],&quot;ret&quot;:true}">
             <span class="mobile-nav-icon">🏠</span>
             <span>Início</span>
         </div>
-        <div class="mobile-nav-item" onclick="showSection('gestao-docs'); return false;">
+        <div class="mobile-nav-item" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-docs&quot;],&quot;ret&quot;:true}">
             <span class="mobile-nav-icon">📑</span>
             <span>Notas</span>
         </div>
-        <div class="mobile-nav-item" onclick="showSection('emissor-rapido'); return false;">
+        <div class="mobile-nav-item" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;emissor-rapido&quot;],&quot;ret&quot;:true}">
             <span class="mobile-nav-icon">📤</span>
             <span>Emitir</span>
         </div>
-        <div class="mobile-nav-item" onclick="showSection('gestao-contabil'); return false;">
+        <div class="mobile-nav-item" data-onclick="{&quot;fn&quot;:&quot;showSection&quot;,&quot;args&quot;:[&quot;gestao-contabil&quot;],&quot;ret&quot;:true}">
             <span class="mobile-nav-icon">📊</span>
             <span>Contábil</span>
         </div>
-        <div class="mobile-nav-item" onclick="abrirCommandPalette(); return false;">
+        <div class="mobile-nav-item" data-onclick="{&quot;fn&quot;:&quot;abrirCommandPalette&quot;,&quot;args&quot;:[],&quot;ret&quot;:true}">
             <span class="mobile-nav-icon">🔍</span>
             <span>Busca</span>
         </div>
@@ -3962,6 +4000,7 @@
     <script src="/static/js/firebase-config.js"></script>
     <script src="/static/js/constants.js"></script>
     <script src="/static/js/utils.js"></script>
+    <script src="/static/js/inline-actions.js"></script>
     <script src="/static/js/datas.js"></script>
     <script src="/static/js/auth.js"></script>
     <script src="/static/js/ui-feedback.js"></script>

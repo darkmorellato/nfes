@@ -62,7 +62,7 @@ from backend.services.excel_service import generate_fiscal_excel
 from backend.services.notification_service import dispatch_notification
 from backend.services.label_service import generate_labels_html
 from backend.config import settings
-from backend.dependencies import require_session
+from backend.dependencies import require_session, require_admin, require_session_ou_sync
 
 router = APIRouter(
     prefix="/gestao",
@@ -558,12 +558,16 @@ async def listar_backups_fiscais():
 
 
 @router.get("/backups/{filename}/download")
-async def download_backup_fiscal(filename: str):
-    """Download seguro de um arquivo de backup ZIP."""
+async def download_backup_fiscal(filename: str, session: dict = Depends(require_admin), request: Request = None):
+    """Download do backup fiscal (ZIP com a base inteira). Restrito ao perfil admin."""
     from backend.services.backup_service import get_backup_path
     path = get_backup_path(filename)
     if not path:
         raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado ou inválido.")
+    from backend.services.audit_service import record_audit
+    record_audit("DOWNLOAD_BACKUP", "BACKUP", filename, request=request,
+                 usuario_email=session.get("email"), usuario_nome=session.get("nome"),
+                 detalhe=f"Download do pacote de backup {filename}")
     return FileResponse(
         path=path,
         filename=filename,
@@ -668,12 +672,13 @@ async def debug_nfe_completo(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     tipo_doc: Optional[int] = Query(None),
+    session: dict = Depends(require_admin),
 ):
     """Endpoint de debug: retorna TODAS as NF-e sem paginação, com filtros opcionais,
     para investigar e monitorar o que está ocorrendo com cada certificado/empresa.
 
-    Restrito a ``settings.DEBUG=True`` — em produção devolve 404 para não vazar
-    dados fiscais completos sem filtro.
+    Restrito a ``settings.DEBUG=True`` **e** ao perfil admin — em produção
+    devolve 404 para não vazar dados fiscais completos sem filtro.
     """
     if not settings.DEBUG:
         raise HTTPException(status_code=404, detail="Endpoint de debug desativado.")
@@ -1341,8 +1346,15 @@ async def rota_preview_limpeza(
 
 
 @router.post("/limpeza/executar")
-async def rota_executar_limpeza(payload: Dict[str, Any] = Body(...)):
-    """Executa a exclusão definitiva das NF-es selecionadas no SQLite, arquivos XML em disco e Cloud Firestore."""
+async def rota_executar_limpeza(payload: Dict[str, Any] = Body(...), session: dict = Depends(require_admin), request: Request = None):
+    """Executa a exclusão definitiva das NF-es selecionadas no SQLite, arquivos XML em disco e Cloud Firestore.
+
+    Restrito ao perfil admin: apaga documento fiscal e XML de forma irreversível.
+    """
+    from backend.services.audit_service import record_audit
+    record_audit("LIMPEZA_BASE", "NFE", str(payload.get("termo") or payload.get("cnpj") or ""),
+                 detalhe=f"Limpeza executada: termo={payload.get('termo')!r} cnpj={payload.get('cnpj')!r}",
+                 request=request, usuario_email=session.get("email"), usuario_nome=session.get("nome"))
     try:
         termo = payload.get("termo")
         cnpj = payload.get("cnpj")
@@ -1385,8 +1397,12 @@ async def rota_auditoria_xmls_orfaos():
 
 
 @router.post("/limpeza/apagar-xmls-orfaos")
-async def rota_apagar_xmls_orfaos():
+async def rota_apagar_xmls_orfaos(session: dict = Depends(require_admin), request: Request = None):
     """Apaga fisicamente do disco todos os arquivos XML órfãos que não existem no banco."""
+    from backend.services.audit_service import record_audit
+    record_audit("LIMPEZA_XML_ORFAOS", "XML", "ORFAOS",
+                 detalhe="Remoção de XMLs órfãos do diretório de armazenamento",
+                 request=request, usuario_email=session.get("email"), usuario_nome=session.get("nome"))
     try:
         return apagar_xmls_orfaos()
     except Exception as e:
@@ -1415,20 +1431,42 @@ async def rota_status_atualizacao():
 
 
 @router.post("/sistema/atualizacao/executar")
-async def rota_executar_atualizacao():
-    """Executa a atualização automática do sistema via git pull + pip."""
+async def rota_executar_atualizacao(session: dict = Depends(require_admin), request: Request = None):
+    """Executa a atualização automática do sistema via git pull + pip.
+
+    Restrito ao perfil admin: executa código de terceiros (git pull + pip install)
+    no host — um endpoint aberto equivale a execução remota de comando.
+    """
+    from backend.services.audit_service import record_audit
+    record_audit("ATUALIZACAO_SISTEMA", "SISTEMA", "UPDATER",
+                 detalhe="Atualização via git pull + pip instalada pelo painel",
+                 request=request, usuario_email=session.get("email"), usuario_nome=session.get("nome"))
     from backend.services.updater_service import execute_update
     return execute_update()
 
 
 @router.post("/sistema/reiniciar")
-async def rota_reiniciar_sistema():
-    """Reinicia o servidor em segundo plano após uma atualização."""
+async def rota_reiniciar_sistema(session: dict = Depends(require_admin), request: Request = None):
+    """Reinicia o servidor em segundo plano após uma atualização. Restrito ao perfil admin."""
+    from backend.services.audit_service import record_audit
+    record_audit("REINICIO_SISTEMA", "SISTEMA", "RESTART",
+                 detalhe="Reinício do processo solicitado pelo painel",
+                 request=request, usuario_email=session.get("email"), usuario_nome=session.get("nome"))
     from backend.services.updater_service import restart_server_process
     return restart_server_process()
 
 
-@router.get("/rede/info")
+# ====================================================================
+# SINCRONIZAÇÃO P2P ENTRE MÁQUINAS DA REDE
+# ====================================================================
+# Router separado de propósito: estas rotas NÃO herdam o require_session
+# do router principal, porque uma máquina chama a outra sem sessão de
+# usuário. A autenticação é o segredo compartilhado X-Sync-Token.
+# (Antes, qualquer host da LAN era aceito sem token.)
+router_rede = APIRouter(prefix="/gestao", tags=["Sincronização de Rede"])
+
+
+@router_rede.get("/rede/info", dependencies=[Depends(require_session)])
 async def rota_obter_info_rede():
     """Retorna o IP da rede local e porta desta máquina para sincronização direta."""
     import socket
@@ -1459,10 +1497,13 @@ async def rota_obter_info_rede():
         "ips": ips,
         "porta": port,
         "url_sugerida": f"http://{primary_ip}:{port}",
+        # Segredo usado na autenticação entre máquinas (X-Sync-Token).
+        # Só é devolvido a uma sessão já autenticada nesta máquina.
+        "sync_token": settings.SYNC_TOKEN,
     }
 
 
-@router.get("/rede/exportar-dados")
+@router_rede.get("/rede/exportar-dados", dependencies=[Depends(require_session_ou_sync)])
 async def rota_exportar_dados_rede():
     """Exporta clientes, produtos e dados fiscais de certificados para sincronização direta em rede."""
     from backend.database.cadastros import list_clientes, list_produtos
@@ -1472,10 +1513,15 @@ async def rota_exportar_dados_rede():
     produtos = list_produtos()
     certs = list_certificates_db()
 
+    # Nunca exportar a senha decifrada nem o caminho do .pfx: antes apenas a
+    # chave `password_encrypted` era zerada e a `password` saía em texto claro.
     certs_sanitized = []
     for c in certs:
         c_copy = dict(c)
-        c_copy["password_encrypted"] = ""
+        c_copy.pop("password", None)
+        c_copy.pop("password_encrypted", None)
+        c_copy.pop("path", None)
+        c_copy.pop("filename", None)
         certs_sanitized.append(c_copy)
 
     return {
@@ -1489,11 +1535,15 @@ async def rota_exportar_dados_rede():
     }
 
 
-@router.get("/rede/download-banco")
-async def rota_download_banco_dados():
-    """Permite baixar diretamente o arquivo nfe_database.db completo contendo todos os clientes e notas."""
+@router_rede.get("/rede/download-banco")
+async def rota_download_banco_dados(session: dict = Depends(require_admin), request: Request = None):
+    """Baixa o nfe_database.db completo (hashes de senha, tokens, XMLs). Restrito ao perfil admin."""
     from fastapi.responses import FileResponse
     from backend.config import settings
+    from backend.services.audit_service import record_audit
+    record_audit("DOWNLOAD_BANCO", "BANCO", "nfe_database.db",
+                 detalhe="Download da base SQLite completa",
+                 request=request, usuario_email=session.get("email"), usuario_nome=session.get("nome"))
     db_path = os.path.join(settings.DATA_DIR, "nfe_database.db")
     if not os.path.exists(db_path):
         db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "nfe_database.db")
@@ -1502,12 +1552,13 @@ async def rota_download_banco_dados():
     raise HTTPException(status_code=404, detail="Banco de dados não encontrado.")
 
 
-@router.post("/rede/puxar-dados")
-async def rota_puxar_dados_de_outra_maquina(payload: Dict[str, Any] = Body(...)):
+@router_rede.post("/rede/puxar-dados")
+async def rota_puxar_dados_de_outra_maquina(payload: Dict[str, Any] = Body(...), session: dict = Depends(require_admin), request: Request = None):
     """Conecta à outra máquina na rede local via HTTP e sincroniza clientes e produtos instantaneamente."""
     import httpx
     from backend.database.cadastros import save_cliente, save_produto
     from backend.database.certificates import update_certificate_fiscal_data
+    from backend.services.audit_service import record_audit
 
     url_origem = str(payload.get("url_origem") or "").strip().rstrip("/")
     if not url_origem:
@@ -1517,9 +1568,16 @@ async def rota_puxar_dados_de_outra_maquina(payload: Dict[str, Any] = Body(...))
         url_origem = "http://" + url_origem
 
     fetch_url = f"{url_origem}/api/gestao/rede/exportar-dados"
+    # Token exibido na máquina de ORIGEM. Os segredos são por instalação, então o
+    # token local não serve para autenticar na máquina remota.
+    token_origem = str(payload.get("sync_token") or "").strip() or settings.SYNC_TOKEN
     try:
         async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.get(fetch_url, headers={"User-Agent": "NFE-Manager-P2P-Sync"})
+            resp = await client.get(fetch_url, headers={
+                "User-Agent": "NFE-Manager-P2P-Sync",
+                # A máquina remota recusa a chamada sem este segredo.
+                "X-Sync-Token": token_origem,
+            })
             if resp.status_code != 200:
                 raise HTTPException(status_code=resp.status_code, detail=f"Máquina remota retornou erro {resp.status_code}: {resp.text[:200]}")
             data = resp.json()
@@ -1553,6 +1611,13 @@ async def rota_puxar_dados_de_outra_maquina(payload: Dict[str, Any] = Body(...))
                 empresas_importadas += 1
             except Exception:
                 pass
+
+    record_audit(
+        "SYNC_P2P_IMPORTACAO", "SINCRONIZACAO", url_origem,
+        detalhe=(f"Importação P2P de {url_origem}: {clientes_importados} clientes, "
+                 f"{produtos_importados} produtos, {empresas_importadas} empresas"),
+        request=request, usuario_email=session.get("email"), usuario_nome=session.get("nome"),
+    )
 
     return {
         "success": True,

@@ -66,8 +66,11 @@ async function atualizarProximoNumeroNfe() {
 
     try {
         const res = await apiGet(`/api/emissao/proximo-numero?empresa_cnpj=${encodeURIComponent(emitCnpj)}&serie=${encodeURIComponent(serie)}`);
-        if (res.success && res.proximo_numero) {
-            inputNum.value = res.proximo_numero;
+        // apiGet devolve { success, data, status } — o payload fica em res.data.
+        const prox = res.success && res.data ? res.data.proximo_numero : null;
+        if (prox) {
+            inputNum.value = prox;
+            inputNum.placeholder = String(prox);
         }
     } catch (err) {
         console.warn("Erro ao consultar próximo número:", err);
@@ -120,7 +123,7 @@ function atualizarCardEmitenteInfo() {
                 <div style="color:var(--text-muted);">
                     <span>📍 <b>Endereço Fiscal:</b> ${escapeHtml(endFmt)}</span>
                 </div>
-                <button type="button" class="btn-action" onclick="abrirModalEditarDadosFiscaisCert('${cert.cnpj}');" style="font-size:10.5px;padding:2px 8px;" title="Editar Inscrição Estadual e Endereço desta empresa">✏️ Alterar</button>
+                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalEditarDadosFiscaisCert", "args": [cert.cnpj]}))}" style="font-size:10.5px;padding:2px 8px;" title="Editar Inscrição Estadual e Endereço desta empresa">✏️ Alterar</button>
             </div>
         </div>
     `;
@@ -204,7 +207,7 @@ function renderDropdownClientes(lista) {
         const loc = [c.municipio, c.uf].filter(Boolean).join(" / ");
         
         return `
-            <div class="dropdown-cliente-item" onclick="selecionarClientePreCadastrado('${c.cpf_cnpj}');" style="padding:7px 10px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background 0.15s ease;">
+            <div class="dropdown-cliente-item" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "selecionarClientePreCadastrado", "args": [c.cpf_cnpj]}))}" style="padding:7px 10px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background 0.15s ease;">
                 <div style="font-size:11.5px;font-weight:600;color:var(--text-main);">${escapeHtml(c.razao_social || "Sem Nome")}</div>
                 <div style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;gap:8px;margin-top:2px;">
                     <span>📄 <b>${escapeHtml(docFmt)}</b> ${emailTel ? `| 📞 ${escapeHtml(emailTel)}` : ""}</span>
@@ -409,7 +412,7 @@ function renderDropdownProdutos(lista) {
     dropdown.innerHTML = lista.map(p => {
         const precoFmt = parseFloat(p.preco_venda || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return `
-            <div class="dropdown-cliente-item" onclick="selecionarProdutoCatalogo('${p.codigo}');" style="padding:7px 10px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background 0.15s ease;">
+            <div class="dropdown-cliente-item" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "selecionarProdutoCatalogo", "args": [p.codigo]}))}" style="padding:7px 10px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background 0.15s ease;">
                 <div style="font-size:11.5px;font-weight:600;color:var(--text-main);">${escapeHtml(p.descricao || "Sem Descrição")}</div>
                 <div style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;gap:8px;margin-top:2px;">
                     <span>🏷️ Cód: <b>${escapeHtml(p.codigo)}</b> | NCM: <b>${escapeHtml(p.ncm || "—")}</b> | UN: ${escapeHtml(p.unidade || "UN")}</span>
@@ -577,7 +580,7 @@ function renderizarTabelaItensEmissao() {
             <td style="text-align:right;color:#c0392b;">R$ ${item.desconto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             <td style="text-align:right;font-weight:bold;color:#27ae60;">R$ ${item.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             <td style="text-align:center;">
-                <button type="button" class="btn-action" onclick="removerItemNfeEmissao(${idx});" title="Remover item" style="color:#c0392b;padding:2px 6px;">✕</button>
+                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "removerItemNfeEmissao", "args": [idx]}))}" title="Remover item" style="color:#c0392b;padding:2px 6px;">✕</button>
             </td>
         </tr>
     `).join("");
@@ -755,6 +758,10 @@ function montarPayloadEmissao() {
     const formaPag = document.getElementById("emissao-forma-pagamento")?.value || "17";
     const infoCompl = document.getElementById("emissao-info-compl")?.value || "";
 
+    // Modo de emissão: normal x contingência (tpEmis da SEFAZ Virtual)
+    const modoEmissao = document.getElementById("emissao-modo-emissao")?.value || "normal";
+    const justContingencia = (document.getElementById("emissao-contingencia-justificativa")?.value || "").trim();
+
     const parcelas = [];
     if (condPag === "a_prazo") {
         const nums = document.querySelectorAll(".parc-num");
@@ -827,6 +834,9 @@ function montarPayloadEmissao() {
         informacoes_complementares: infoCompl,
         homologacao: homolog,
         uf: AppState.uf,
+        // Contingência (tpEmis) — validada no backend antes de reservar número
+        contingencia: modoEmissao === "contingencia",
+        contingencia_justificativa: modoEmissao === "contingencia" ? justContingencia : null,
     };
 }
 
@@ -1276,8 +1286,45 @@ async function handleEmitirNfeProfissional(e) {
         return;
     }
 
+    // Contingência: validado aqui também para dar um feedback imediato
+    // (o backend também valida, antes de reservar o número de nota).
+    if (payload.contingencia) {
+        const just = (payload.contingencia_justificativa || "").trim();
+        if (just.length < 15) {
+            const campo = document.getElementById("emissao-contingencia-justificativa");
+            if (campo) {
+                campo.focus();
+                campo.classList.add("input-erro-destaque");
+                setTimeout(() => campo.classList.remove("input-erro-destaque"), 3000);
+            }
+            toast.error(
+                `A contingência exige justificativa de 15 a 255 caracteres (você escreveu ${just.length}).`
+            );
+            return;
+        }
+        if (just.length > 255) {
+            toast.error("A justificativa da contingência aceita no máximo 255 caracteres.");
+            return;
+        }
+    }
+
     // Abre o modal seguro de confirmação (Sim / Não)
     abrirModalConfirmacaoTransmissao(payload);
+}
+
+/** Mostra/oculta o bloco de justificativa quando o modo vira contingência. */
+function alternarModoContingencia() {
+    const modo = document.getElementById("emissao-modo-emissao")?.value || "normal";
+    const bloco = document.getElementById("bloco-contingencia-emissao");
+    if (!bloco) return;
+    bloco.style.display = modo === "contingencia" ? "block" : "none";
+    if (modo === "contingencia") {
+        const campo = document.getElementById("emissao-contingencia-justificativa");
+        if (campo) campo.focus();
+        if (typeof toast !== "undefined" && toast.info) {
+            toast.info("🛰️ Modo contingência: o XML sairá com tpEmis da SEFAZ Virtual e a chave será diferente.");
+        }
+    }
 }
 
 function abrirModalConfirmacaoTransmissao(payload) {
@@ -1332,12 +1379,17 @@ async function executarTransmissaoSefazConfirmada() {
 
     try {
         const res = await apiPost("/api/emissao/nfe/emitir", payload);
-        const d = (res && res.data && res.data.data) ? res.data.data : (res && res.data ? res.data : null);
+        // O backend devolve 200 APENAS com autorização real (cStat 100/150).
+        // Ainda assim confere o flag interno: nunca anunciar "Autorizada"
+        // sem protocolo da SEFAZ.
+        const r = (res && res.data) ? res.data : {};
+        const d = r.data || null;
+        const autorizada = !!(res.success && r.success !== false && d && d.chave && d.autorizada);
 
         fecharModalConfirmacaoTransmissao();
         fecharModalPreviaNfe();
 
-        if (res.success && d && d.chave) {
+        if (autorizada) {
             // Abre o modal de retorno oficial com sucesso
             abrirModalRetornoSefaz({
                 autorizada: true,
@@ -1362,6 +1414,7 @@ async function executarTransmissaoSefazConfirmada() {
 
             // Limpa o carrinho de itens e avança o próximo número
             AppState.emissaoItens = [];
+            AppState._payloadPendenteEmissao = null;   // evita retransmissão acidental
             renderizarTabelaItensEmissao();
             await atualizarProximoNumeroNfe();
             carregarSelectClientesEmissao();

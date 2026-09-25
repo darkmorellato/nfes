@@ -59,6 +59,47 @@ def _default_debug() -> bool:
     return os.environ.get("DEBUG", "False").lower() in ("1", "true", "yes", "on")
 
 
+def _trust_proxy() -> bool:
+    """Só confie em ``X-Forwarded-For`` quando houver um proxy reverso de verdade.
+
+    Com ``False`` (padrão) o header é ignorado: qualquer cliente da LAN poderia
+    forjar o IP e burlar o rate limit de força bruta do login.
+    """
+    return os.environ.get("TRUST_PROXY", "False").lower() in ("1", "true", "yes", "on")
+
+
+def _default_sync_token() -> str:
+    """Segredo compartilhado para a sincronização P2P entre máquinas.
+
+    Substitui o antigo "bypass por IP": qualquer host da rede passava pela
+    autenticação sem token e conseguia baixar o banco inteiro. Agora a troca de
+    dados exige este token (``X-Sync-Token``), gerado por instalação e gravado
+    com permissão ``0600``.
+    """
+    env = os.environ.get("NFE_SYNC_TOKEN")
+    if env:
+        return env
+    token_file = os.path.join(_resolve_data_dir(), ".sync_token")
+    try:
+        if os.path.exists(token_file):
+            with open(token_file, "r") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        os.makedirs(os.path.dirname(token_file), exist_ok=True)
+        generated = secrets.token_urlsafe(32)
+        with open(token_file, "w") as f:
+            f.write(generated)
+        os.chmod(token_file, 0o600)
+        return generated
+    except Exception:
+        logger.warning(
+            "NFE_SYNC_TOKEN não definido e não foi possível persistir. "
+            "Usando token aleatório por execução (a sincronização em rede falhará entre reinícios)."
+        )
+        return secrets.token_urlsafe(32)
+
+
 def _default_origins() -> str:
     return os.environ.get(
         "ALLOWED_ORIGINS",
@@ -79,6 +120,13 @@ class Settings(BaseSettings):
     DEFAULT_UF: str = "SP"
     TIMEOUT: int = 60
     ALLOWED_ORIGINS: str = _default_origins()
+    TRUST_PROXY: bool = _trust_proxy()
+    SYNC_TOKEN: str = _default_sync_token()
+    # Verificação TLS dos WS da SEFAZ (ver backend/services/tls_sefaz.py)
+    SEFAZ_VERIFY_TLS: bool = (
+        os.environ.get("SEFAZ_VERIFY_TLS", "True").lower() in ("1", "true", "yes", "on")
+    )
+    SEFAZ_CA_BUNDLE: str = os.environ.get("SEFAZ_CA_BUNDLE", "")
 
     FIREBASE_API_KEY: str = os.environ.get("FIREBASE_API_KEY", "AIzaSyAoq7xuMCJde6AXHmVMKt8c7NGYQlHMsX4")
     FIREBASE_AUTH_DOMAIN: str = os.environ.get("FIREBASE_AUTH_DOMAIN", "nfes-dd7ab.firebaseapp.com")

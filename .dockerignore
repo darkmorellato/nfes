@@ -9,6 +9,24 @@ __pycache__
 .pytest_cache
 .ruff_cache
 alembic.log
-data/backups/*.zip
-data/xmls/*.xml
+
+# Segredos e configuração local — NUNCA entram na imagem
+.env
+.env.*
+!.env.example
+certs/
+*.pfx
+*.p12
+*.pem
+cert_meta.json
+.secret_key
+*.secret_key
+.sync_token
+data/.secret_key
+data/.sync_token
+
+# Dados fiscais de produção — banco, XMLs e backups ficam em volumes
+data/
 tests
+scratch
+docs

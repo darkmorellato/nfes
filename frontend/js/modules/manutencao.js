@@ -199,7 +199,7 @@ async function carregarLimpezaPreview(tipoTeste) {
                     return `
                         <tr>
                             <td style="text-align:center;">
-                                <input type="checkbox" class="chk-limpeza-item" value="${ch}" checked onchange="atualizarBadgeSelecaoLimpeza()">
+                                <input type="checkbox" class="chk-limpeza-item" value="${ch}" checked data-onchange="${escapeAttrJson(JSON.stringify({"fn": "atualizarBadgeSelecaoLimpeza", "args": []}))}">
                             </td>
                             <td><strong>${escapeHtml(item.numero || "--")}</strong> <span style="font-size:11px;color:var(--text-muted);">(série ${escapeHtml(item.serie || "1")})</span></td>
                             <td>
@@ -221,7 +221,7 @@ async function carregarLimpezaPreview(tipoTeste) {
                                 <code style="font-size:11px;" title="${ch}">${chCurta}</code>
                             </td>
                             <td style="text-align:center;white-space:nowrap;">
-                                <button type="button" class="btn-action btn-action-primary" onclick="visualizarDanfeChave('${ch}');" title="Visualizar DANFE / Detalhes da Nota" style="padding:4px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px;">
+                                <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [ch]}))}" title="Visualizar DANFE / Detalhes da Nota" style="padding:4px 8px;font-size:11px;display:inline-flex;align-items:center;gap:4px;">
                                     👁️ Ver DANFE
                                 </button>
                             </td>
@@ -607,7 +607,7 @@ async function carregarAuditoriaGaps() {
                                                 <td style="font-size:11px;color:var(--text-muted);">${escapeHtml(g.detalhes)}</td>
                                                 <td style="text-align:center;">
                                                     ${!g.inutilizado ? `
-                                                        <button type="button" class="btn-action" onclick="abrirModalInutilizarComDados('${emp.cnpj}', '${s.serie}', ${g.numero_inicio}, ${g.numero_fim});" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:11px;padding:3px 8px;" title="Transmitir pedido oficial de inutilização à SEFAZ">
+                                                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalInutilizarComDados", "args": [emp.cnpj, s.serie, g.numero_inicio, g.numero_fim]}))}" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:11px;padding:3px 8px;" title="Transmitir pedido oficial de inutilização à SEFAZ">
                                                             🚫 Inutilizar Faixa
                                                         </button>
                                                     ` : `
@@ -689,10 +689,10 @@ async function carregarListaBackups() {
                         <td style="text-align:right;font-weight:600;">${tamanhoDisplay}</td>
                         <td>
                             <code style="font-size:11px;background:rgba(0,0,0,0.04);padding:2px 6px;border-radius:4px;" title="${sha}">${shaShort}</code>
-                            ${sha ? `<button type="button" class="botao botao-secundario" style="padding:1px 6px;font-size:10px;margin-left:4px;" onclick="navigator.clipboard.writeText('${sha}');showToast('Hash SHA-256 copiado!','info',2000);">Copiar</button>` : ''}
+                            ${sha ? `<button type="button" class="botao botao-secundario" style="padding:1px 6px;font-size:10px;margin-left:4px;" data-onclick="${escapeAttrJson(JSON.stringify({"seq": [{"fn": "navigator.clipboard.writeText", "args": [sha]}, {"fn": "showToast", "args": ['Hash SHA-256 copiado!', 'info', 2000]}]}))}">Copiar</button>` : ''}
                         </td>
                         <td style="text-align:center;">
-                            <button type="button" class="botao botao-secundario" style="padding:3px 8px;font-size:11px;" onclick="baixarBackupFiscal('${fn}')">
+                            <button type="button" class="botao botao-secundario" style="padding:3px 8px;font-size:11px;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "baixarBackupFiscal", "args": [fn]}))}">
                                 ⬇ Download .ZIP
                             </button>
                         </td>
@@ -851,11 +851,11 @@ async function carregarTrilhaAuditoria(page = 1) {
                     <div>Total de <b>${total}</b> eventos registrados (Página <b>${page}</b> de <b>${pages}</b>)</div>
                     <div style="display:flex;gap:6px;">
                         <button type="button" class="botao botao-secundario" style="padding:3px 10px;font-size:12px;"
-                            ${page <= 1 ? 'disabled' : ''} onclick="carregarTrilhaAuditoria(${page - 1})">
+                            ${page <= 1 ? 'disabled' : ''} data-onclick="${escapeAttrJson(JSON.stringify({"fn": "carregarTrilhaAuditoria", "args": [page - 1]}))}">
                             ◀ Anterior
                         </button>
                         <button type="button" class="botao botao-secundario" style="padding:3px 10px;font-size:12px;"
-                            ${page >= pages ? 'disabled' : ''} onclick="carregarTrilhaAuditoria(${page + 1})">
+                            ${page >= pages ? 'disabled' : ''} data-onclick="${escapeAttrJson(JSON.stringify({"fn": "carregarTrilhaAuditoria", "args": [page + 1]}))}">
                             Próxima ▶
                         </button>
                     </div>

@@ -59,7 +59,7 @@ async function carregarNotificacoes() {
                             </div>
                             <div style="color:#444;margin-top:3px;">${escapeHtml(n.message || "")}</div>
                             <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-                                ${n.chave ? `<button type="button" class="botao" onclick="fecharNotificacoesEVerDanfe('${n.chave}');" style="font-size:10px;padding:2px 6px;">👁️ Ver DANFE</button>` : ""}
+                                ${n.chave ? `<button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "fecharNotificacoesEVerDanfe", "args": [n.chave]}))}" style="font-size:10px;padding:2px 6px;">👁️ Ver DANFE</button>` : ""}
                                 <a href="https://api.whatsapp.com/send?phone=5519989354849&text=${zapText}" target="_blank" class="botao" style="font-size:10px;padding:2px 6px;background:#25d366;color:#fff;border-color:#25d366;text-decoration:none;display:inline-flex;align-items:center;gap:3px;" title="Enviar para +55 19 98935-4849">
                                     💬 Whats 1
                                 </a>
@@ -138,7 +138,7 @@ async function loadSyncStatus() {
                             }).join(" ")}
                             <span style="font-size:11px;color:#a06126;display:block;margin-top:2px;">O robô aguarda o término da janela oficial para evitar bloqueios maiores da SEFAZ.</span>
                         </div>
-                        <button type="button" onclick="document.getElementById('global-sefaz-cooldown-banner').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:14px;color:#8f4b0e;">✕</button>
+                        <button type="button" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "fecharBannerCooldownSeFaz", "args": []}))}" style="background:none;border:none;cursor:pointer;font-size:14px;color:#8f4b0e;">✕</button>
                     </div>
                 `;
             } else {
@@ -190,7 +190,7 @@ async function loadSyncStatus() {
                                 : "";
                             const btnHtml = blocked
                                 ? `<button type="button" class="botao" disabled style="font-size:10px;padding:2px 8px;background:#95a5a6;border-color:#95a5a6;cursor:not-allowed;color:#fff;" title="SEFAZ bloqueou — aguarde ${c.cooldown_minutes} min (tentar antes só agrava o bloqueio)">🔒 Bloqueado</button>`
-                                : `<button type="button" class="botao botao-primario" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="font-size:10px;padding:2px 8px;background:#27ae60;border-color:#27ae60;">⚡ Sincronizar</button>`;
+                                : `<button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "sincronizarEmpresaEspecifica", "args": [c.cnpj]}))}" style="font-size:10px;padding:2px 8px;background:#27ae60;border-color:#27ae60;">⚡ Sincronizar</button>`;
                             return `
                                 <tr${blocked ? ' style="background:#fff5f5;"' : ''}>
                                     <td style="text-align:left;padding:6px;"><b>${escapeHtml(c.razao_social)}</b>${blockedBadge}</td>
@@ -681,7 +681,7 @@ async function carregarDivergenciasPreco() {
                                     <td style="text-align:right;font-weight:bold;color:${corBadge};">${sinal}${it.variacao_pct}%</td>
                                     <td>${escapeHtml(it.fornecedor_atual || "")}</td>
                                     <td>
-                                        <button type="button" class="botao" onclick="visualizarDanfeChave('${it.chave_atual}');" style="padding:2px 6px;font-size:10px;">👁️ Ver NF-e</button>
+                                        <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [it.chave_atual]}))}" style="padding:2px 6px;font-size:10px;">👁️ Ver NF-e</button>
                                     </td>
                                 </tr>
                             `;
@@ -791,7 +791,7 @@ async function carregarIntercompany() {
                                     <td>${escapeHtml(o.data_emissao ? o.data_emissao.slice(0, 10) : "—")}</td>
                                     <td style="text-align:right;font-weight:bold;">R$ ${parseFloat(o.valor_total || 0).toFixed(2)}</td>
                                     <td>
-                                        <button type="button" class="btn-action btn-action-primary" onclick="visualizarDanfeChave('${o.chave}');">👁️ DANFE</button>
+                                        <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [o.chave]}))}">👁️ DANFE</button>
                                     </td>
                                 </tr>
                             `).join("")}

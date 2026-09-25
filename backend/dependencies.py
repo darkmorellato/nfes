@@ -1,17 +1,31 @@
 """
 Dependências compartilhadas do FastAPI (autenticação, autorização).
 
-Toda a API, com exceção de /api/auth/login, /health, / e /favicon.ico,
-exige um token de sessão válido no header ``X-Session-Token``.
+Toda a API, com exceção de ``/api/auth/login``, ``/health``, ``/`` e
+``/favicon.ico``, exige um token de sessão válido no header ``X-Session-Token``.
 
-O token é gerado por :mod:`backend.routers.auth` ao fazer login e fica
-armazenado em memória no dict ``_sessions``. Esta dependência apenas
-valida que o token existe e não expirou.
+Segredos de implementação (por que as coisas são assim):
+
+* **Só header, nunca query string.** O token também era aceito em ``?token=``,
+  o que o vazava em logs de proxy, histórico do navegador e cabeçalho
+  ``Referer``. Downloads usam ``apiDownload``, que já envia o header.
+* **Sem passe de IP.** Havia um ramo que concedia sessão falsa a qualquer
+  host ``127.0.0.1``/``192.168.x``/``10.x``/``172.x`` sem token — com bind em
+  ``0.0.0.0``, qualquer máquina da LAN baixava o ``.db`` inteiro (hashes de
+  senha, tokens e senhas de certificado). A sincronização P2P agora usa o
+  segredo compartilhado ``X-Sync-Token`` (:data:`settings.SYNC_TOKEN`).
+* **Rate limit por IP real.** ``X-Forwarded-For`` só é considerado quando
+  ``TRUST_PROXY=true`` (proxy reverso configurado); sem isso qualquer cliente
+  forjava o header e zera o limite de força bruta do login.
 """
 from __future__ import annotations
 
 
+import hmac
+import time
 from fastapi import Depends, HTTPException, Request, status
+
+from backend.config import settings
 
 
 def _get_sessions() -> dict:
@@ -20,44 +34,81 @@ def _get_sessions() -> dict:
     return _sessions
 
 
+def _token_da_requisicao(request: Request) -> str:
+    """Token de sessão — exclusivamente do header ``X-Session-Token``."""
+    return request.headers.get("X-Session-Token", "").strip()
+
+
+def _sessao_do_token(token: str) -> dict | None:
+    from backend.routers.auth import get_session
+    return get_session(token)
+
+
+def _unauthorized(detalle: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detalle,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def require_session(request: Request) -> dict:
     """
-    Valida o header ``X-Session-Token`` ou parâmetro de query ``token`` e devolve os dados da sessão.
+    Valida o header ``X-Session-Token`` e devolve os dados da sessão.
 
     Verifica o cache em memória e o banco SQLite (para persistir pós-restart).
     Lança ``HTTP 401`` se o token estiver ausente, inválido ou expirado.
     """
-    token = request.headers.get("X-Session-Token", "").strip()
+    token = _token_da_requisicao(request)
     if not token:
-        token = request.query_params.get("token", "").strip()
-    if not token:
-        path = request.url.path
-        if path.startswith("/api/gestao/rede/"):
-            client_host = request.client.host if request.client else ""
-            if client_host in ("127.0.0.1", "localhost", "::1", "testclient") or client_host.startswith("192.168.") or client_host.startswith("10.") or client_host.startswith("172."):
-                return {"username": "local_network_sync", "perfil": "operador"}
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sessão não informada. Faça login em /api/auth/login.",
+        raise _unauthorized(
+            "Sessão não informada. Faça login e envie o header X-Session-Token."
         )
 
-    from backend.routers.auth import get_session
-    session = get_session(token)
+    session = _sessao_do_token(token)
     if not session:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sessão inválida ou expirada. Faça login novamente.",
-        )
+        raise _unauthorized("Sessão inválida ou expirada. Faça login novamente.")
     return session
+
+
+def require_session_ou_sync(request: Request) -> dict:
+    """
+    Sessão válida **ou** ``X-Sync-Token`` conferindo com o segredo da instalação.
+
+    Usado apenas nas rotas de sincronização P2P (``/api/gestao/rede/*``), em que
+    uma máquina da LAN chama a outra sem que o operador tenha login na máquina
+    de destino. O token é opaco, gerado por instalação e comparado em tempo
+    constante.
+    """
+    session = None
+    token = _token_da_requisicao(request)
+    if token:
+        session = _sessao_do_token(token)
+        if session:
+            return session
+
+    sync = request.headers.get("X-Sync-Token", "").strip()
+    if sync and hmac.compare_digest(sync, settings.SYNC_TOKEN):
+        return {
+            "username": "sincronizacao_p2p",
+            "nome": "Sincronização de rede",
+            "perfil": "operador",
+            "origem": "sync_token",
+        }
+
+    if token:
+        raise _unauthorized("Sessão inválida ou expirada. Faça login novamente.")
+    raise _unauthorized(
+        "Autenticação necessária: envie X-Session-Token ou X-Sync-Token válido."
+    )
 
 
 def require_admin(session: dict = Depends(require_session)) -> dict:
     """
     Exige perfil ``admin`` na sessão autenticada.
 
-    Use em endpoints sensíveis como exclusão de certificado, mudança de
-    configuração, sync forçado e download de pacotes contábeis.
+    Use em endpoints sensíveis: exclusão de certificado, limpeza de base,
+    atualização/reinicio do sistema, download de banco e de backups fiscais.
     """
     if session.get("perfil") != "admin":
         raise HTTPException(
@@ -76,17 +127,25 @@ class RateLimiter:
         self.action_name = action_name
         self._history: dict[str, list[float]] = {}
 
-    def __call__(self, request: Request) -> None:
-        import time
-        now = time.time()
-        # Identifica IP (considerando cabeçalho X-Forwarded-For caso haja proxy reverso)
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            ip = forwarded.split(",")[0].strip()
-        else:
-            ip = request.client.host if request.client else "127.0.0.1"
+    def _ip_real(self, request: Request) -> str:
+        # X-Forwarded-For só vale atrás de um proxy de confiança; caso contrário
+        # é simplesmente um header que o próprio cliente controla.
+        if settings.TRUST_PROXY:
+            forwarded = request.headers.get("X-Forwarded-For")
+            if forwarded:
+                return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "0.0.0.0"
 
-        # Limpa entradas com mais de window_seconds
+    def __call__(self, request: Request) -> None:
+        now = time.time()
+
+        # Poda periódica: sem ela o dicionário cresce para cada IP que já
+        # bateu no limite e nunca mais volta (DoS por memória).
+        if len(self._history) > 512:
+            self.limpar()
+
+        ip = self._ip_real(request)
+
         cutoff = now - self.window_seconds
         timestamps = [t for t in self._history.get(ip, []) if t > cutoff]
 
@@ -102,6 +161,16 @@ class RateLimiter:
         timestamps.append(now)
         self._history[ip] = timestamps
 
+    def limpar(self) -> int:
+        """Poda entradas expiradas — evita crescimento ilimitado de memória."""
+        cutoff = time.time() - self.window_seconds
+        expirados = [ip for ip, ts in list(self._history.items()) if not ts or max(ts) < cutoff]
+        for ip in expirados:
+            del self._history[ip]
+        return len(expirados)
+
 
 # Instâncias reutilizáveis de rate limit
 login_rate_limiter = RateLimiter(requests=10, window_seconds=60, action_name="tentativas de login")
+credencial_rate_limiter = RateLimiter(requests=5, window_seconds=300, action_name="alterações de credencial")
+sefaz_rate_limiter = RateLimiter(requests=30, window_seconds=60, action_name="consultas à SEFAZ")

@@ -443,13 +443,20 @@ def delete_produto_by_codigo(codigo: str) -> bool:
         return cursor.rowcount > 0
 
 def get_next_nfe_number(empresa_cnpj: str, serie: str = "1", modelo: str = "55") -> int:
-    """Calcula o próximo número sequencial de NF-e (Mod 55) ou NFC-e (Mod 65) para a empresa emitente e série informadas."""
+    """Calcula o próximo número sequencial de NF-e (Mod 55) ou NFC-e (Mod 65) para a empresa emitente e série informadas.
+
+    Apenas **consulta** — serve para exibir o próximo número na tela. A emissão
+    deve usar :func:`reservar_proximo_numero`, que garante exclusão mútua real.
+    """
     clean_cnpj = "".join(c for c in str(empresa_cnpj) if c.isdigit())
     clean_serie = str(serie or "1").strip()
     clean_modelo = str(modelo or "55").strip()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # 0. Sequência dedicada (reservas atômicas feitas por outras emissões)
+        seq = _ler_sequencia(cursor, clean_cnpj, clean_serie, clean_modelo)
 
         # 1. Verifica notas emitidas por essa empresa (Saídas - tipo_doc = 1)
         if clean_modelo == "65":
@@ -479,5 +486,156 @@ def get_next_nfe_number(empresa_cnpj: str, serie: str = "1", modelo: str = "55")
         except Exception:
             max_inu = 0
 
-        max_final = max(max_doc, max_inu)
-        return max_final + 1
+        return max(seq, max_doc, max_inu) + 1
+
+
+def _ler_sequencia(cursor, emitente_cnpj: str, serie: str, modelo: str) -> int:
+    """Lê o último número já reservado na sequência dedicada (0 se inexiste)."""
+    try:
+        cursor.execute(
+            "SELECT ultimo_numero FROM nfe_numeracao WHERE emitente_cnpj = ? AND serie = ? AND modelo = ?",
+            (emitente_cnpj, serie, modelo),
+        )
+        row = cursor.fetchone()
+        return int(row["ultimo_numero"]) if row and row["ultimo_numero"] else 0
+    except Exception:
+        return 0
+
+
+def _historico_maximo(cursor, emitente_cnpj: str, serie: str, modelo: str) -> int:
+    """Maior número já existente em nfe_docs / nfe_inutilizacoes para a série."""
+    try:
+        if modelo == "65":
+            cursor.execute(
+                """
+                SELECT MAX(CAST(numero AS INTEGER)) FROM nfe_docs
+                WHERE emitente_cnpj = ? AND serie = ? AND tipo_doc = 1 AND modelo = '65'
+                """,
+                (emitente_cnpj, serie),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT MAX(CAST(numero AS INTEGER)) FROM nfe_docs
+                WHERE emitente_cnpj = ? AND serie = ? AND tipo_doc = 1 AND (modelo = '55' OR modelo IS NULL)
+                """,
+                (emitente_cnpj, serie),
+            )
+        max_doc = int(cursor.fetchone()[0] or 0)
+    except Exception:
+        max_doc = 0
+
+    try:
+        cursor.execute(
+            "SELECT MAX(numero_final) FROM nfe_inutilizacoes WHERE empresa_cnpj = ? AND serie = ? AND modelo = ?",
+            (emitente_cnpj, serie, modelo),
+        )
+        max_inu = int(cursor.fetchone()[0] or 0)
+    except Exception:
+        max_inu = 0
+
+    return max(max_doc, max_inu)
+
+
+def _sincroniza_sequencia(cursor, emitente_cnpj: str, serie: str, modelo: str) -> None:
+    """Garante que a sequência dedicada nunca fique atrás do histórico já gravado."""
+    historico = _historico_maximo(cursor, emitente_cnpj, serie, modelo)
+    cursor.execute(
+        """
+        INSERT INTO nfe_numeracao (emitente_cnpj, serie, modelo, ultimo_numero, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(emitente_cnpj, serie, modelo) DO UPDATE SET
+            ultimo_numero = MAX(ultimo_numero, excluded.ultimo_numero),
+            updated_at = excluded.updated_at
+        """,
+        (emitente_cnpj, serie, modelo, historico, datetime.now().isoformat()),
+    )
+
+
+def reservar_proximo_numero(empresa_cnpj: str, serie: str = "1", modelo: str = "55") -> int:
+    """**Reserva** atomicamente o próximo número de NF-e/NFC-e.
+
+    Executa ``BEGIN IMMEDIATE`` para serializar emissões concorrentes e
+    incrementa a sequência dedicada ``nfe_numeracao``. Dois operadores
+    simultâneos nunca recebem o mesmo número (previne Rejeição 204).
+
+    Números reservados e não utilizados viram "buraco" na sequência — comportamento
+    esperado e tratado pelo módulo de inutilização de faixa.
+    """
+    clean_cnpj = "".join(c for c in str(empresa_cnpj) if c.isdigit())
+    if len(clean_cnpj) != 14:
+        raise ValueError("CNPJ do emitente deve conter 14 dígitos.")
+    clean_serie = str(serie or "1").strip()
+    clean_modelo = str(modelo or "55").strip()
+    now_iso = datetime.now().isoformat()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # BEGIN IMMEDIATE: toma o lock de escrita ANTES das leituras,
+        # impedindo que duas transações leiam o mesmo MAX.
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            _sincroniza_sequencia(cursor, clean_cnpj, clean_serie, clean_modelo)
+            cursor.execute(
+                """
+                UPDATE nfe_numeracao
+                SET ultimo_numero = ultimo_numero + 1, updated_at = ?
+                WHERE emitente_cnpj = ? AND serie = ? AND modelo = ?
+                RETURNING ultimo_numero
+                """,
+                (now_iso, clean_cnpj, clean_serie, clean_modelo),
+            )
+            row = cursor.fetchone()
+            numero = int(row[0])
+            conn.commit()
+            return numero
+        except Exception:
+            conn.rollback()
+            raise
+
+
+def garante_numero_livre(empresa_cnpj: str, serie: str, modelo: str, numero: int) -> None:
+    """Valida um número de NF-e informado manualmente pelo operador.
+
+    Levanta ``ValueError`` se o número já estiver utilizado. Também faz a
+    sequência dedicada avançar até esse número, para que a próxima emissão
+    automática não reutilize-o.
+    """
+    clean_cnpj = "".join(c for c in str(empresa_cnpj) if c.isdigit())
+    clean_serie = str(serie or "1").strip()
+    clean_modelo = str(modelo or "55").strip()
+    numero = int(numero)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            _sincroniza_sequencia(cursor, clean_cnpj, clean_serie, clean_modelo)
+            cursor.execute(
+                """
+                SELECT chave FROM nfe_docs
+                WHERE emitente_cnpj = ? AND serie = ? AND CAST(numero AS INTEGER) = ?
+                LIMIT 1
+                """,
+                (clean_cnpj, clean_serie, numero),
+            )
+            if cursor.fetchone():
+                conn.rollback()
+                raise ValueError(
+                    f"O número {numero} da série {clean_serie} já está em uso para o CNPJ {clean_cnpj}."
+                )
+            cursor.execute(
+                """
+                UPDATE nfe_numeracao
+                SET ultimo_numero = MAX(ultimo_numero, ?), updated_at = ?
+                WHERE emitente_cnpj = ? AND serie = ? AND modelo = ?
+                """,
+                (numero, datetime.now().isoformat(), clean_cnpj, clean_serie, clean_modelo),
+            )
+            conn.commit()
+        except ValueError:
+            raise
+        except Exception:
+            conn.rollback()
+            raise
+

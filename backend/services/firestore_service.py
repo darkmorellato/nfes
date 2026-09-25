@@ -498,7 +498,10 @@ def pull_from_firestore() -> Dict[str, Any]:
             d["produtos"] = itens
             itens_total += len(itens)
 
-        if save_nfe_doc(d):
+        # `xml_raw` veio do Firestore: restaura também o arquivo em data/xmls/.
+        # sync_remote=False: NÃO reenviar para a nuvem o que veio dela (loop de
+        # escritas que estourava a cota Spark e travava o login).
+        if save_nfe_doc(d, xml_raw=d.get("xml_raw") or None, sync_remote=False):
             sucessos += 1
         else:
             falhas += 1

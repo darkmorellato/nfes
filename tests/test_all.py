@@ -285,16 +285,18 @@ class TestNFEManager(unittest.TestCase):
             self.assertTrue(saved_ev)
 
             doc_updated = get_nfe_detail(mock_doc["chave"])
-            self.assertIn("Confirmada", doc_updated["situacao"])
+            # A manifestação vive em coluna própria; `situacao` (estado fiscal)
+            # não pode ser sobrescrito por ela — senão a nota deixa de aparecer
+            # no filtro "Autorizadas".
+            self.assertIn("Confirmada", doc_updated["manifestacao"])
+            self.assertEqual(doc_updated["situacao"], "Pendente")
             self.assertGreaterEqual(len(doc_updated["eventos"]), 1)
         finally:
             # Clean up test artifact from DB and filesystem immediately
+            # (ON DELETE CASCADE já remove filhos ao apagar nfe_docs)
             with get_db_connection() as conn:
                 cur = conn.cursor()
                 cur.execute("DELETE FROM nfe_docs WHERE chave = ?", (mock_doc["chave"],))
-                cur.execute("DELETE FROM nfe_items WHERE chave = ?", (mock_doc["chave"],))
-                cur.execute("DELETE FROM nfe_events WHERE chave = ?", (mock_doc["chave"],))
-                cur.execute("DELETE FROM nfe_duplicatas WHERE chave = ?", (mock_doc["chave"],))
                 conn.commit()
             xml_p = f"data/xmls/{mock_doc['chave']}.xml"
             if os.path.exists(xml_p):
@@ -350,6 +352,9 @@ class TestNFEManager(unittest.TestCase):
         self.assertTrue(deleted)
 
     def test_emissao_nfe_saida_service(self):
+        from unittest.mock import patch
+        from lxml import etree
+        from pynfe.utils.flags import NAMESPACE_NFE
         from backend.services.nfe_emissao_service import emitir_nfe_profissional
         from backend.database import get_db_connection, list_nfe_saidas
 
@@ -360,7 +365,7 @@ class TestNFEManager(unittest.TestCase):
             "numero": 999991,
             "destinatario": {
                 "cpf_cnpj": "12345678909",
-                "razao_social": "TESTE UNIT CLIENTE DEST",
+                "razao_social": "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL",
                 "indicador_ie": 9,
                 "cep": "01310100",
                 "logradouro": "Av Paulista",
@@ -388,9 +393,32 @@ class TestNFEManager(unittest.TestCase):
             "uf": "SP",
         }
 
-        res = emitir_nfe_profissional(payload)
-        self.assertTrue(res["success"])
+        # SEFAZ simulada: o teste valida o fluxo local (montagem, assinatura,
+        # totais, persistência) sem gastar cota do certificado A1.
+        def autorizacao_dupla(self, modelo, nota_fiscal, **kwargs):
+            proc = etree.Element("nfeProc", nsmap={None: NAMESPACE_NFE}, versao="4.00")
+            proc.append(nota_fiscal)
+            inf = etree.SubElement(etree.SubElement(proc, "protNFe", versao="4.00"), "infProt")
+            for tag, valor in (
+                ("tpAmb", "2"), ("verAplic", "SP_PL_009"),
+                ("chNFe", nota_fiscal[0].get("Id", "").replace("NFe", "")),
+                ("dhRecbto", "2026-01-01T10:00:00-03:00"),
+                ("nProt", "135260000000001"), ("digVal", "abc123="),
+                ("cStat", "100"), ("xMotivo", "Autorizado o uso da NF-e"),
+            ):
+                etree.SubElement(inf, tag).text = valor
+            return (0, proc)
+
+        with patch(
+            "backend.services.nfe_emissao_service.ComunicacaoSefaz.autorizacao",
+            autorizacao_dupla,
+        ):
+            res = emitir_nfe_profissional(payload)
+
+        self.assertTrue(res["success"], f"emissão não autorizada: {res.get('motivo')}")
         self.assertEqual(res["numero"], 999991)
+        self.assertEqual(res["protocolo"], "135260000000001")
+        self.assertEqual(res["situacao"], "Autorizada")
         self.assertIn("chave", res)
 
         # Checa listagem de saídas

@@ -26,6 +26,28 @@ async function alternarPagamentoConta(dupId) {
 }
 
 
+/**
+ * Alterna Recebido / A Receber.
+ *
+ * Botão "✓ Receber / ↺ Desmarcar" das contas a receber: o handler era
+ * referenciado desde sempre mas a função nunca foi escrita — o clique não
+ * fazia nada. A rota do backend é justamente um alternador.
+ */
+async function alternarRecebimentoConta(dupId) {
+    try {
+        const res = await apiPost(`/api/gestao/financeiro/receber/${dupId}/receber`, {});
+        if (res.success) {
+            const periodo = document.getElementById("fin-mes")?.value || "";
+            const empresa = document.getElementById("fin-empresa")?.value || "";
+            carregarContasAReceber(periodo, empresa);
+            if (typeof toast !== "undefined") toast.success("Status da conta atualizado.");
+        }
+    } catch (err) {
+        toast.error("Erro ao alterar status da conta: " + err.message);
+    }
+}
+
+
 // ====================================================================
 // CONTROLES UNIFICADOS: PERÍODO + EMPRESA
 // ====================================================================
@@ -101,12 +123,12 @@ async function carregarContasAPagar(periodo, empresa, mes, ano) {
     if (document.getElementById("fin-kpi-pago")) document.getElementById("fin-kpi-pago").textContent = fmtMoney(data.total_pago);
     if (dups.length === 0) { container.innerHTML = `<div style="padding:20px;text-align:center;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:4px;color:#666;">Nenhuma duplicata encontrada.</div>`; return; }
     container.innerHTML = `<div class="table-responsive"><table class="tabelaGrupo" style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr class="linhaTitulo" style="background:#e9ecef;">
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-pagar','status')">Status</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-pagar','d_venc')">Vencimento</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-pagar','emitente_nome')">Fornecedor</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-pagar','empresa_cnpj')">Empresa</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-pagar','nfe_numero')">NF-e/Parc.</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-pagar','v_dup')">Valor</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-pagar', 'status']}))}">Status</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-pagar', 'd_venc']}))}">Vencimento</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-pagar', 'emitente_nome']}))}">Fornecedor</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-pagar', 'empresa_cnpj']}))}">Empresa</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-pagar', 'nfe_numero']}))}">NF-e/Parc.</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-pagar', 'v_dup']}))}">Valor</th>
         <th style="padding:6px;">Valor NF-e</th>
         <th style="padding:6px;">Ações</th>
     </tr></thead><tbody>${dups.map(d => {
@@ -124,8 +146,8 @@ async function carregarContasAPagar(periodo, empresa, mes, ano) {
             <td style="text-align:right;font-weight:bold;color:#2c3e50;">${fmtMoney(d.v_dup)}</td>
             <td style="text-align:right;color:#888;">${fmtMoney(d.valor_total || 0)}</td>
             <td><div class="actions-cell">
-                <button type="button" class="btn-action ${d.pago ? '' : 'btn-action-success'}" onclick="alternarPagamentoConta(${d.id});">${d.pago ? "↺ Desmarcar" : "✓ Pagar"}</button>
-                <button type="button" class="btn-action btn-action-primary" onclick="visualizarDanfeChave('${d.chave}');">👁️ DANFE</button>
+                <button type="button" class="btn-action ${d.pago ? '' : 'btn-action-success'}" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "alternarPagamentoConta", "args": [d.id]}))}">${d.pago ? "↺ Desmarcar" : "✓ Pagar"}</button>
+                <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [d.chave]}))}">👁️ DANFE</button>
             </div></td>
         </tr>`;
     }).join("")}</tbody></table></div>`;
@@ -149,12 +171,12 @@ async function carregarContasAReceber(periodo, empresa, mes, ano) {
     if (document.getElementById("fin-kpi-rec-recebido")) document.getElementById("fin-kpi-rec-recebido").textContent = fmtMoney(data.total_recebido);
     if (recs.length === 0) { container.innerHTML = `<div style="padding:20px;text-align:center;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:4px;color:#666;">Nenhuma conta a receber encontrada.</div>`; return; }
     container.innerHTML = `<div class="table-responsive"><table class="tabelaGrupo" style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr class="linhaTitulo" style="background:#e9ecef;">
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-receber','status')">Status</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-receber','d_venc')">Vencimento</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-receber','cliente_nome')">Cliente</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-receber','empresa_cnpj')">Empresa</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-receber','nfe_numero')">NF-e/Parc.</th>
-        <th style="padding:6px;cursor:pointer;" onclick="ordenarTabela('fin-receber','v_dup')">Valor</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-receber', 'status']}))}">Status</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-receber', 'd_venc']}))}">Vencimento</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-receber', 'cliente_nome']}))}">Cliente</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-receber', 'empresa_cnpj']}))}">Empresa</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-receber', 'nfe_numero']}))}">NF-e/Parc.</th>
+        <th style="padding:6px;cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "ordenarTabela", "args": ['fin-receber', 'v_dup']}))}">Valor</th>
         <th style="padding:6px;">Valor NF-e</th>
         <th style="padding:6px;">Ações</th>
     </tr></thead><tbody>${recs.map(d => {
@@ -172,8 +194,8 @@ async function carregarContasAReceber(periodo, empresa, mes, ano) {
             <td style="text-align:right;font-weight:bold;color:#2c3e50;">${fmtMoney(d.v_dup)}</td>
             <td style="text-align:right;color:#888;">${fmtMoney(d.valor_total || 0)}</td>
             <td><div class="actions-cell">
-                <button type="button" class="btn-action ${d.recebido ? '' : 'btn-action-success'}" onclick="alternarRecebimentoConta(${d.id});">${d.recebido ? "↺ Desmarcar" : "✓ Receber"}</button>
-                <button type="button" class="btn-action btn-action-primary" onclick="visualizarDanfeChave('${d.chave}');">👁️ DANFE</button>
+                <button type="button" class="btn-action ${d.recebido ? '' : 'btn-action-success'}" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "alternarRecebimentoConta", "args": [d.id]}))}">${d.recebido ? "↺ Desmarcar" : "✓ Receber"}</button>
+                <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [d.chave]}))}">👁️ DANFE</button>
             </div></td>
         </tr>`;
     }).join("")}</tbody></table></div>`;
@@ -228,7 +250,7 @@ async function carregarImpostosInterestaduais(empresa) {
                 <td style="text-align:right;color:#64748b;">${fmtR(i.icms_proprio)}</td>
                 <td style="text-align:center;">${i.aliquota_interna_destino}% / ${i.aliquota_aplicada}%</td>
                 <td style="text-align:right;font-weight:bold;color:#8e44ad;">${fmtR(i.difal_estimado)}</td>
-                <td><button type="button" class="btn-action btn-action-primary" onclick="visualizarDanfeChave('${i.chave}');">👁️ DANFE</button></td>
+                <td><button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [i.chave]}))}">👁️ DANFE</button></td>
             </tr>
         `).join("");
 
@@ -518,7 +540,7 @@ async function carregarConferenciaEstoque(chave) {
                                 <td style="font-family:monospace;">${escapeHtml(it.ean || it.codigo || "—")}</td>
                                 <td style="text-align:center;font-weight:bold;">${it.qtd_nota} ${escapeHtml(it.unidade || "UN")}</td>
                                 <td style="text-align:center;">
-                                    <input type="number" class="conf-input-qtd" value="${it.qtd_conferida || it.qtd_nota}" min="0" step="1" style="width:80px;text-align:center;padding:4px;font-weight:bold;" onchange="validarLinhaConferencia(this);">
+                                    <input type="number" class="conf-input-qtd" value="${it.qtd_conferida || it.qtd_nota}" min="0" step="1" style="width:80px;text-align:center;padding:4px;font-weight:bold;" data-onchange="${escapeAttrJson(JSON.stringify({"fn": "validarLinhaConferencia", "args": ["$this"]}))}">
                                 </td>
                                 <td>
                                     <input type="text" class="conf-input-seriais" value="${escapeHtml(it.seriais || '')}" placeholder="Bipe seriais/IMEIs separados por vírgula" style="width:95%;padding:3px;font-size:10px;">
@@ -538,8 +560,8 @@ async function carregarConferenciaEstoque(chave) {
                         Conferente: <input type="text" id="conf-conferido-por" value="${escapeHtml(conf.conferido_por || 'Almoxarifado')}" style="padding:4px;border:1px solid #ccc;border-radius:3px;">
                     </div>
                     <div style="display:flex;gap:8px;">
-                        <button type="button" class="botao" onclick="imprimirEtiquetasChave('${chave}');">🏷️ Imprimir Etiquetas</button>
-                        <button type="button" class="botao botao-primario" onclick="salvarConferenciaEstoque('${chave}');" style="background:#27ae60;border-color:#27ae60;padding:6px 16px;">
+                        <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "imprimirEtiquetasChave", "args": [chave]}))}">🏷️ Imprimir Etiquetas</button>
+                        <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "salvarConferenciaEstoque", "args": [chave]}))}" style="background:#27ae60;border-color:#27ae60;padding:6px 16px;">
                             💾 Concluir e Salvar Conferência
                         </button>
                     </div>
@@ -746,7 +768,7 @@ async function carregarApuracaoSimplesNacional(ano, mes, empresa) {
             `;
         }
     } catch (err) {
-        container.innerHTML = `<div style="color:#c0392b;padding:10px;">Erro ao calcular Simples Nacional: ${err.message}</div>`;
+        container.innerHTML = `<div style="color:#c0392b;padding:10px;">Erro ao calcular Simples Nacional: ${escapeHtml(err.message)}</div>`;
     }
 }
 
@@ -765,7 +787,8 @@ async function carregarDreMargens(empresa) {
         let url = `/api/gestao/dre/margens?limit=50`;
         if (emp) url += `&empresa_cnpj=${encodeURIComponent(emp)}`;
         const res = await apiGet(url);
-        const produtos = res.produtos || [];
+        // apiGet devolve { success, data } — a lista está em data
+        const produtos = res.data?.produtos || res.produtos || [];
 
         if (produtos.length === 0) {
             container.innerHTML = `<div style="padding:15px;color:#888;text-align:center;">Nenhum produto cadastrado no catálogo.</div>`;
@@ -812,7 +835,7 @@ async function carregarDreMargens(empresa) {
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<div style="color:#c0392b;padding:10px;">Erro ao carregar DRE de produtos: ${err.message}</div>`;
+        container.innerHTML = `<div style="color:#c0392b;padding:10px;">Erro ao carregar DRE de produtos: ${escapeHtml(err.message)}</div>`;
     }
 }
 

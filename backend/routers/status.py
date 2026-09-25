@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pynfe.processamento.comunicacao import ComunicacaoSefaz
 from backend.config import settings
+from backend.utils import decode_xml
 from backend.services.cert_service import get_cert_path, get_cert_password
 from backend.services.pynfe_service import uf_from_chave
-from backend.dependencies import require_session
+from backend.dependencies import require_session, sefaz_rate_limiter
 from typing import Optional
 
 router = APIRouter()
 
 
-# Endpoint público: checagem de status da SEFAZ é feita antes do login.
-@router.get("/status/{tipo}")
+# O status da SEFAZ exige sessão: sem ela, qualquer visitante disparava
+# consultas usando o certificado A1 do servidor (rejeição 656 - consumo
+# indevido) e recebia o texto bruto das exceções.
+@router.get("/status/{tipo}", dependencies=[Depends(require_session), Depends(sefaz_rate_limiter)])
 async def status_servico(tipo: str, uf: Optional[str] = None, homologacao: Optional[bool] = None):
     uf = (uf or settings.DEFAULT_UF).upper()
     homologacao = homologacao if homologacao is not None else settings.HOMOLOGACAO
@@ -21,11 +24,12 @@ async def status_servico(tipo: str, uf: Optional[str] = None, homologacao: Optio
         con = ComunicacaoSefaz(uf, cert_path, cert_password, homologacao=homologacao)
         response = con.status_servico(tipo)
         return {"status_code": response.status_code, "body": response.text}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        # Sem vazar caminho de arquivo, host ou stack trace para o cliente.
+        return {"error": "Falha ao consultar o status da SEFAZ."}
 
 
-@router.get("/consulta/chave", dependencies=[Depends(require_session)])
+@router.get("/consulta/chave", dependencies=[Depends(require_session), Depends(sefaz_rate_limiter)])
 async def consulta_chave(
     chave: str,
     modelo: str = "nfe",
@@ -41,11 +45,12 @@ async def consulta_chave(
         con = ComunicacaoSefaz(uf, cert_path, cert_password, homologacao=homologacao)
         response = con.consulta_nota(modelo, chave)
         return {"status_code": response.status_code, "body": response.text}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        # Não vazar host, caminho de certificado ou stack trace ao cliente.
+        return {"error": "Falha ao consultar o webservice da SEFAZ."}
 
 
-@router.get("/consulta/cadastro", dependencies=[Depends(require_session)])
+@router.get("/consulta/cadastro", dependencies=[Depends(require_session), Depends(sefaz_rate_limiter)])
 async def consulta_cadastro(
     documento: str,
     tipo: str = "CNPJ",
@@ -62,8 +67,9 @@ async def consulta_cadastro(
         con = ComunicacaoSefaz(uf, cert_path, cert_password, homologacao=homologacao)
         response = con.consulta_cadastro(modelo, documento, tipo=tipo, uf=uf)
         return {"status_code": response.status_code, "body": response.text}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        # Não vazar host, caminho de certificado ou stack trace ao cliente.
+        return {"error": "Falha ao consultar o webservice da SEFAZ."}
 
 
 def _parse_distribuicao_xml(xml_text: str) -> dict:
@@ -107,7 +113,7 @@ def _parse_distribuicao_xml(xml_text: str) -> dict:
                     "nsu": nsu,
                     "schema": schema,
                     "tag": tag_name,
-                    "xml_raw": xml_bytes.decode("utf-8", errors="ignore"),
+                    "xml_raw": decode_xml(xml_bytes),
                     "chave": "",
                     "cnpj_emitente": "",
                     "nome_emitente": "",
@@ -169,7 +175,7 @@ def _parse_distribuicao_xml(xml_text: str) -> dict:
     return out
 
 
-@router.get("/consulta/distribuicao", dependencies=[Depends(require_session)])
+@router.get("/consulta/distribuicao", dependencies=[Depends(require_session), Depends(sefaz_rate_limiter)])
 async def consulta_distribuicao(
     cnpj: Optional[str] = None,
     cpf: Optional[str] = None,
@@ -195,5 +201,6 @@ async def consulta_distribuicao(
             "body": response.text,
             "parsed": parsed,
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        # Não vazar host, caminho de certificado ou stack trace ao cliente.
+        return {"error": "Falha ao consultar o webservice da SEFAZ."}

@@ -210,7 +210,8 @@ def init_db():
                 valor_pis REAL DEFAULT 0.0,
                 valor_cofins REAL DEFAULT 0.0,
                 valor_ipi REAL DEFAULT 0.0,
-                situacao TEXT DEFAULT 'Autorizada',
+                situacao TEXT DEFAULT 'Pendente',
+                manifestacao TEXT,
                 tipo_doc INTEGER DEFAULT 0, -- 0=Entrada (Fornecedor), 1=Saída (Venda/Devolução para Cliente)
                 nsu TEXT DEFAULT '0',
                 has_xml INTEGER DEFAULT 0,
@@ -229,6 +230,43 @@ def init_db():
             cursor.execute("ALTER TABLE nfe_docs ADD COLUMN tipo_doc INTEGER DEFAULT 0")
         if "last_sefaz_check" not in cols:
             cursor.execute("ALTER TABLE nfe_docs ADD COLUMN last_sefaz_check TEXT")
+
+        # --- Retorno real da SEFAZ (Fase 1 — Integridade Fiscal) ---
+        # Nada aqui é mais fabricado localmente: protocolo, cStat, xMotivo e o
+        # ambiente de emissão vêm exclusivamente do webservice da SEFAZ.
+        if "protocolo" not in cols:
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN protocolo TEXT")
+        if "c_stat" not in cols:
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN c_stat TEXT")
+        if "x_motivo" not in cols:
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN x_motivo TEXT")
+        if "tp_amb" not in cols:
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN tp_amb INTEGER")
+        if "dh_recbto" not in cols:
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN dh_recbto TEXT")
+        if "xml_assinado" not in cols:
+            # <NFe> assinado ainda não autorizado — permite retransmissão idempotente
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN xml_assinado TEXT")
+        if "manifestacao" not in cols:
+            # Manifestação do destinatário vive em coluna própria: misturá-la com
+            # `situacao` fazia nota autorizada sumir do filtro "Autorizadas".
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN manifestacao TEXT")
+        if "tp_emis" not in cols:
+            # tpEmis da emissão: em contingência a consulta/reenvio precisa ir
+            # para o endpoint da SEFAZ Virtual, não para o normal.
+            cursor.execute("ALTER TABLE nfe_docs ADD COLUMN tp_emis INTEGER")
+
+        # --- Reserva atômica de numeração (evita rejeição 204 por duplicidade) ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS nfe_numeracao (
+                emitente_cnpj TEXT NOT NULL,
+                serie TEXT NOT NULL,
+                modelo TEXT NOT NULL,
+                ultimo_numero INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT,
+                PRIMARY KEY (emitente_cnpj, serie, modelo)
+            )
+        """)
 
         # Tabela de Cadastro de Clientes / Destinatários
         cursor.execute("""
@@ -507,6 +545,37 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_venc ON nfe_duplicatas(d_venc)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_chave ON nfe_duplicatas(chave)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conf_chave ON nfe_conferencia(chave)")
+
+        # Unicidade fiscal: (emitente, série, número) — impede rejeição 204 da SEFAZ
+        # por numeração duplicada. Criado somente quando não há histórico duplicado
+        # (instalações legadas com dados repetidos são reportadas no log).
+        cursor.execute("""
+            SELECT emitente_cnpj, serie, modelo, numero, COUNT(*) AS qtd
+            FROM nfe_docs
+            WHERE emitente_cnpj IS NOT NULL AND emitente_cnpj != ''
+              AND serie IS NOT NULL AND serie != ''
+              AND numero IS NOT NULL AND numero != ''
+            GROUP BY emitente_cnpj, serie, modelo, numero
+            HAVING COUNT(*) > 1
+            LIMIT 1
+        """)
+        if cursor.fetchone() is None:
+            # Índice parcial: linhas com emitente/série/número vazios ou nulos
+            # continuam livres (SQLite trata cada NULL como distinto).
+            # Numeração da SEFAZ é única por (CNPJ, modelo, série).
+            cursor.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_nfe_num_unico
+                ON nfe_docs(emitente_cnpj, modelo, serie, numero)
+                WHERE emitente_cnpj IS NOT NULL AND emitente_cnpj != ''
+                  AND serie IS NOT NULL AND serie != ''
+                  AND numero IS NOT NULL AND numero != ''
+            """)
+        else:
+            import logging as _logging
+            _logging.getLogger("nfe.schema").warning(
+                "[NFE] Duplicidade histórica de numeração detectada — índice único "
+                "idx_nfe_num_unico NÃO criado. Elimine as duplicatas para ativá-lo."
+            )
 
         # Tabela de Sessões de Usuários (Persistência pós-reinicialização)
         cursor.execute("""

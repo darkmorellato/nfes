@@ -38,14 +38,18 @@ def record_audit(
 
     if request is not None:
         if not resolved_ip:
-            forwarded = request.headers.get("X-Forwarded-For")
+            # X-Forwarded-For só é confiável atrás de um proxy de confiança;
+            # sem isso o IP auditado seria forjável pelo próprio cliente.
+            from backend.config import settings as _settings
+            forwarded = request.headers.get("X-Forwarded-For") if _settings.TRUST_PROXY else None
             if forwarded:
                 resolved_ip = forwarded.split(",")[0].strip()
             else:
                 resolved_ip = request.client.host if request.client else "127.0.0.1"
 
         if not resolved_email:
-            token = request.headers.get("X-Session-Token", "").strip() or request.query_params.get("token", "").strip()
+            # Somente header: token em query string vaza em logs/Referer.
+            token = request.headers.get("X-Session-Token", "").strip()
             if token:
                 try:
                     from backend.routers.auth import get_session

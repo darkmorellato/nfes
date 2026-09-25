@@ -738,9 +738,9 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
                 <span class="badge-ambiente" style="background:${isHomologacao ? '#d97706' : '#27ae60'};font-size:11px;padding:2px 8px;border-radius:3px;">${isHomologacao ? "Homologação" : "Produção"}</span>
             </div>
             <div style="display:flex;gap:8px;">
-                <button type="button" class="botao botao-primario" onclick="downloadDanfePdf('${chave}')" style="background:#27ae60;border-color:#27ae60;color:#fff;cursor:pointer;">📥 Baixar PDF Oficial</button>
-                <button type="button" class="botao" onclick="window.print()" style="background:#fff;color:#333;cursor:pointer;">🖨️ Imprimir</button>
-                ${xmlText ? `<button type="button" class="botao" onclick="handleResumoAction('xml', '${chave}', 'nfe')" style="background:#34495e;color:#fff;border-color:#4a6572;cursor:pointer;">💾 Baixar XML</button>` : ""}
+                <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "downloadDanfePdf", "args": [chave]}))}" style="background:#27ae60;border-color:#27ae60;color:#fff;cursor:pointer;">📥 Baixar PDF Oficial</button>
+                <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "imprimirPagina", "args": []}))}" style="background:#fff;color:#333;cursor:pointer;">🖨️ Imprimir</button>
+                ${xmlText ? `<button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "handleResumoAction", "args": ['xml', chave, 'nfe']}))}" style="background:#34495e;color:#fff;border-color:#4a6572;cursor:pointer;">💾 Baixar XML</button>` : ""}
             </div>
         </div>
 
@@ -758,7 +758,7 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
                 <div>
                     <b>⚠️ ATENÇÃO:</b> Este documento fiscal <b>não possui autorização oficial de uso da SEFAZ</b> (é um rascunho / prévia sem validade jurídica).
                 </div>
-                <button type="button" class="btn-action" onclick="clonarNfeParaEmissao('${chave}')" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:11.5px;font-weight:bold;padding:4px 12px;">
+                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "clonarNfeParaEmissao", "args": [chave]}))}" style="background:#dc2626;color:#fff;border-color:#dc2626;font-size:11.5px;font-weight:bold;padding:4px 12px;">
                     ✏️ Corrigir e Emitir Oficial à SEFAZ
                 </button>
             </div>
@@ -1222,9 +1222,9 @@ function renderDanfePreview(dados, chave, xmlText, prefixHtml = "") {
 async function downloadDanfePdf(chave, ufOverride) {
     const ufParaConsulta = ufOverride || ufFromChave(chave) || (typeof AppState !== "undefined" && AppState.uf ? AppState.uf : "SP");
     const isHomolog = typeof AppState !== "undefined" && AppState.ambiente === "homologacao";
-    const token = typeof _getSessionToken === "function" ? _getSessionToken() : "";
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
-    const url = `/api/danfe/pdf/${chave}?uf=${ufParaConsulta}&homologacao=${isHomolog}${tokenParam}`;
+    // Sem token na query string: ele vaza em logs de proxy, histórico e Referer.
+    // apiDownload envia X-Session-Token no header.
+    const url = `/api/danfe/pdf/${chave}?uf=${ufParaConsulta}&homologacao=${isHomolog}`;
     const defaultName = `DANFE_${chave}.pdf`;
 
     if (typeof toast !== "undefined" && toast.info) {

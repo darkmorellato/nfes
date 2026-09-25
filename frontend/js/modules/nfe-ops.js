@@ -254,7 +254,7 @@ async function carregarNfeSaidas(page = 1) {
                 const isPendenteOuRejeitada = (d.situacao || "").toLowerCase().includes("pendent") || (d.situacao || "").toLowerCase().includes("rejeit") || (d.situacao || "").toLowerCase().includes("erro");
 
                 html += `
-                    <tr class="linha" style="${isCancelada ? 'opacity:0.65;background:#fef2f2;' : ''};cursor:pointer;" onclick="toggleSaidasItens('${d.chave}', this)">
+                    <tr class="linha" style="${isCancelada ? 'opacity:0.65;background:#fef2f2;' : ''};cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "toggleSaidasItens", "args": [d.chave, "$this"]}))}">
                         <td style="text-align:center;">${(page - 1) * 50 + (i + 1)}</td>
                         <td style="text-align:center;"><b>${numSerie}</b></td>
                         <td style="text-align:center;">${dataEmi}</td>
@@ -267,14 +267,14 @@ async function carregarNfeSaidas(page = 1) {
                         </td>
                         <td style="text-align:center;">
                             <div class="actions-cell" style="justify-content:center;gap:4px;flex-wrap:wrap;">
-                                <button type="button" class="btn-action btn-action-primary" onclick="event.stopPropagation();abrirDanfeDireto('${d.chave}');" title="Visualizar DANFE">👁️ DANFE</button>
-                                <button type="button" class="btn-action" onclick="event.stopPropagation();reenviarNfeSefaz('${d.chave}');" title="Reenviar / Validar Retorno na SEFAZ" style="${isPendenteOuRejeitada ? 'background:#fef3c7;color:#92400e;border-color:#f59e0b;font-weight:bold;' : 'background:#f0fdf4;color:#166534;border-color:#bbf7d0;'}">🔄 Reenviar</button>
-                                <button type="button" class="btn-action" onclick="event.stopPropagation();downloadDanfePdf('${d.chave}');" title="Baixar PDF">📥 PDF</button>
-                                <button type="button" class="btn-action" onclick="event.stopPropagation();enviarWhatsappNfe('${d.chave}');" title="Enviar para o WhatsApp do Cliente" style="background:#25d366;color:#fff;border-color:#25d366;font-weight:bold;">💬 Zap</button>
-                                <button type="button" class="btn-action" onclick="event.stopPropagation();abrirModalEmailNfe('${d.chave}', '${escapeHtml(d.destinatario_nome || '')}');" title="Enviar por E-mail com XML e PDF">📧 E-mail</button>
-                                <button type="button" class="btn-action" onclick="event.stopPropagation();clonarNfeParaEmissao('${d.chave}');" title="Clonar dados para emitir nova nota">📋 Clonar</button>
-                                <button type="button" class="btn-action" onclick="event.stopPropagation();abrirCartaCorrecaoModal('${d.chave}', '${d.empresa_cnpj || d.emitente_cnpj}');" title="Carta de Correção">✍️ CC-e</button>
-                                ${!isCancelada ? `<button type="button" class="btn-action" onclick="event.stopPropagation();abrirModalCancelarNfe('${d.chave}', '${d.protocolo || ""}');" style="color:#c0392b;" title="Cancelar NF-e na SEFAZ">❌ Cancelar</button>` : ''}
+                                <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirDanfeDireto", "args": [d.chave], "stop": true}))}" title="Visualizar DANFE">👁️ DANFE</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "reenviarNfeSefaz", "args": [d.chave], "stop": true}))}" title="Reenviar / Validar Retorno na SEFAZ" style="${isPendenteOuRejeitada ? 'background:#fef3c7;color:#92400e;border-color:#f59e0b;font-weight:bold;' : 'background:#f0fdf4;color:#166534;border-color:#bbf7d0;'}">🔄 Reenviar</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "downloadDanfePdf", "args": [d.chave], "stop": true}))}" title="Baixar PDF">📥 PDF</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "enviarWhatsappNfe", "args": [d.chave], "stop": true}))}" title="Enviar para o WhatsApp do Cliente" style="background:#25d366;color:#fff;border-color:#25d366;font-weight:bold;">💬 Zap</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalEmailNfe", "args": [d.chave, d.destinatario_nome || ''], "stop": true}))}" title="Enviar por E-mail com XML e PDF">📧 E-mail</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "clonarNfeParaEmissao", "args": [d.chave], "stop": true}))}" title="Clonar dados para emitir nova nota">📋 Clonar</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirCartaCorrecaoModal", "args": [d.chave, d.empresa_cnpj || d.emitente_cnpj], "stop": true}))}" title="Carta de Correção">✍️ CC-e</button>
+                                ${!isCancelada ? `<button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalCancelarNfe", "args": [d.chave, d.protocolo || ""], "stop": true}))}" style="color:#c0392b;" title="Cancelar NF-e na SEFAZ">❌ Cancelar</button>` : ''}
                             </div>
                         </td>
                     </tr>
@@ -296,9 +296,9 @@ async function carregarNfeSaidas(page = 1) {
                 pagDiv.innerHTML = `
                     <span>Exibindo <b>${docs.length}</b> de <b>${res.data.total}</b> notas de saída</span>
                     <div style="display:flex;gap:6px;">
-                        <button type="button" class="btn-action" ${page <= 1 ? "disabled" : ""} onclick="carregarNfeSaidas(${page - 1});">◀ Anterior</button>
+                        <button type="button" class="btn-action" ${page <= 1 ? "disabled" : ""} data-onclick="${escapeAttrJson(JSON.stringify({"fn": "carregarNfeSaidas", "args": [page - 1]}))}">◀ Anterior</button>
                         <span style="padding:3px 8px;font-weight:bold;">Pág. ${page} de ${totalPages}</span>
-                        <button type="button" class="btn-action" ${page >= totalPages ? "disabled" : ""} onclick="carregarNfeSaidas(${page + 1});">Próxima ▶</button>
+                        <button type="button" class="btn-action" ${page >= totalPages ? "disabled" : ""} data-onclick="${escapeAttrJson(JSON.stringify({"fn": "carregarNfeSaidas", "args": [page + 1]}))}">Próxima ▶</button>
                     </div>
                 `;
             }
@@ -617,23 +617,23 @@ function abrirModalRetornoSefaz(data) {
     if (chaveEl) {
         const ch = data.chave || "";
         const chFmt = ch.replace(/(\d{4})(?=\d)/g, "$1 ");
-        chaveEl.innerHTML = `${chFmt} <button type="button" class="btn-action" onclick="navigator.clipboard.writeText('${ch}'); toast.success('Chave copiada!');" style="font-size:10px;padding:1px 6px;margin-left:6px;">📋 Copiar</button>`;
+        chaveEl.innerHTML = `${chFmt} <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"seq": [{"fn": "navigator.clipboard.writeText", "args": [ch]}, {"fn": "toast.success", "args": ['Chave copiada!']}]}))}" style="font-size:10px;padding:1px 6px;margin-left:6px;">📋 Copiar</button>`;
     }
 
     if (botoesExtras) {
         botoesExtras.innerHTML = "";
         if (isSucesso) {
             botoesExtras.innerHTML = `
-                <button type="button" class="botao botao-primario" onclick="fecharModalRetornoSefaz(); abrirDanfeDireto('${data.chave}');" style="font-size:12px;padding:6px 12px;">
+                <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"seq": [{"fn": "fecharModalRetornoSefaz", "args": []}, {"fn": "abrirDanfeDireto", "args": [data.chave]}]}))}" style="font-size:12px;padding:6px 12px;">
                     👁️ Visualizar DANFE
                 </button>
-                <button type="button" class="btn-action" onclick="downloadDanfePdf('${data.chave}');" style="font-size:12px;padding:6px 12px;">
+                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "downloadDanfePdf", "args": [data.chave]}))}" style="font-size:12px;padding:6px 12px;">
                     📥 Baixar PDF
                 </button>
             `;
         } else {
             botoesExtras.innerHTML = `
-                <button type="button" class="botao botao-primario" onclick="fecharModalRetornoSefaz(); clonarNfeParaEmissao('${data.chave}');" style="font-size:12px;padding:6px 12px;">
+                <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"seq": [{"fn": "fecharModalRetornoSefaz", "args": []}, {"fn": "clonarNfeParaEmissao", "args": [data.chave]}]}))}" style="font-size:12px;padding:6px 12px;">
                     ✏️ Clonar e Corrigir no Formulário
                 </button>
             `;
@@ -650,9 +650,10 @@ function fecharModalRetornoSefaz() {
 
 async function clonarNfeParaEmissao(chave) {
     try {
+        // apiGet devolve { success, data, status } — o documento está em data.
         const res = await apiGet(`/api/emissao/nfe/${chave}/clonar`);
-        if (res.success && res.documento) {
-            const doc = res.documento;
+        const doc = res.data?.documento || res.documento || null;
+        if (res.success && doc) {
             switchEmissaoTab("form");
 
             const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
@@ -951,7 +952,7 @@ async function handleEnviarEmailNfe(e) {
                 resDiv.style.background = "#f0fdf4";
                 resDiv.style.border = "1px solid #bbf7d0";
                 resDiv.style.color = "#166534";
-                resDiv.innerHTML = `<b>✓ Sucesso:</b> ${res.message || 'E-mail enviado com sucesso com XML e DANFE PDF anexados!'}`;
+                resDiv.innerHTML = `<b>✓ Sucesso:</b> ${escapeHtml(res.message || 'E-mail enviado com sucesso com XML e DANFE PDF anexados!')}`;
             }
             toast.success(`E-mail enviado com sucesso para ${email} com XML e DANFE PDF!`);
             setTimeout(() => {
@@ -1003,7 +1004,8 @@ function abrirModalInutilizarNfe() {
             certs.forEach(c => {
                 const opt = document.createElement("option");
                 opt.value = c.cnpj;
-                opt.textContent = `${c.razao_social || 'Filial'} (${formatarCpfCnpj(c.cnpj)})`;
+                // formatarCpfCnpj não existia (ReferenceError derrubava o modal)
+                opt.textContent = `${c.razao_social || 'Filial'} (${formatCpfCnpj(c.cnpj)})`;
                 selEmp.appendChild(opt);
             });
             const empAtual = document.getElementById("filtro-saidas-empresa")?.value || document.getElementById("emissao-empresa-emit")?.value;
@@ -1184,14 +1186,14 @@ async function executarImportacaoSaidas() {
             if (statusDiv) {
                 statusDiv.style.background = "#fef2f2";
                 statusDiv.style.color = "#991b1b";
-                statusDiv.innerHTML = `Erro na importação: ${data.detail || "Falha ao processar arquivos"}`;
+                statusDiv.innerHTML = `Erro na importação: ${escapeHtml(data.detail || "Falha ao processar arquivos")}`;
             }
         }
     } catch (err) {
         if (statusDiv) {
             statusDiv.style.background = "#fef2f2";
             statusDiv.style.color = "#991b1b";
-            statusDiv.innerHTML = `Erro: ${err.message}`;
+            statusDiv.innerHTML = `Erro: ${escapeHtml(err.message)}`;
         }
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "⚡ Iniciar Importação"; }

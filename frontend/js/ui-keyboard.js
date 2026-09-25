@@ -135,7 +135,7 @@
                 const nome = d.destinatario_nome || d.emitente_nome || d.destinatario?.nome || d.emitente?.nome || '(sem nome)';
                 const data = (d.data_emissao || '').substring(0, 10);
                 const num = d.numero || d.chave?.slice(-6) || '?';
-                html += `<a href="#" class="global-search-item" onclick="fecharBuscaGlobalEAbrirNfe('${escapeHtml(d.chave || '')}');return false;">
+                html += `<a href="#" class="global-search-item" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "fecharBuscaGlobalEAbrirNfe", "args": [d.chave || ''], "ret": true}))}">
                     <b>NF-e ${escapeHtml(String(num))}</b> — ${escapeHtml(nome)} <small>${escapeHtml(data)}</small>
                 </a>`;
             });
@@ -144,7 +144,7 @@
             html += `<div class="global-search-group">👥 Clientes (${cliList.length})</div>`;
             cliList.slice(0, 5).forEach(c => {
                 const doc = c.cpf_cnpj || c.cnpj_cpf || c.documento || '';
-                html += `<a href="#" class="global-search-item" onclick="fecharBuscaGlobalEAbrirCliente('${escapeHtml(String(c.id || ''))}');return false;">
+                html += `<a href="#" class="global-search-item" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "fecharBuscaGlobalEAbrirCliente", "args": [String(c.id || '')], "ret": true}))}">
                     <b>${escapeHtml(c.razao_social || c.nome || '(sem nome)')}</b> <small>${escapeHtml(doc)}</small>
                 </a>`;
             });
@@ -152,7 +152,7 @@
         if (prodList.length) {
             html += `<div class="global-search-group">📦 Produtos (${prodList.length})</div>`;
             prodList.slice(0, 5).forEach(p => {
-                html += `<a href="#" class="global-search-item" onclick="fecharBuscaGlobalEAbrirProduto('${escapeHtml(String(p.id || ''))}');return false;">
+                html += `<a href="#" class="global-search-item" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "fecharBuscaGlobalEAbrirProduto", "args": [String(p.id || '')], "ret": true}))}">
                     <b>${escapeHtml(p.codigo || '')}</b> — ${escapeHtml(p.descricao || '')}
                 </a>`;
             });

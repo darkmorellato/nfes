@@ -1,6 +1,53 @@
 import io
+import logging
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, Query, Body, UploadFile, File, Depends, Request
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
+
+
+def _auditar(acao: str, entidade: str, identificador: str, request: Request, detalhe: str, ok: bool = True, **kw) -> None:
+    """Registra a operação fiscal na trilha de auditoria (LGPD / Ajuste SINIEF 07/05).
+
+    Emissão, cancelamento, CC-e e inutilização eram as operações de maior peso
+    jurídico do sistema e não deixavam rastro.
+    """
+    try:
+        from backend.services.audit_service import record_audit
+        record_audit(
+            acao, entidade, identificador, detalhe=detalhe,
+            status="SUCESSO" if ok else "FALHA", request=request, **kw,
+        )
+    except Exception:
+        logger.exception("[AUDITORIA] Falha ao registrar %s", acao)
+
+
+def _resposta_fiscal(res: Dict[str, Any], msg_sucesso: str):
+    """
+    Formato único de retorno para eventos fiscais.
+
+    * Sucesso → **200** com ``c_stat``/``motivo``/``protocolo`` no nível raiz
+      (é assim que o front lê: ``res.data.c_stat``).
+    * Rejeição → **400** com ``detail`` + ``c_stat``, de modo que
+      ``response.ok`` seja falso e a interface exiba a falha.
+    """
+    if res.get("success"):
+        return {"success": True, "message": msg_sucesso, **res}
+
+    detail = res.get("detail") or res.get("motivo") or "Operação não homologada pela SEFAZ."
+    return JSONResponse(
+        status_code=400,
+        content={
+            "success": False,
+            "c_stat": res.get("c_stat") or "",
+            "chave": res.get("chave") or "",
+            "motivo": res.get("motivo") or detail,
+            "detail": detail,
+            "error": detail,
+            "data": res,
+        },
+    )
 
 from backend.database import (
     save_cliente,
@@ -18,6 +65,13 @@ from backend.database import (
     get_nfe_detail,
 )
 from backend.dependencies import require_session
+from backend.schemas.nfe import (
+    EmissaoNFeRequest,
+    CancelamentoNFeRequest,
+    CartaCorrecaoRequest,
+    InutilizacaoNFeRequest,
+    payload_do_body,
+)
 from fastapi.responses import StreamingResponse
 from backend.services.nfe_emissao_service import (
     emitir_nfe_profissional,
@@ -169,20 +223,45 @@ async def consultar_proximo_numero(
 
 
 @router.post("/nfe/emitir")
-async def emitir_nfe(payload: Dict[str, Any] = Body(...)):
+async def emitir_nfe(payload: EmissaoNFeRequest, request: Request = None):
     """
     Emissão profissional de NF-e (Modelo 55 - Saída/Venda/Devolução):
     Monta os objetos fiscais, calcula IBPT, assina digitalmente com o Certificado A1 e transmite à SEFAZ.
+
+    Resposta: **200** somente quando a SEFAZ autorizou (cStat 100/150).
+    Qualquer rejeição, denegação ou falha de comunicação retorna **400** com
+    ``c_stat`` e ``detail`` — o front jamais recebe "sucesso" sem protocolo real.
     """
     try:
-        res = emitir_nfe_profissional(payload)
-        is_authorized = res.get("c_stat") == "100"
-        if is_authorized:
-            return {"success": True, "data": res, "message": "NF-e emitida e autorizada com sucesso!"}
-        else:
-            return {"success": False, "data": res, "message": f"Falha na autorização: {res.get('motivo', 'Erro desconhecido')}"}
-    except Exception as e:
+        res = emitir_nfe_profissional(payload_do_body(payload))
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("[EMISSAO] Erro inesperado na emissão de NF-e")
+        raise HTTPException(status_code=500, detail=f"Erro inesperado na emissão: {e}")
+
+    _auditar(
+        "EMISSAO_NFE", "NFE", res.get("chave") or "", request,
+        detalhe=(f"Emissão NF-e nº {res.get('numero')}/{res.get('serie')} "
+                 f"CNPJ {res.get('emitente_cnpj')} → {res.get('destinatario')} "
+                 f"R$ {res.get('valor_total')} | cStat {res.get('c_stat')} | {res.get('situacao')}"),
+        ok=bool(res.get("autorizada")),
+    )
+
+    if res.get("autorizada"):
+        return {"success": True, "data": res, "message": "NF-e emitida e autorizada com sucesso!"}
+
+    return JSONResponse(
+        status_code=400,
+        content={
+            "success": False,
+            "c_stat": res.get("c_stat") or "",
+            "chave": res.get("chave") or "",
+            "motivo": res.get("motivo") or "",
+            "detail": res.get("motivo") or "A SEFAZ não autorizou a NF-e.",
+            "data": res,
+        },
+    )
 
 
 @router.post("/nfe/previa")
@@ -198,74 +277,111 @@ async def previa_nfe(payload: Dict[str, Any] = Body(...)):
 
 
 @router.post("/nfe/cancelar")
-async def cancelar_nfe(payload: Dict[str, Any] = Body(...)):
+async def cancelar_nfe(payload: CancelamentoNFeRequest, request: Request = None):
     """
-    Cancela uma NF-e perante a SEFAZ (Evento 110111) e atualiza o banco de dados.
+    Cancela uma NF-e perante a SEFAZ (Evento 110111). O banco só é alterado
+    quando a SEFAZ confirma o evento (cStat 135/136).
     """
-    chave = payload.get("chave", "")
-    justificativa = payload.get("justificativa", "")
-    protocolo = payload.get("protocolo")
-    homolog = payload.get("homologacao")
+    chave = payload.chave
+    justificativa = payload.justificativa
+    protocolo = payload.protocolo
+    homolog = payload.homologacao
 
     try:
         res = cancelar_nfe_profissional(chave=chave, justificativa=justificativa, protocolo=protocolo, homologacao=homolog)
-        return {"success": True, "data": res, "message": "NF-e cancelada com sucesso!"}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    _auditar(
+        "CANCELAMENTO_NFE", "NFE", res.get("chave") or "", request,
+        detalhe=(f"Cancelamento (110111) cStat {res.get('c_stat')}: {res.get('motivo')}"),
+        ok=bool(res.get("success")),
+    )
+    return _resposta_fiscal(res, "NF-e cancelada com sucesso na SEFAZ!")
 
 
 @router.post("/nfe/carta-correcao")
 @router.post("/nfe/cce")
 @router.post("/cce")
-async def carta_correcao_nfe(payload: Dict[str, Any] = Body(...)):
+async def carta_correcao_nfe(payload: CartaCorrecaoRequest, request: Request = None):
     """
     Emite uma Carta de Correção Eletrônica (CC-e - Evento 110110) perante a SEFAZ.
     """
-    chave = payload.get("chave", "")
-    correcao = payload.get("correcao", "") or payload.get("texto", "")
-    seq = int(payload.get("sequencia", 1))
-    homolog = payload.get("homologacao")
+    chave = payload.chave
+    correcao = payload.correcao or payload.texto or ""
+    seq = payload.sequencia
+    homolog = payload.homologacao
 
     try:
         res = emitir_carta_correcao_nfe(chave=chave, texto_correcao=correcao, seq_evento=seq, homologacao=homolog)
-        return {"success": True, "data": res, "message": "Carta de Correção Eletrônica (CC-e) emitida com sucesso!"}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    _auditar(
+        "CARTA_CORRECAO_NFE", "NFE", res.get("chave") or "", request,
+        detalhe=(f"CC-e (110110) seq {res.get('sequencia_evento')} "
+                 f"cStat {res.get('c_stat')}: {res.get('motivo')}"),
+        ok=bool(res.get("success")),
+    )
+    return _resposta_fiscal(res, "Carta de Correção Eletrônica (CC-e) transmitida com sucesso!")
 
 
 @router.post("/inutilizar")
 @router.post("/nfe/inutilizar")
-async def inutilizar_nfe(payload: Dict[str, Any] = Body(...)):
+async def inutilizar_nfe(payload: InutilizacaoNFeRequest, request: Request = None):
     """
     Inutiliza uma faixa de numeração de NF-e/NFC-e perante a SEFAZ.
     """
-    cnpj = payload.get("empresa_cnpj", "")
-    serie = str(payload.get("serie", "1"))
-    num_ini = int(payload.get("numero_inicial", 1))
-    num_fim = int(payload.get("numero_final", num_ini))
-    just = payload.get("justificativa", "")
-    modelo = str(payload.get("modelo", "55"))
-    homolog = payload.get("homologacao")
+    cnpj = payload.empresa_cnpj
+    serie = str(payload.serie)
+    num_ini = int(payload.numero_inicial)
+    num_fim = int(payload.numero_final)
+    just = payload.justificativa
+    modelo = str(payload.modelo)
+    homolog = payload.homologacao
 
     try:
         res = inutilizar_numeracao_nfe(empresa_cnpj=cnpj, serie=serie, numero_inicial=num_ini, numero_final=num_fim, justificativa=just, modelo=modelo, homologacao=homolog)
-        return {"success": True, "data": res, "message": "Faixa de numeração inutilizada com sucesso na SEFAZ!"}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    _auditar(
+        "INUTILIZACAO_NUMERACAO", "NFE", f"{res.get('numero_inicial')}-{res.get('numero_final')}", request,
+        detalhe=(f"Inutilização série {res.get('serie')} CNPJ {res.get('empresa_cnpj')} "
+                 f"cStat {res.get('c_stat')}: {res.get('motivo')}"),
+        ok=bool(res.get("success")),
+    )
+    return _resposta_fiscal(res, "Faixa de numeração inutilizada com sucesso na SEFAZ!")
 
 
 @router.post("/nfe/{chave}/reenviar")
 @router.post("/nfe/{chave}/retransmitir")
-async def reenviar_nfe_endpoint(chave: str, payload: Optional[Dict[str, Any]] = Body(None)):
+async def reenviar_nfe_endpoint(chave: str, payload: Optional[Dict[str, Any]] = Body(None), request: Request = None):
     """
-    Reenvia ou consulta a situação da NF-e perante a SEFAZ e retorna diagnóstico detalhado.
+    Consulta a situação da NF-e na SEFAZ e, se ela estiver pendente de
+    transmissão, reenvia o XML assinado. Nunza fabrica retorno de sucesso.
     """
     try:
         homolog = payload.get("homologacao") if payload else None
         res = reenviar_nfe_sefaz(chave=chave, homologacao=homolog)
-        return {"success": True, "data": res, "message": res.get("status_geral", "Consulta realizada com sucesso")}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("[REENVIO] Erro inesperado para a chave %s", chave)
+        raise HTTPException(status_code=500, detail=f"Erro inesperado: {e}")
+
+    _auditar(
+        "CONSULTA_REENVIO_NFE", "NFE", res.get("chave") or chave, request,
+        detalhe=(f"Consulta/reenvio cStat {res.get('c_stat')} "
+                 f"retransmitido={bool(res.get('retransmitido'))} | {res.get('x_motivo') or res.get('erro') or ''}"),
+        ok=bool(res.get("success")),
+    )
+    return {
+        "success": bool(res.get("success")),
+        "data": res,
+        "detail": res.get("erro") or res.get("x_motivo"),
+        "message": res.get("status_geral") or res.get("x_motivo") or "Consulta realizada",
+    }
 
 
 @router.get("/nfe/{chave}/clonar")

@@ -1,12 +1,100 @@
 import os
+import re
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+
+from lxml import etree
 
 from backend.database import get_db_connection, XML_STORAGE_DIR
 from backend.database.certificates import get_certificate_record
 
-def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnpj: Optional[str] = None) -> bool:
-    """Salva ou atualiza um documento NF-e e seus produtos no banco de dados SQLite."""
+
+# ====================================================================
+# Mapeamento de situação fiscal a partir do retorno real da SEFAZ
+# ====================================================================
+
+CSTAT_AUTORIZADO = ("100", "150")
+CSTAT_DENEGADO = ("110", "301", "302")
+
+# Manifestação do destinatário (evento sobre a nota de terceiros).
+# Fica em `nfe_docs.manifestacao`, separada da `situacao` fiscal.
+_ROTULOS_MANIFESTACAO = {
+    "210200": "Confirmada (210200)",
+    "210210": "Ciência da Emissão (210210)",
+    "210220": "Desconhecimento (210220)",
+    "210240": "Operação não Realizada (210240)",
+}
+
+
+def _ler_retorno_do_xml(xml_raw: Optional[str]) -> Dict[str, str]:
+    """
+    Extrai o ``infProt`` (protocolo SEFAZ) de um ``<nfeProc>``.
+
+    Usa XPath por ``local-name()``: o PyNFe serializa o retorno com prefixos
+    gerados (``ns0:infProt``) e um parser por regex literal perderia o protocolo
+    — a nota autorizada ficaria gravada como pendente.
+
+    Retorna dicionário vazio quando não há protocolo: nesse caso a nota **não**
+    foi autorizada e não pode ser tratada como tal.
+    """
+    if not xml_raw:
+        return {}
+
+    try:
+        bruto = xml_raw if not isinstance(xml_raw, str) else xml_raw.encode("utf-8")
+        raiz = etree.fromstring(bruto)
+    except Exception:
+        return {}
+
+    nos = raiz.xpath("//*[local-name()='infProt']")
+    if not nos:
+        return {}
+    bloco = nos[0]
+
+    def _dentro(nome: str) -> str:
+        achou = bloco.xpath(f".//*[local-name()='{nome}']")
+        return (achou[0].text or "").strip() if achou else ""
+
+    return {
+        "c_stat": _dentro("cStat"),
+        "x_motivo": _dentro("xMotivo"),
+        "protocolo": _dentro("nProt"),
+        "dh_recbto": _dentro("dhRecbto"),
+        "tp_amb": _dentro("tpAmb"),
+        "dig_val": _dentro("digVal"),
+        "ver_aplic": _dentro("verAplic"),
+    }
+
+
+def _situacao_padrao(c_stat: str, protocolo: str = "") -> str:
+    """Deriva a situação fiscal exclusivamente a partir do retorno da SEFAZ."""
+    if c_stat in CSTAT_AUTORIZADO:
+        return "Autorizada"
+    if c_stat in CSTAT_DENEGADO:
+        return "Denegada"
+    if c_stat in ("103", "105"):
+        return "Em Processamento"
+    if c_stat:
+        return f"Rejeitada ({c_stat})"
+    return "Pendente"
+
+
+def situacao_e_terminal(situacao_atual: Optional[str]) -> bool:
+    """Cancelada e Denegada são estados finais — não podem ser rebaixados."""
+    if not situacao_atual:
+        return False
+    return situacao_atual.startswith("Cancelada") or situacao_atual.startswith("Denegada")
+
+
+def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None,
+                 empresa_cnpj: Optional[str] = None, sync_remote: bool = True) -> bool:
+    """
+    Salva ou atualiza um documento NF-e e seus produtos no banco de dados SQLite.
+
+    ``sync_remote=False`` grava só localmente — usado pelo pull do Firestore,
+    senão o sistema baixaria da nuvem e em seguida reenviaria tudo, queimando a
+    cota de escrita do plano Spark (``HTTP 429``) e travando o login.
+    """
     chave = "".join(c for c in str(doc.get("chave", "")) if c.isdigit())
     if len(chave) != 44:
         return False
@@ -91,8 +179,32 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
     modelo = ident.get("modelo") or doc.get("modelo") or ("65" if chave[20:22] == "65" else "55")
     dt_emi = ident.get("data_emissao") or doc.get("data_emissao") or doc.get("dhEmi") or ""
     dt_aut = doc.get("data_autorizacao") or ""
-    situacao = doc.get("situacao") or "Autorizada"
     nsu = str(doc.get("nsu") or "0")
+
+    # --- Retorno real da SEFAZ (nunca fabricado localmente) ---
+    # Campos informados explicitamente têm prioridade; caso contrário são
+    # extraídos do próprio <nfeProc> (fluxo de download/sincronização).
+    retorno_xml = _ler_retorno_do_xml(xml_raw)
+    protocolo = str(doc.get("protocolo") or retorno_xml.get("protocolo") or "")
+    c_stat = str(doc.get("c_stat") or retorno_xml.get("c_stat") or "")
+    x_motivo = str(doc.get("x_motivo") or retorno_xml.get("x_motivo") or "")
+    dh_recbto = str(doc.get("dh_recbto") or retorno_xml.get("dh_recbto") or "")
+    tp_amb = doc.get("tp_amb", retorno_xml.get("tp_amb"))
+    tp_amb = int(tp_amb) if tp_amb in (1, 2, "1", "2") else None
+    tp_emis = doc.get("tp_emis")
+    try:
+        tp_emis = int(tp_emis) if tp_emis is not None else None
+    except (TypeError, ValueError):
+        tp_emis = None
+    xml_assinado = doc.get("xml_assinado") or ""
+
+    situacao = doc.get("situacao") or ""
+    if not situacao:
+        # Sem informação explícita: só autoriza se o XML carregar protocolo SEFAZ.
+        situacao = _situacao_padrao(c_stat, protocolo)
+
+    # Estados terminais: nunca são rebaixados por uma regravção posterior.
+    SITUACOES_TERMINAIS = ("Cancelada", "Denegada")
 
     # Extração inteligente a partir da chave de 44 dígitos se faltarem dados (como em resNFe)
     if not numero and len(chave) == 44:
@@ -149,8 +261,9 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
                 chave, empresa_cnpj, numero, serie, modelo, tipo_doc, emitente_cnpj, emitente_nome, emitente_uf,
                 destinatario_cnpj, destinatario_nome, destinatario_uf, data_emissao, data_autorizacao,
                 valor_total, valor_icms, valor_pis, valor_cofins, valor_ipi, situacao, nsu,
-                has_xml, xml_raw, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                has_xml, xml_raw, created_at, updated_at,
+                protocolo, c_stat, x_motivo, tp_amb, dh_recbto, xml_assinado, tp_emis
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(chave) DO UPDATE SET
                 empresa_cnpj = COALESCE(NULLIF(excluded.empresa_cnpj, ''), nfe_docs.empresa_cnpj),
                 numero = COALESCE(NULLIF(excluded.numero, ''), nfe_docs.numero),
@@ -161,10 +274,24 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
                 destinatario_cnpj = COALESCE(NULLIF(excluded.destinatario_cnpj, ''), nfe_docs.destinatario_cnpj),
                 destinatario_nome = COALESCE(NULLIF(excluded.destinatario_nome, ''), nfe_docs.destinatario_nome),
                 data_emissao = COALESCE(NULLIF(excluded.data_emissao, ''), nfe_docs.data_emissao),
+                data_autorizacao = COALESCE(NULLIF(excluded.data_autorizacao, ''), nfe_docs.data_autorizacao),
                 valor_total = CASE WHEN excluded.valor_total > 0 THEN excluded.valor_total ELSE nfe_docs.valor_total END,
-                situacao = COALESCE(NULLIF(excluded.situacao, ''), nfe_docs.situacao),
+                situacao = CASE
+                    WHEN nfe_docs.situacao IS NOT NULL
+                         AND nfe_docs.situacao != ''
+                         AND (nfe_docs.situacao LIKE 'Cancelada%' OR nfe_docs.situacao LIKE 'Denegada%')
+                    THEN nfe_docs.situacao
+                    ELSE COALESCE(NULLIF(excluded.situacao, ''), nfe_docs.situacao)
+                END,
                 nsu = CASE WHEN excluded.nsu != '0' THEN excluded.nsu ELSE nfe_docs.nsu END,
                 has_xml = CASE WHEN excluded.has_xml = 1 THEN 1 ELSE nfe_docs.has_xml END,
+                protocolo = COALESCE(NULLIF(excluded.protocolo, ''), nfe_docs.protocolo),
+                c_stat = COALESCE(NULLIF(excluded.c_stat, ''), nfe_docs.c_stat),
+                x_motivo = COALESCE(NULLIF(excluded.x_motivo, ''), nfe_docs.x_motivo),
+                tp_amb = COALESCE(excluded.tp_amb, nfe_docs.tp_amb),
+                tp_emis = COALESCE(excluded.tp_emis, nfe_docs.tp_emis),
+                dh_recbto = COALESCE(NULLIF(excluded.dh_recbto, ''), nfe_docs.dh_recbto),
+                xml_assinado = COALESCE(NULLIF(excluded.xml_assinado, ''), nfe_docs.xml_assinado),
                 xml_raw = CASE
                     WHEN excluded.xml_raw LIKE '%<nfeProc%' OR excluded.xml_raw LIKE '%<NFe%' THEN excluded.xml_raw
                     WHEN nfe_docs.xml_raw LIKE '%<nfeProc%' OR nfe_docs.xml_raw LIKE '%<NFe%' THEN nfe_docs.xml_raw
@@ -175,7 +302,9 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
             chave, empresa_cnpj, numero, serie, modelo, tipo_doc, emit_cnpj, emit_nome, emit_uf,
             dest_cnpj, dest_nome, dest_uf, dt_emi, dt_aut,
             v_total, v_icms, v_pis, v_cofins, v_ipi, situacao, nsu,
-            has_xml, xml_raw or "", now, now
+            has_xml, xml_raw or "", now, now,
+            protocolo, c_stat, x_motivo, tp_amb, dh_recbto, xml_assinado,
+            tp_emis,
         ))
 
         produtos = doc.get("produtos", [])
@@ -205,7 +334,12 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
 
         conn.commit()
 
-    # Espelhamento automático em tempo real no Cloud Firestore (não-bloqueante)
+    # Espelhamento automático em tempo real no Cloud Firestore (não-bloqueante).
+    # Pulado quando a origem É o próprio Firestore: reenviar o que acabou de ser
+    # baixado gera um loop de escritas que estoura a cota do plano Spark.
+    if not sync_remote:
+        return True
+
     try:
         from backend.services.firestore_service import sync_single_nfe_async, sync_nfe_items_to_firestore_async
         doc_payload = {
@@ -231,6 +365,11 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
             "situacao": situacao,
             "nsu": nsu,
             "has_xml": bool(has_xml),
+            # O XML fiscal é o documento de valor jurídico: mandá-lo para a nuvem
+            # garante que a perda da máquina local não perca o arquivo (e o pull
+            # consegue restaurar data/xmls/ numa instalação nova).
+            # Média de 8,4 KB → 1 GiB do plano Spark comporta ~124 mil XMLs.
+            "xml_raw": xml_raw if has_xml else None,
         }
         sync_single_nfe_async(doc_payload)
         if produtos:
@@ -239,6 +378,49 @@ def save_nfe_doc(doc: Dict[str, Any], xml_raw: Optional[str] = None, empresa_cnp
         pass
 
     return True
+
+def _garantir_documento_pai(cursor, chave: str) -> None:
+    """
+    Garante que a NF-e exista em ``nfe_docs`` antes de gravar um evento.
+
+    Com ``foreign_keys=ON``, manifestar ou sincronizar uma nota que ainda não
+    foi baixada localmente violaria a FK. A nota é registrada com o mínimo
+    fiável: a chave (que carrega UF, CNPJ, modelo, série e número) e o papel
+    derivado de quem é o emitente.
+    """
+    cursor.execute("SELECT 1 FROM nfe_docs WHERE chave = ?", (chave,))
+    if cursor.fetchone():
+        return
+
+    emitente_cnpj = chave[6:20] if len(chave) == 44 else ""
+    try:
+        from backend.database.certificates import get_certificate_record
+        emitente_e_minha = bool(get_certificate_record(emitente_cnpj))
+    except Exception:
+        emitente_e_minha = False
+
+    tipo_doc = 1 if emitente_e_minha else 0
+    now_iso = datetime.now().isoformat()
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO nfe_docs (
+            chave, empresa_cnpj, numero, serie, modelo, tipo_doc,
+            emitente_cnpj, situacao, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Recebida', ?, ?)
+        """,
+        (
+            chave,
+            emitente_cnpj if emitente_e_minha else "",
+            chave[25:34] if len(chave) == 44 else "",
+            str(int(chave[22:25])) if len(chave) == 44 else "0",
+            chave[20:22] if len(chave) == 44 else "55",
+            tipo_doc,
+            emitente_cnpj,
+            now_iso,
+            now_iso,
+        ),
+    )
+
 
 def save_nfe_event(event: Dict[str, Any]) -> bool:
     """Salva um evento fiscal (Manifestação, Cancelamento, CC-e) no banco."""
@@ -257,22 +439,28 @@ def save_nfe_event(event: Dict[str, Any]) -> bool:
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        _garantir_documento_pai(cursor, chave)
         cursor.execute("""
             INSERT INTO nfe_events (
                 chave, tipo_evento, desc_evento, n_seq, dh_evento, protocolo, c_stat, x_motivo, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (chave, tipo, desc, n_seq, dh_ev, prot, cstat, motivo, now))
 
-        if tipo == "210240":
-            cursor.execute("UPDATE nfe_docs SET situacao = 'Operação não Realizada (210240)', updated_at = ? WHERE chave = ?", (now, chave))
-        elif tipo == "210200":
-            cursor.execute("UPDATE nfe_docs SET situacao = 'Confirmada (210200)', updated_at = ? WHERE chave = ?", (now, chave))
-        elif tipo == "210220":
-            cursor.execute("UPDATE nfe_docs SET situacao = 'Desconhecimento (210220)', updated_at = ? WHERE chave = ?", (now, chave))
-        elif tipo == "210210":
-            cursor.execute("UPDATE nfe_docs SET situacao = 'Ciência da Emissão (210210)', updated_at = ? WHERE chave = ?", (now, chave))
-        elif tipo == "110111":
-            cursor.execute("UPDATE nfe_docs SET situacao = 'Cancelada', updated_at = ? WHERE chave = ?", (now, chave))
+        if tipo == "110111":
+            # Cancelamento é estado final e a única manifestação que altera
+            # a situação fiscal. As demais (210200/210210/210220/210240) são
+            # registradas APENAS em nfe_events: sobrescrever `situacao` com elas
+            # fazia uma nota autorizada sumir do filtro "Autorizadas"
+            # (LIKE '%autorizad%') logo após a confirmação da operação.
+            cursor.execute(
+                "UPDATE nfe_docs SET situacao = 'Cancelada', updated_at = ? WHERE chave = ?",
+                (now, chave),
+            )
+        elif tipo in _ROTULOS_MANIFESTACAO:
+            cursor.execute(
+                "UPDATE nfe_docs SET manifestacao = ?, updated_at = ? WHERE chave = ?",
+                (_ROTULOS_MANIFESTACAO[tipo], now, chave),
+            )
 
         conn.commit()
 
@@ -460,7 +648,7 @@ def list_nfe_saidas(
                d.destinatario_cnpj, d.destinatario_nome, d.destinatario_uf,
                d.data_emissao, d.data_autorizacao, d.valor_total,
                d.valor_icms, d.valor_pis, d.valor_cofins, d.valor_ipi,
-               d.situacao, d.tipo_doc, d.has_xml, d.created_at,
+               d.situacao, d.manifestacao, d.tipo_doc, d.has_xml, d.created_at,
                (SELECT COUNT(*) FROM nfe_items WHERE chave = d.chave) as qtd_itens
         FROM nfe_docs d
         {where_str}

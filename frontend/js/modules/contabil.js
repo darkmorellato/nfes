@@ -89,7 +89,7 @@ async function loadContabilPrevia() {
                         <table class="tabelaGrupo" style="width:100%;font-size:11px;">
                             <tr class="linhaTitulo"><th>Nº</th><th>Chave de Acesso</th><th>Destinatário</th><th>Data</th><th style="text-align:right;">Valor</th><th>Itens</th><th>Situação</th></tr>
                             ${emp.notas.map(d => `
-                                <tr style="cursor:pointer;" onclick="toggleContabilItens('${d.chave}', this)">
+                                <tr style="cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "toggleContabilItens", "args": [d.chave, "$this"]}))}">
                                     <td><b>${escapeHtml(d.numero || "—")}</b></td>
                                     <td style="font-family:monospace;font-size:9.5px;">${escapeHtml(d.chave)}</td>
                                     <td><b>${escapeHtml(d.destinatario_nome || d.emitente_nome || "—")}</b></td>

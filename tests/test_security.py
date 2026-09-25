@@ -53,17 +53,91 @@ class TestRequireSessionGate(unittest.TestCase):
         save_session(token, {"email": "test@local.com", "nome": "Operador", "perfil": "operador"})
         client = TestClient(app)
 
-        # Teste com token no Header
+        # Teste com token no Header — único caminho aceito
         resp_header = client.get("/api/gestao/documentos", headers={"X-Session-Token": token})
         self.assertNotIn(resp_header.status_code, (401, 403))
 
-        # Teste com token na Query string
+        # Token na Query string DEVE ser recusado: ele vaza em logs de proxy,
+        # histórico do navegador e no cabeçalho Referer.
         resp_query = client.get(f"/api/gestao/documentos?token={token}")
-        self.assertNotIn(resp_query.status_code, (401, 403))
+        self.assertEqual(resp_query.status_code, 401)
 
-        # Teste com token inválido na Query string
-        resp_invalid = client.get("/api/gestao/documentos?token=token_invalido_123")
+        # Teste com token inválido no Header
+        resp_invalid = client.get("/api/gestao/documentos", headers={"X-Session-Token": "token_invalido_123"})
         self.assertEqual(resp_invalid.status_code, 401)
+
+    def test_p2p_routes_reject_unauthenticated_lan_clients(self):
+        """Regressão do bypass por IP: host de rede sem token é recusado."""
+        from backend.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        for url in ("/api/gestao/rede/exportar-dados", "/api/gestao/rede/info"):
+            resp = client.get(url)
+            self.assertEqual(
+                resp.status_code, 401,
+                f"{url} aceitou requisição sem token (bypass de rede reativado?)",
+            )
+
+    def test_exportacao_p2p_nunca_expoe_senha_de_certificado(self):
+        """A exportação P2P entrega dados cadastrais, jamais a senha do PFX."""
+        import secrets
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        from backend.routers.auth import save_session
+        from backend.dependencies import require_session_ou_sync
+
+        token = secrets.token_hex(16)
+        save_session(token, {"email": "test@local.com", "nome": "Operador", "perfil": "operador"})
+        client = TestClient(app)
+        resp = client.get(
+            "/api/gestao/rede/exportar-dados", headers={"X-Session-Token": token}
+        )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertIn("certificados_fiscais", payload)
+        for c in payload["certificados_fiscais"]:
+            self.assertNotIn("password", c, "senha do certificado vazou na exportação P2P")
+            self.assertNotIn("path", c, "caminho do .pfx vazou na exportação P2P")
+        # e a dependência não é mais o passe de IP
+        self.assertTrue(callable(require_session_ou_sync))
+
+    def test_p2p_routes_accept_sync_token(self):
+        """O segredo compartilhado autentica a sincronização entre máquinas."""
+        import secrets
+        from unittest.mock import patch
+        from backend.main import app
+        from fastapi.testclient import TestClient
+
+        segredo = secrets.token_urlsafe(32)
+        client = TestClient(app)
+        with patch("backend.dependencies.settings.SYNC_TOKEN", segredo):
+            negado = client.get("/api/gestao/rede/exportar-dados", headers={"X-Sync-Token": "errado"})
+            self.assertEqual(negado.status_code, 401)
+
+            aceito = client.get(
+                "/api/gestao/rede/exportar-dados",
+                headers={"X-Sync-Token": segredo},
+            )
+            self.assertNotEqual(aceito.status_code, 401)
+
+    def test_ip_spoof_nao_burla_rate_limit(self):
+        """X-Forwarded-For só é considerado com TRUST_PROXY=true."""
+        from backend.dependencies import RateLimiter
+
+        limiter = RateLimiter(requests=2, window_seconds=60, action_name="teste")
+
+        class _Req:
+            def __init__(self, ip, xff=None):
+                self.client = type("C", (), {"host": ip})()
+                self.headers = {"X-Forwarded-For": xff} if xff else {}
+
+        # Sem TRUST_PROXY, trocar o XFF não cria "IPs novos"
+        limiter(_Req("10.0.0.5", xff="1.1.1.1"))
+        limiter(_Req("10.0.0.5", xff="2.2.2.2"))
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException):
+            limiter(_Req("10.0.0.5", xff="3.3.3.3"))
 
 
 class TestAuthBcrypt(unittest.TestCase):
@@ -317,6 +391,92 @@ class TestRateLimiting(unittest.TestCase):
         self.assertTrue(data_backup.get("success"))
         self.assertIn("backups", data_backup)
         self.assertIsInstance(data_backup["backups"], list)
+
+
+class TestAdminGate(unittest.TestCase):
+    """Fase 2: require_admin existe e é aplicado nas rotas destrutivas."""
+
+    def _token(self, perfil="operador"):
+        import secrets
+        from backend.routers.auth import save_session
+        token = secrets.token_hex(16)
+        save_session(token, {"email": f"{perfil}@local.com", "nome": "T", "perfil": perfil})
+        return token
+
+    def _rota_destrutiva_protegida(self, cliente, token, metodo, url, **kw):
+        resp = cliente.request(metodo, url, headers={"X-Session-Token": token}, **kw)
+        self.assertEqual(
+            resp.status_code, 403,
+            f"{metodo} {url} devolveu {resp.status_code} para perfil operador (esperado 403)",
+        )
+
+    def test_rotas_destrutivas_exigem_admin(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+
+        cliente = TestClient(app)
+        token = self._token("operador")
+
+        casos = [
+            ("POST", "/api/gestao/limpeza/executar", {"json": {"termo": "x"}}),
+            ("POST", "/api/gestao/limpeza/apagar-xmls-orfaos", {}),
+            ("POST", "/api/gestao/sistema/atualizacao/executar", {}),
+            ("POST", "/api/gestao/sistema/reiniciar", {}),
+            ("GET", "/api/gestao/rede/download-banco", {}),
+            ("GET", "/api/gestao/backups/inexistente.zip/download", {}),
+            ("GET", "/api/gestao/debug/nfe-completo", {}),
+            ("DELETE", "/api/certificado/00000000000000", {}),
+        ]
+        for metodo, url, extra in casos:
+            self._rota_destrutiva_protegida(cliente, token, metodo, url, **extra)
+
+    def test_admin_passa_pelo_gate(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+
+        cliente = TestClient(app)
+        token = self._token("admin")
+        resp = cliente.get(
+            "/api/gestao/limpeza/xmls-orfaos", headers={"X-Session-Token": token}
+        )
+        self.assertNotEqual(resp.status_code, 403)
+
+
+class TestSecurityHeaders(unittest.TestCase):
+    """Fase 2: CSP, HSTS condicional e no-store na API."""
+
+    def _cabecalho(self, rota="/health"):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        return TestClient(app).get(rota).headers
+
+    def test_csp_presente(self):
+        csp = self._cabecalho().get("Content-Security-Policy", "")
+        self.assertIn("default-src 'self'", csp)
+        self.assertIn("frame-ancestors 'none'", csp)
+        self.assertIn("object-src 'none'", csp)
+
+    def test_hsts_ausente_em_http(self):
+        """HSTS emitido em HTTP puro é ignorado pelo navegador e engana o operador."""
+        self.assertNotIn("Strict-Transport-Security", self._cabecalho())
+
+    def test_api_nao_cacheada(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        # Qualquer rota /api/* — inclusive as recusadas com 401
+        resp = TestClient(app).get("/api/status/nfe")
+        self.assertEqual(resp.headers.get("Cache-Control"), "no-store")
+
+
+class TestStatusEndpointRequiresSession(unittest.TestCase):
+    """/api/status/{tipo} usava o certificado A1 do servidor sem autenticação."""
+
+    def test_status_sem_token_e_401(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+
+        resp = TestClient(app).get("/api/status/nfe")
+        self.assertEqual(resp.status_code, 401)
 
 
 if __name__ == "__main__":

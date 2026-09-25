@@ -19,6 +19,12 @@ certs/
 *.pem
 cert_meta.json
 
+# Exceção: cadeia pública de CAs da SEFAZ usada na verificação TLS
+# (backend/services/tls_sefaz.py). É certificado público de autoridade
+# certificadora, não chave privada — precisa estar versionado para que
+# toda instalação nova valide o webservice.
+!backend/security/sefaz_ca.pem
+
 # IDEs
 .vscode/
 .idea/
@@ -65,8 +71,9 @@ scratch/
 *.db-wal
 *.db-shm
 *.db.bak_*
-data/.secret_key
-data/danfe_pdfs/
-data/backups/
-data/firestore_pending_queue.json
+
+# Dados fiscais de produção — XMLs, cadastro de empresas, backups e PDFs.
+# NUNCA versionar: contém CNPJ/endereço/telefone de terceiros (LGPD) e
+# documentos fiscais com validade jurídica.
+data/
 *.zip

@@ -313,6 +313,8 @@ function setupForms() {
     document.getElementById("form-rel-emissores")?.addEventListener("submit", handleRelEmissores);
     document.getElementById("form-danfe-chave")?.addEventListener("submit", handleDanfeChave);
     document.getElementById("form-danfe-upload")?.addEventListener("submit", handleDanfeUpload);
+    // Modo de emissão: normal x contingência (tpEmis)
+    document.getElementById("emissao-modo-emissao")?.addEventListener("change", alternarModoContingencia);
     document.getElementById("form-ncm")?.addEventListener("submit", handleNcm);
     document.getElementById("form-gtin")?.addEventListener("submit", handleGtin);
     document.getElementById("form-ccc")?.addEventListener("submit", handleCcc);
@@ -431,14 +433,19 @@ function showResult(elementId, data, type = "info") {
 
     if (data && data.error && !data.status_code) {
         element.classList.add("error");
-        element.innerHTML = `<pre>${data.error}</pre>`;
+        element.innerHTML = `<pre>${escapeHtml(data.error)}</pre>`;
         return;
     }
 
     if (typeof data === "object") {
-        element.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        // textContent: JSON pode conter descrições de produto/cliente vindas
+        // de XML de terceiros — innerHTML aqui seria XSS armazenado.
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(data, null, 2);
+        element.innerHTML = "";
+        element.appendChild(pre);
     } else {
-        element.innerHTML = `<pre>${data}</pre>`;
+        element.innerHTML = `<pre>${escapeHtml(data)}</pre>`;
     }
 }
 

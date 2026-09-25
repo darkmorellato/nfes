@@ -72,8 +72,8 @@ async function handleManifestacao(e) {
                     ${cStat === "573" ? "<b>Informação:</b> Este evento de manifestação <b>já constava registrado e homologado</b> na base de dados nacional da SEFAZ para esta NF-e." : isSuccess ? "<b>Sucesso:</b> A manifestação foi vinculada à NF-e na Receita Federal e SEFAZ com valor legal." : `<b>Aviso:</b> ${escapeHtml(parsed.xMotivo || 'Verifique os dados informados.')}`}
                 </div>
                 <div style="margin-top:12px;display:flex;gap:8px;">
-                    <button type="button" class="botao botao-primario" onclick="document.getElementById('danfe-chave-input').value='${chave}';showSection('danfe');switchTab('tab-chave-danfe');document.getElementById('form-danfe-chave').dispatchEvent(new Event('submit',{cancelable:true}));">👁️ Visualizar DANFE</button>
-                    <button type="button" class="botao" onclick="showSection('distribuicao');">Ir para Distribuição DF-e</button>
+                    <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDANFEDaChave", "args": [chave]}))}">👁️ Visualizar DANFE</button>
+                    <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "showSection", "args": ['distribuicao']}))}">Ir para Distribuição DF-e</button>
                 </div>
                 <details class="sefaz-resumo-xml" style="margin-top:10px;">
                     <summary style="cursor:pointer;font-weight:bold;color:#2c3e50;">XML retornado pela SEFAZ (clique para expandir)</summary>
@@ -238,7 +238,7 @@ function renderDistribuicaoResultado(parsed, documento, tipoDoc, rawXml) {
                 <div style="font-weight:bold;font-size:13px;margin-bottom:6px;">⚠️ Alerta SEFAZ: Consumo Indevido (cStat 656)</div>
                 <div>A SEFAZ exige que as consultas sequenciais utilizem o último NSU retornado (<b>${escapeHtml(ultNSU)}</b>) em vez de reiniciar em 0.</div>
                 <div style="margin-top:10px;">
-                    <button type="button" class="botao botao-primario" onclick="document.getElementById('distribuicao-nsu').value='${escapeHtml(ultNSU)}';document.getElementById('form-distribuicao').dispatchEvent(new Event('submit',{cancelable:true}));" style="background:#27ae60;border-color:#27ae60;color:#fff;">
+                    <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "aplicarNsuEDistribuir", "args": [ultNSU]}))}" style="background:#27ae60;border-color:#27ae60;color:#fff;">
                         🔄 Consultar a partir do NSU ${escapeHtml(ultNSU)}
                     </button>
                 </div>
@@ -270,7 +270,7 @@ function renderDistribuicaoResultado(parsed, documento, tipoDoc, rawXml) {
             <td><b>${escapeHtml(emitenteNome || "—")}</b><br><span style="color:#666;font-size:10px;">${escapeHtml(emitenteCnpj)}</span></td>
             <td>${escapeHtml(fmtDate(dt))}</td>
             <td>
-                ${chave ? `<button type="button" class="botao" onclick="document.getElementById('danfe-chave-input').value='${chave}';showSection('danfe');switchTab('tab-chave-danfe');document.getElementById('form-danfe-chave').dispatchEvent(new Event('submit',{cancelable:true}));" style="padding:2px 6px;font-size:10px;">👁️ Ver DANFE</button>` : ""}
+                ${chave ? `<button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDANFEDaChave", "args": [chave]}))}" style="padding:2px 6px;font-size:10px;">👁️ Ver DANFE</button>` : ""}
             </td>
         </tr>`;
     }).join("");

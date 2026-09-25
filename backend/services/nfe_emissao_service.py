@@ -15,6 +15,7 @@ from pynfe.entidades.notafiscal import (
     NotaFiscalCobrancaDuplicata,
 )
 from pynfe.entidades.fonte_dados import _fonte_dados
+from pynfe.utils.flags import CODIGO_BRASIL
 from pynfe.processamento.serializacao import SerializacaoXML
 from pynfe.processamento.assinatura import AssinaturaA1
 from pynfe.processamento.comunicacao import ComunicacaoSefaz
@@ -24,16 +25,316 @@ from backend.database import (
     get_certificate_record,
     list_certificates_db,
     save_nfe_doc,
+    save_nfe_event,
     save_cliente,
     get_next_nfe_number,
+    reservar_proximo_numero,
+    garante_numero_livre,
     cancelar_nfe_doc,
     get_nfe_detail,
+    save_inutilizacao,
     XML_STORAGE_DIR,
 )
+from backend.database.nfe_docs import (
+    _ler_retorno_do_xml,
+    CSTAT_AUTORIZADO,
+    CSTAT_DENEGADO,
+    situacao_e_terminal,
+)
 from backend.services.danfe_service import parse_nfe_xml, generate_danfe_pdf
+from backend.services.xsd_validator import validar_xml
+from backend.utils import decode_xml
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Timeout (segundos) para qualquer chamada ao webservice da SEFAZ.
+# Sem timeout a chamada bloqueante dentro de ``async def`` congela a API inteira.
+SEFAZ_TIMEOUT = float(os.environ.get("SEFAZ_TIMEOUT", "30"))
+
+# cStat de lote (nível retEnviNFe) e de nota (nível infProt)
+CSTAT_LOTE_PROCESSADO = "104"
+CSTAT_LOTE_RECEBIDO = "103"
+CSTAT_LOTE_EM_PROCESSAMENTO = "105"
+
+# ====================================================================
+# Contingência (tpEmis)
+# ====================================================================
+# Tabela oficial do MOC NF-e (tag tpEmis do grupo B01).
+TPEMIS_NORMAL = "1"
+TPEMIS_CONTINGENCIA = {"2", "4", "5", "6", "7", "9"}
+
+# O PyNFe decide a URL de contingência pela UF e ignora o código que escrevemos
+# (``ComunicacaoSefaz._get_url(contingencia=True)``). Emitir com tpEmis 2/4/5
+# mandaria o XML para a SEFAZ Virtual errada e a SEFAZ rejeitaria.
+# Por isso só são aceitos os códigos de SVC coerentes com essa rota — e eles
+# são derivados da UF automaticamente.
+_SVC_SVAN = ("AC", "AL", "AP", "DF", "ES", "MG", "PA", "PB", "PI", "RJ",
+             "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO")
+_SVC_SVRS = ("AM", "BA", "CE", "GO", "MA", "MS", "MT", "PE", "PR")
+
+_ROTULO_TPEMIS = {
+    "1": "Emissão normal",
+    "2": "Contingência FS-IA (formulário de segurança)",
+    "4": "Contingência DPEC",
+    "5": "Contingência FS-DA (formulário de segurança)",
+    "6": "Contingência SVC-AN (SEFAZ Virtual do Ambiente Nacional)",
+    "7": "Contingência SVC-RS (SEFAZ Virtual do RS)",
+    "9": "Contingência offline da NFC-e",
+}
+
+
+def tp_emis_svc_da_uf(uf: str) -> str:
+    """
+    Código tpEmis do SVC que atende esta UF, seguindo a mesma rota do PyNFe.
+
+    * lista ``contingencia_svan`` → **6** (SVC-AN)
+    * lista ``contingencia_svrs`` → **7** (SVC-RS)
+    * vazio quando a UF não tem SVC mapeada nessa biblioteca
+    """
+    uf = (uf or "").upper()
+    if uf in _SVC_SVAN:
+        return "6"
+    if uf in _SVC_SVRS:
+        return "7"
+    return ""
+
+
+def resolver_tp_emis(payload: Dict[str, Any], uf_emitente: str) -> Tuple[str, Optional[str]]:
+    """
+    Resolve e valida o ``tpEmis`` da emissão.
+
+    Dois formatos são aceitos:
+
+    * ``contingencia: true`` → código derivado automaticamente da UF;
+    * ``tp_emis: 6|7`` → código explícito, conferido contra a UF.
+
+    Retorna ``(tp_emis, justificativa_de_contingencia)``; a justificativa é
+    ``None`` quando a emissão é normal. Qualquer incoerência levanta
+    ``ValueError`` **antes** de a numeração ser reservada e **antes** de
+    qualquer chamada à SEFAZ.
+    """
+    tp_informado = payload.get("tp_emis")
+    flag_contingencia = bool(payload.get("contingencia"))
+
+    if tp_informado in (None, ""):
+        if not flag_contingencia:
+            return TPEMIS_NORMAL, None
+        # Pediu contingência sem informar o código: deriva da UF.
+        tp_emis = tp_emis_svc_da_uf(uf_emitente)
+        if not tp_emis:
+            raise ValueError(
+                f"A UF {uf_emitente.upper()} não tem contingência SVC mapeada pelo "
+                "motor de emissão. Informe tp_emis explicitamente ou emita em modo normal."
+            )
+    else:
+        tp_emis = str(tp_informado).strip()
+        if tp_emis == TPEMIS_NORMAL:
+            if flag_contingencia:
+                raise ValueError(
+                    "Contingência contraditória: tp_emis=1 (emissão normal) junto "
+                    "com contingencia=true. Remova um dos dois."
+                )
+            return TPEMIS_NORMAL, None
+
+        if tp_emis not in TPEMIS_CONTINGENCIA:
+            raise ValueError(
+                f"tp_emis '{tp_emis}' não consta na tabela oficial da NF-e "
+                f"({', '.join(sorted(TPEMIS_CONTINGENCIA))})."
+            )
+        if tp_emis not in ("6", "7"):
+            raise ValueError(
+                f"tp_emis {tp_emis} ({_ROTULO_TPEMIS.get(tp_emis, '?')}) não é suportado: "
+                "o motor roteia a contingência para a SEFAZ Virtual, então somente "
+                "6 (SVC-AN) e 7 (SVC-RS) são coerentes com o endpoint utilizado."
+            )
+        esperado = tp_emis_svc_da_uf(uf_emitente)
+        if esperado and tp_emis != esperado:
+            raise ValueError(
+                f"A UF {uf_emitente.upper()} é atendida por "
+                f"{_ROTULO_TPEMIS[esperado]} — use tp_emis={esperado} "
+                f"(o {tp_emis} enviaria o XML para a SEFAZ Virtual errada)."
+            )
+
+    justificativa = remover_acentos_sefaz(str(payload.get("contingencia_justificativa") or "").strip())
+    if len(justificativa) < 15:
+        raise ValueError(
+            "A contingência exige justificativa de no mínimo 15 caracteres "
+            "(campo contingencia_justificativa) — exigido pela SEFAZ em <xJust>."
+        )
+    if len(justificativa) > 255:
+        raise ValueError("A justificativa de contingência aceita no máximo 255 caracteres.")
+
+    return tp_emis, justificativa
+
+
+def _situacao_de_cstat(c_stat: str, protocolo: str = "") -> str:
+    """Máquina de estados fiscal a partir do cStat real devolvido pela SEFAZ."""
+    if c_stat in CSTAT_AUTORIZADO:
+        return "Autorizada"
+    if c_stat in CSTAT_DENEGADO:
+        return "Denegada"
+    if c_stat in (CSTAT_LOTE_RECEBIDO, CSTAT_LOTE_EM_PROCESSAMENTO):
+        return "Em Processamento"
+    if c_stat:
+        return f"Rejeitada ({c_stat})"
+    return "Pendente"
+
+
+def _extrair_icms_tot(xml: str) -> Dict[str, str]:
+    """Lê os totais do grupo ``ICMSTot`` direto do XML assinado da NF-e."""
+    resultado = {
+        "vBC": "0.00", "vICMS": "0.00", "vProd": "0.00", "vFrete": "0.00",
+        "vSeg": "0.00", "vDesc": "0.00", "vIPI": "0.00", "vPIS": "0.00",
+        "vCOFINS": "0.00", "vOutro": "0.00", "vNF": "0.00",
+    }
+    if not xml:
+        return resultado
+    bloco = re.search(r"<ICMSTot>(.*?)</ICMSTot>", xml, re.S)
+    if not bloco:
+        return resultado
+    for chave in resultado:
+        m = re.search(rf"<{chave}>([^<]+)</{chave}>", bloco.group(1))
+        if m and m.group(1).strip():
+            resultado[chave] = m.group(1).strip()
+    return resultado
+
+
+def _serializar_prot_nfe(proc_elem) -> str:
+    """
+    Serializa o ``<protNFe>`` devolvido pela SEFAZ com namespace padrão canônico.
+
+    O PyNFe monta o ``nfeProc`` usando ``xmlns`` como atributo literal, o que faz
+    o lxml prefixar o grupo recebido da SEFAZ como ``<ns0:protNFe>``. Reconstruir
+    apenas esse grupo devolve o formato usual de ``procNFe`` — o ``<NFe>`` assinado
+    não é re-serializado, então a assinatura permanece intacta.
+    """
+    from pynfe.utils.flags import NAMESPACE_NFE
+
+    nos = proc_elem.xpath(".//*[local-name()='protNFe']")
+    if not nos:
+        return ""
+    prot = nos[0]
+    novo = etree.Element("protNFe", nsmap={None: NAMESPACE_NFE}, versao=prot.get("versao") or "4.00")
+    for filho in list(prot):
+        novo.append(filho)
+    return etree.tostring(novo, encoding="unicode")
+
+
+def _montar_nfe_proc(xml_nfe_assinado: str, prot_xml: str) -> str:
+    """Envolve o ``<NFe>`` assinado (bytes originais) no ``nfeProc`` com o protocolo."""
+    from pynfe.utils.flags import NAMESPACE_NFE
+
+    corpo_nfe = re.sub(r"<\?xml[^?]*\?>", "", xml_nfe_assinado or "").strip()
+    if not corpo_nfe or not prot_xml:
+        return ""
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<nfeProc xmlns="{NAMESPACE_NFE}" versao="4.00">\n'
+        f"{corpo_nfe}\n{prot_xml}\n</nfeProc>"
+    )
+
+
+def _parse_retorno_autorizacao(resposta, xml_assinado_str: str = "") -> Dict[str, str]:
+    """
+    Converte o retorno de ``ComunicacaoSefaz.autorizacao()`` em dados estruturados.
+
+    O PyNFe devolve **sempre uma tupla**:
+      * ``(0, nfeProc)``  → autorizado (cStat 100/150), com o ``protNFe`` real da SEFAZ;
+      * ``(1, response, nota)`` → qualquer outra situação (rejeição, lote, erro HTTP).
+
+    Nunca inventamos protocolo, digVal ou verAplic: tudo vem do XML de resposta.
+    """
+    resultado: Dict[str, str] = {
+        "c_stat": "",
+        "motivo": "",
+        "protocolo": "",
+        "dh_recbto": "",
+        "dig_val": "",
+        "ver_aplic": "",
+        "c_msg": "",
+        "x_msg": "",
+        "xml_proc": "",
+        "erro": None,
+    }
+
+    try:
+        codigo, primeiro, *demais = resposta
+    except Exception:
+        resultado["erro"] = "Formato de retorno inesperado do PyNFe (esperada uma tupla)."
+        return resultado
+
+    if codigo == 0 and primeiro is not None:
+        # Autorizado: `primeiro` é o <nfeProc> montado com o protNFe real.
+        proc_elem = primeiro
+        retorno = _ler_retorno_do_xml(etree.tostring(proc_elem, encoding="unicode"))
+        resultado.update({
+            "c_stat": retorno.get("c_stat", ""),
+            "motivo": retorno.get("x_motivo", ""),
+            "protocolo": retorno.get("protocolo", ""),
+            "dh_recbto": retorno.get("dh_recbto", ""),
+            "dig_val": retorno.get("dig_val", ""),
+            "ver_aplic": retorno.get("ver_aplic", ""),
+        })
+        if not resultado["c_stat"]:
+            resultado["erro"] = "Resposta da SEFAZ sem infProt mesmo com status 0."
+            return resultado
+        # O <NFe> assinado é envolvido por concatenação de string: a assinatura
+        # cobre apenas <infNFe>, então nenhum byte assinado é re-serializado.
+        resultado["xml_proc"] = _montar_nfe_proc(xml_assinado_str, _serializar_prot_nfe(proc_elem))
+        return resultado
+
+    # Falha / rejeição: `primeiro` é o objeto Response do SOAP.
+    response = primeiro
+    corpo = getattr(response, "text", None) or getattr(response, "content", None) or ""
+    if isinstance(corpo, bytes):
+        corpo = corpo.decode("utf-8", errors="replace")
+    status_http = getattr(response, "status_code", None)
+    if status_http not in (None, 200):
+        resultado["erro"] = f"HTTP {status_http} no webservice da SEFAZ"
+        resultado["motivo"] = f"Falha de comunicação com a SEFAZ (HTTP {status_http})."
+        return resultado
+
+    try:
+        raiz = etree.fromstring(corpo.encode("utf-8"))
+    except Exception as exc:
+        resultado["erro"] = f"Não foi possível interpretar a resposta da SEFAZ: {exc}"
+        resultado["motivo"] = "Resposta da SEFAZ ilegível."
+        return resultado
+
+    def _acha(tag: str) -> str:
+        nos = raiz.xpath(f"//*[local-name()='{tag}']")
+        return (nos[0].text or "").strip() if nos else ""
+
+    # 1) Nível de item: infProt (quando o lote foi processado)
+    inf_prot = raiz.xpath("//*[local-name()='infProt']")
+    if inf_prot:
+        bloco = inf_prot[0]
+        def _dentro(nome: str) -> str:
+            nos = bloco.xpath(f".//*[local-name()='{nome}']")
+            return (nos[0].text or "").strip() if nos else ""
+        resultado["c_stat"] = _dentro("cStat")
+        resultado["motivo"] = _dentro("xMotivo")
+        resultado["protocolo"] = _dentro("nProt")
+        resultado["dh_recbto"] = _dentro("dhRecbto")
+        resultado["dig_val"] = _dentro("digVal")
+        resultado["ver_aplic"] = _dentro("verAplic")
+
+    # 2) Nível de lote: retEnviNFe (usado quando não há infProt ou cStat vazio)
+    lote_cstat = _acha("cStat") if not resultado["c_stat"] else ""
+    if not resultado["c_stat"] and lote_cstat:
+        resultado["c_stat"] = lote_cstat
+        resultado["motivo"] = _acha("xMotivo") or "Sem descrição retornada pela SEFAZ."
+    resultado["c_msg"] = _acha("cMsg")
+    resultado["x_msg"] = _acha("xMsg")
+
+    # 3) Mensagem de erro SOAP (falha de transporte, certificado, etc.)
+    fault = _acha("faultstring") or _acha("Message")
+    if fault and not resultado["c_stat"]:
+        resultado["erro"] = fault
+        resultado["motivo"] = f"Erro de comunicação com a SEFAZ: {fault}"
+
+    return resultado
 
 # Meses em pt-BR (por extenso e abreviado) para rótulos de fechamento contábil.
 _MESES_PT_BR = [
@@ -159,12 +460,17 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
     emit_cep = "".join(c for c in str(payload.get("emitente_cep") or cert_rec.get("cep") or "01001000") if c.isdigit())
     emit_crt = int(payload.get("regime_tributario") or cert_rec.get("crt") or 1)
 
+    # ATENÇÃO: os atributos corretos do PyNFe são `cnpj` e
+    # `codigo_de_regime_tributario`. Usar `numero_documento`/`regime_tributario`
+    # criava atributos órfãos que o serializador ignora — resultando em XML sem
+    # <CNPJ> em <emit> e com <CRT/> vazio (Rejeição 225) e em chave de acesso
+    # com CNPJ zerado.
     pynfe_emitente = Emitente(
         razao_social=cert_rec["razao_social"],
         nome_fantasia=cert_rec.get("nome_fantasia") or cert_rec["razao_social"].split()[0],
-        numero_documento=emit_cnpj_clean,
+        cnpj=emit_cnpj_clean,
         inscricao_estadual=emit_ie,
-        regime_tributario=emit_crt, # 1=Simples Nacional
+        codigo_de_regime_tributario=str(emit_crt), # 1=Simples Nacional, 2=Simples excesso, 3=Regime normal
         endereco_logradouro=emit_logr,
         endereco_numero=emit_num,
         endereco_bairro=emit_bairro,
@@ -213,7 +519,10 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         endereco_municipio=dest_mun_limpo,
         endereco_cod_municipio=dest_cod_mun,
         endereco_uf=dest_uf,
-        endereco_cep=dest_data.get("cep", "01001000").replace("-", ""),
+        endereco_cep=str(dest_data.get("cep", "01001000")).replace("-", ""),
+        # O padrão da classe é "" e o serializador emite <cPais/> vazio →
+        # viola o padrão [0-9]{1,4} e a SEFAZ responde cStat 225.
+        endereco_pais=CODIGO_BRASIL,
     )
 
     # Salva cliente no banco para cadastros futuros se solicitado
@@ -239,9 +548,41 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             print(f"Aviso ao auto-salvar cliente: {e}")
 
+    # Contingência: validada ANTES de reservar numeração e ANTES de qualquer
+    # chamada à SEFAZ — um tpEmis incoerente com a UF geraria XML que a SEFAZ
+    # rejeita e ainda queimaria um número de nota.
+    tp_emis, contingencia_just = resolver_tp_emis(payload, emit_uf)
+
     # 3. Número, Série e Identificação
+    # Valida os itens ANTES de reservar numeração: um payload inválido não pode
+    # queimar números da sequência fiscal da empresa.
+    produtos_payload = payload.get("produtos") or []
+    if not produtos_payload:
+        raise ValueError("A NF-e deve conter ao menos 1 produto ou serviço.")
+    for idx_item, item_bruto in enumerate(produtos_payload, start=1):
+        try:
+            q_item = Decimal(str(item_bruto.get("quantidade", 1)))
+            vu_item = Decimal(str(item_bruto.get("valor_unitario", 0)))
+        except Exception:
+            raise ValueError(f"Item {idx_item}: quantidade ou valor unitário inválido.")
+        if q_item <= 0:
+            raise ValueError(f"Item {idx_item}: a quantidade deve ser maior que zero.")
+        if vu_item < 0:
+            raise ValueError(f"Item {idx_item}: o valor unitário não pode ser negativo.")
+
     serie = str(payload.get("serie", "1"))
-    numero = int(payload.get("numero") or get_next_nfe_number(emit_cnpj_clean, serie))
+    modelo_doc = str(payload.get("modelo", "55"))
+    numero_informado = payload.get("numero")
+    if numero_informado:
+        # Número escolhido manualmente pelo operador: precisa estar livre e
+        # reservar a sequência até ele, para que a próxima emissão não o reutilize.
+        numero = int(numero_informado)
+        garante_numero_livre(emit_cnpj_clean, serie, modelo_doc, numero)
+    else:
+        # Reserva atômica (BEGIN IMMEDIATE): emissões simultâneas nunca recebem
+        # o mesmo número — previne a Rejeição 204 da SEFAZ.
+        numero = reservar_proximo_numero(emit_cnpj_clean, serie, modelo_doc)
+
     natureza_op = remover_acentos_sefaz(str(payload.get("natureza_operacao") or "VENDA DE MERCADORIA"))
     is_interestadual = emit_uf != dest_uf
     ind_destino = 2 if is_interestadual else 1
@@ -265,6 +606,11 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
     inf_cpl_base = payload.get("informacoes_complementares", "Documento emitido por ME ou EPP optante pelo Simples Nacional. Nao gera direito a credito fiscal de IPI.")
 
     # 4. Instanciação da Nota Fiscal
+    # O PyNFe mantém um repositório global de entidades. Se uma emissão anterior
+    # falhou após criar o NotaFiscal, ele fica residente e a próxima serialização
+    # geraria <NFe> com DOIS <infNFe> (XML inválido) assinando a nota errada.
+    _fonte_dados.limpar_dados()
+
     nota_fiscal = NotaFiscal(
         emitente=pynfe_emitente,
         cliente=pynfe_cliente,
@@ -277,7 +623,9 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         indicador_presencial=int(payload.get("indicador_presencial", 1)),
         numero_nf=str(numero),
         serie=str(serie),
-        forma_emissao="1", # Normal
+        # tpEmis entra na chave de acesso (posição 34), por isso precisa estar
+        # definido antes de qualquer serialização.
+        forma_emissao=tp_emis,
         modelo="55",
         uf=emit_uf,
         municipio=emit_cod_mun,
@@ -298,14 +646,42 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("A NF-e de Devolução (Finalidade 4) exige a Chave de 44 dígitos da NF-e de Origem Referenciada conforme a SEFAZ (Rejeição 321).")
 
     # 5. Adição dos Produtos e Cálculo dos Tributos (IBPT)
-    produtos_payload = payload.get("produtos", [])
-    if not produtos_payload:
-        raise ValueError("A NF-e deve conter ao menos 1 produto ou serviço.")
-
     tot_produtos = Decimal("0.00")
     tot_desconto = Decimal("0.00")
     tot_trib_fed = Decimal("0.00")
     tot_trib_est = Decimal("0.00")
+    tot_trib_aprox = Decimal("0.00")   # soma exata dos vTotTrib dos itens
+    itens_para_rateio: List[Tuple[Any, Decimal]] = []  # (objeto_do_item, valor_bruto)
+
+    # CSOSN (Simples Nacional) e CST (Regime Normal) são mutuamente exclusivos.
+    # Misturar os dois gera <ICMSSN102><CSOSN>000</CSOSN> → Rejeição 215/225.
+    CSOSN_VALIDOS = {"101", "102", "103", "201", "202", "203", "300", "400", "500", "900"}
+    CST_VALIDOS = {"00", "02", "10", "15", "20", "30", "40", "41", "50", "51", "60", "70", "90"}
+
+    def _resolver_classificacao(valor_informado: str, idx: int) -> str:
+        bruto = str(valor_informado or "").strip()
+        if emit_crt == 1:
+            if bruto in CSOSN_VALIDOS:
+                return bruto
+            if bruto:
+                logger.warning(
+                    "[NFE EMISSAO] Item %s: CSOSN '%s' inválido para o Simples Nacional — usando 102.",
+                    idx, bruto,
+                )
+            return "102"
+        # Regime Normal (CRT 2/3)
+        cand = bruto[-2:] if (len(bruto) == 3 and bruto.startswith("0")) else bruto
+        if cand in CST_VALIDOS:
+            return cand
+        if not bruto:
+            raise ValueError(
+                f"Item {idx}: a empresa não é optante pelo Simples Nacional (CRT {emit_crt}), "
+                "portanto é obrigatório informar o CST de ICMS (2 dígitos) do item."
+            )
+        raise ValueError(
+            f"Item {idx}: CST/CSOSN informado ('{bruto}') incompatível com o regime tributário "
+            f"da empresa (CRT {emit_crt}). Informe um CST válido ({', '.join(sorted(CST_VALIDOS))})."
+        )
 
     for idx, prod_raw in enumerate(produtos_payload, start=1):
         cod_prod = remover_acentos_sefaz(str(prod_raw.get("codigo") or f"PROD{idx}"))
@@ -320,7 +696,17 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         qtd = Decimal(str(prod_raw.get("quantidade", 1)))
         v_unit = Decimal(str(prod_raw.get("valor_unitario", 0.0)))
         v_desc = Decimal(str(prod_raw.get("desconto", 0.0)))
-        v_tot = (qtd * v_unit) - v_desc
+        # vProd SEMPRE bruto (qCom × vUnCom); o desconto vai em <vDesc> à parte.
+        # Embutir o desconto em vProd quebra a regra vProd = qCom × vUnCom − vDesc
+        # e faz o <vDesc> total ficar sempre 0,00 no ICMSTot.
+        v_bruto = qtd * v_unit
+        if v_desc < 0:
+            raise ValueError(f"Item {idx}: o desconto não pode ser negativo.")
+        if v_desc > v_bruto:
+            raise ValueError(
+                f"Item {idx}: o desconto (R$ {v_desc:.2f}) é maior que o valor do item (R$ {v_bruto:.2f})."
+            )
+        v_tot = v_bruto - v_desc
 
         cfop_sugerido = "6102" if is_interestadual else "5102"
         if "DEVOLUCAO" in natureza_op or finalidade == 4:
@@ -335,7 +721,7 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         else:
             cfop = cfop_inf
 
-        csosn = str(prod_raw.get("csosn_cst") or "102")
+        classificacao = _resolver_classificacao(prod_raw.get("csosn_cst") or "", idx)
         origem = int(prod_raw.get("origem", 0))
 
         # IBPT
@@ -348,6 +734,12 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         if imei_prod:
             desc_prod = f"{desc_prod} [IMEI: {remover_acentos_sefaz(imei_prod)}]"
 
+        kwargs_icms = (
+            {"icms_csosn": classificacao, "icms_modalidade": classificacao}
+            if emit_crt == 1
+            else {"icms_csosn": "", "icms_modalidade": classificacao}
+        )
+
         p_obj = nota_fiscal.adicionar_produto_servico(
             codigo=cod_prod,
             descricao=desc_prod,
@@ -356,18 +748,20 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
             unidade_comercial=unidade,
             quantidade_comercial=qtd,
             valor_unitario_comercial=v_unit,
-            valor_total_bruto=v_tot,
+            valor_total_bruto=v_bruto,
+            desconto=v_desc,
             unidade_tributavel=unidade,
             quantidade_tributavel=qtd,
             valor_unitario_tributavel=v_unit,
             icms_origem=origem,
-            icms_csosn=csosn,
-            icms_modalidade=csosn if csosn in ("101", "102", "201", "202", "500", "900") else "102",
+            **kwargs_icms,
         )
         p_obj.ind_total = 1
         p_obj.ean = "SEM GTIN"
         p_obj.ean_tributavel = "SEM GTIN"
-        p_obj.valor_tributos_aprox = float(item_trib_tot)
+        # Decimal (não float): o PyNFe grava com str(), e str(30.0) == "30.0"
+        # violaria o padrão XSD de 2 casas decimais (Rejeição 225).
+        p_obj.valor_tributos_aprox = item_trib_tot
         p_obj.pis_modalidade = "49"
         p_obj.cofins_modalidade = "49"
         p_obj.ipi_codigo_enquadramento = "999"
@@ -375,13 +769,93 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         if imei_prod:
             p_obj.informacoes_adicionais = f"IMEI/Serial: {remover_acentos_sefaz(imei_prod)}"
 
-        tot_produtos += (qtd * v_unit)
+        itens_para_rateio.append((p_obj, v_bruto))
+        tot_produtos += v_bruto
         tot_desconto += v_desc
+        tot_trib_aprox += item_trib_tot
 
     tot_frete = Decimal(str(payload.get("valor_frete", "0.00")))
     tot_seguro = Decimal(str(payload.get("valor_seguro", "0.00")))
     tot_outras = Decimal(str(payload.get("outras_despesas", "0.00")))
+    for nome, valor in (("valor_frete", tot_frete), ("valor_seguro", tot_seguro), ("outras_despesas", tot_outras)):
+        if valor < 0:
+            raise ValueError(f"O campo {nome} não pode ser negativo.")
     tot_nota = tot_produtos - tot_desconto + tot_frete + tot_seguro + tot_outras
+    if tot_nota <= 0:
+        raise ValueError("O valor total da NF-e deve ser maior que zero.")
+
+    # Rateia frete/seguro/outras despesas entre os itens (grupo infProd/vFrete, vSeg, vOutro).
+    # O ICMSTot é a SOMA dos itens: sem isso vFrete/vSeg/vOutro ficam 0,00 e
+    # vPag (que usa tot_nota) passa a divergir de vNF → Rejeições 865/866.
+    def _ratear(valor_total: Decimal, rotulo: str) -> None:
+        if valor_total == 0 or not itens_para_rateio:
+            return
+        base_total = sum((bruto for _, bruto in itens_para_rateio), Decimal("0.00"))
+        if base_total <= 0:
+            itens_para_rateio[0][0].__setattr__(rotulo, valor_total)
+            return
+        atribuido = Decimal("0.00")
+        for pos, (obj, bruto) in enumerate(itens_para_rateio):
+            if pos == len(itens_para_rateio) - 1:
+                parte = valor_total - atribuido
+            else:
+                parte = (valor_total * bruto / base_total).quantize(Decimal("0.01"))
+                if parte < 0:
+                    parte = Decimal("0.00")
+                atribuido += parte
+            setattr(obj, rotulo, parte)
+
+    _ratear(tot_frete, "total_frete")
+    _ratear(tot_seguro, "total_seguro")
+    _ratear(tot_outras, "outras_despesas_acessorias")
+
+    # O PyNFe soma os totais no momento em que o item é INSERIDO; o rateio de
+    # frete/seguro/outras acontece depois, portanto reaplicamos os acumuladores
+    # no nível da nota. Sem isso o ICMSTot sairia com vFrete/vSeg/vOutro zerados
+    # enquanto vPag usava o total cheio → Rejeições 865/866.
+    nota_fiscal.totais_icms_total_produtos_e_servicos = tot_produtos
+    nota_fiscal.totais_icms_total_desconto = tot_desconto
+    nota_fiscal.totais_icms_total_frete = tot_frete
+    nota_fiscal.totais_icms_total_seguro = tot_seguro
+    nota_fiscal.totais_icms_outras_despesas_acessorias = tot_outras
+    # Mesma fórmula usada pelo serializador do PyNFe para <vNF>
+    nota_fiscal.totais_icms_total_nota = (
+        nota_fiscal.totais_icms_total_produtos_e_servicos
+        + nota_fiscal.totais_icms_st_total
+        + nota_fiscal.totais_fcp_st
+        + nota_fiscal.totais_icms_total_frete
+        + nota_fiscal.totais_icms_total_seguro
+        + nota_fiscal.totais_icms_outras_despesas_acessorias
+        + nota_fiscal.totais_icms_total_ii
+        + nota_fiscal.totais_icms_total_ipi
+        + nota_fiscal.totais_icms_total_ipi_dev
+        - nota_fiscal.totais_icms_total_desconto
+        - nota_fiscal.totais_icms_desonerado
+    )
+
+    # Conferência cruzada: o vNF do XML tem de fechar exatamente com tot_nota,
+    # que é o valor usado em vPag e nas duplicatas.
+    v_nf_xml = (
+        nota_fiscal.totais_icms_total_produtos_e_servicos
+        + nota_fiscal.totais_icms_total_frete
+        + nota_fiscal.totais_icms_total_seguro
+        + nota_fiscal.totais_icms_outras_despesas_acessorias
+        - nota_fiscal.totais_icms_total_desconto
+        + nota_fiscal.totais_icms_st_total
+        + nota_fiscal.totais_icms_total_ipi
+        + nota_fiscal.totais_icms_total_ipi_dev
+        - nota_fiscal.totais_icms_desonerado
+    )
+    if Decimal(f"{v_nf_xml:.2f}") != tot_nota:
+        raise ValueError(
+            f"Inconsistência de totais: vNF do XML (R$ {v_nf_xml:.2f}) difere do total "
+            f"calculado (R$ {tot_nota:.2f}). Transmissão cancelada para evitar rejeição."
+        )
+
+    # vTotTrib (Lei 12.741/2012) do grupo ICMSTot: precisa ser exatamente a soma
+    # dos vTotTrib dos itens — divergência gera Rejeição 685. Mantido como Decimal
+    # porque o serializador usa "{:.2f}" / str() e float perderia as casas.
+    nota_fiscal.totais_tributos_aproximado = tot_trib_aprox
 
     # Adiciona resumo IBPT no rodapé
     ibpt_texto = f" | Trib aprox R$: {tot_trib_fed:.2f} Federal e R$: {tot_trib_est:.2f} Estadual. Fonte: IBPT."
@@ -396,7 +870,9 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         transp_nome = transp_data.get("transportadora_nome")
         transp_doc = "".join(c for c in str(transp_data.get("transportadora_cnpj_cpf", "")) if c.isdigit())
         if transp_nome and transp_doc:
-            nota_fiscal.transportadora = Cliente(
+            # O PyNFe serializa `transporte_transportadora` (grupo transp/transporta).
+            # `transportadora` não é lido por nenhum serializador e seria descartado.
+            nota_fiscal.transporte_transportadora = Cliente(
                 razao_social=transp_nome,
                 tipo_documento="CNPJ" if len(transp_doc) == 14 else "CPF",
                 numero_documento=transp_doc,
@@ -404,23 +880,26 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
                 endereco_logradouro=transp_data.get("transportadora_endereco", ""),
                 endereco_municipio=transp_data.get("transportadora_municipio", ""),
                 endereco_uf=transp_data.get("transportadora_uf", "SP"),
+                endereco_pais=CODIGO_BRASIL,
             )
 
         if transp_data.get("placa_veiculo"):
             nota_fiscal.transporte_veiculo_placa = str(transp_data["placa_veiculo"]).replace("-", "").upper()
             nota_fiscal.transporte_veiculo_uf = (transp_data.get("uf_veiculo") or "SP").upper()
 
-        qtd_vol = int(transp_data.get("volumes_qtd") or 1)
-        if qtd_vol > 0:
-            vol_obj = NotaFiscalTransporteVolume(
-                quantidade=qtd_vol,
-                especie=str(transp_data.get("volumes_especie") or "VOLUMES").upper(),
-                marca=str(transp_data.get("volumes_marca") or "").upper(),
-                numeracao=str(transp_data.get("volumes_numeracao") or ""),
-                peso_liquido=float(transp_data.get("peso_liquido") or 0.0),
-                peso_bruto=float(transp_data.get("peso_bruto") or 0.0),
-            )
-            nota_fiscal.transporte_volumes = [vol_obj]
+    # Volumes e pesos (grupo vol) são independentes da modalidade de frete:
+    # sempre que houver volume informado, precisa ir para o XML.
+    qtd_vol = int(transp_data.get("volumes_qtd") or 0)
+    if qtd_vol > 0:
+        vol_obj = NotaFiscalTransporteVolume(
+            quantidade=qtd_vol,
+            especie=str(transp_data.get("volumes_especie") or "VOLUMES").upper(),
+            marca=str(transp_data.get("volumes_marca") or "").upper(),
+            numeracao=str(transp_data.get("volumes_numeracao") or ""),
+            peso_liquido=float(transp_data.get("peso_liquido") or 0.0),
+            peso_bruto=float(transp_data.get("peso_bruto") or 0.0),
+        )
+        nota_fiscal.transporte_volumes = [vol_obj]
 
     # 7. Cobrança e Faturamento a Prazo (Grupo Y - Fatura & Duplicatas)
     cond_pag = payload.get("condicao_pagamento", "a_vista")
@@ -433,36 +912,112 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         nota_fiscal.fatura_valor_liquido = float(tot_nota)
 
         dups = []
+        valores_declarados = []
         for p in parcelas_raw:
             dt_venc = p.get("vencimento")
             if isinstance(dt_venc, str):
                 try:
                     dt_venc_obj = datetime.strptime(dt_venc.split()[0], "%Y-%m-%d")
-                except:
+                except Exception:
                     dt_venc_obj = now + timedelta(days=30)
             elif isinstance(dt_venc, (datetime, date)):
                 dt_venc_obj = dt_venc
             else:
                 dt_venc_obj = now + timedelta(days=30)
 
+            valor_informado = p.get("valor")
+            valores_declarados.append(
+                None if valor_informado in (None, "") else Decimal(str(valor_informado))
+            )
             dups.append(NotaFiscalCobrancaDuplicata(
                 numero=str(p.get("numero", f"00{len(dups)+1}")),
                 data_vencimento=dt_venc_obj,
-                valor=float(p.get("valor", tot_nota / len(parcelas_raw))),
+                valor=0.0,  # recalculado abaixo para fechar com o vNF
             ))
+
+        # A soma das duplicatas tem de fechar exatamente com vNF (Rejeição 866).
+        # Valores não informados são distribuídos; a última parcela absorve
+        # a diferença de arredondamento.
+        declarados_validos = [v for v in valores_declarados if v is not None]
+        if len(declarados_validos) == len(valores_declarados) and declarados_validos:
+            soma_declarada = sum(declarados_validos, Decimal("0.00"))
+            if soma_declarada != tot_nota:
+                logger.warning(
+                    "[NFE EMISSAO] Soma das parcelas (R$ %.2f) divergia de vNF (R$ %.2f) — "
+                    "última parcela ajustada para fechar o total.",
+                    soma_declarada, tot_nota,
+                )
+            valores_declarados[-1] += tot_nota - soma_declarada
+            if valores_declarados[-1] <= 0:
+                raise ValueError(
+                    f"As parcelas informadas somam R$ {soma_declarada:.2f}, mas o total da NF-e "
+                    f"é R$ {tot_nota:.2f}. Corrija as duplicatas antes de transmitir."
+                )
+        else:
+            n = len(dups)
+            fatia = (tot_nota / n).quantize(Decimal("0.01"))
+            for i in range(n):
+                valores_declarados[i] = fatia
+            valores_declarados[-1] = tot_nota - fatia * (n - 1)
+
+        for dup, valor in zip(dups, valores_declarados):
+            dup.valor = float(valor)
         nota_fiscal.duplicatas = dups
 
     # 8. Formas de Pagamento (Grupo YA)
-    tipo_pag = str(payload.get("forma_pagamento", "17")) # Padrão: 17 = PIX
-    nota_fiscal.adicionar_pagamento(
-        t_pag=tipo_pag,
-        v_pag=float(tot_nota),
-        ind_pag="1" if cond_pag == "a_prazo" else "0",
-    )
+    tipo_pag = str(payload.get("forma_pagamento", "17")).strip()
+    tipo_pag = tipo_pag.zfill(2) if tipo_pag.isdigit() else tipo_pag  # "3" → "03"
+    cartao = payload.get("cartao") or {}
+    tp_integra = str(cartao.get("tp_integra") or payload.get("tp_integra") or "").strip()
+
+    pagamento_kwargs: Dict[str, Any] = {
+        "t_pag": tipo_pag,
+        "v_pag": float(tot_nota),
+        "ind_pag": "1" if cond_pag == "a_prazo" else "0",
+    }
+
+    # Regra 391_YA04-10 (MOC / NT 2023.004): para tPag 03 (crédito), 04 (débito)
+    # e 17 (PIX) o grupo <card> é obrigatório. Sem TEF integrado usa-se
+    # tpIntegra=2 (POS não integrado), que dispensa CNPJ da credenciadora,
+    # bandeira e código de autorização (regra 392 só aplica a tpIntegra=1).
+    if tipo_pag in ("03", "04", "17"):
+        if not tp_integra:
+            tp_integra = "2"
+
+        if tp_integra == "1":
+            faltantes = [
+                rotulo for campo, rotulo in (
+                    ("cnpj", "CNPJ da credenciadora"),
+                    ("bandeira", "bandeira do cartão (tBand)"),
+                    ("aut", "código de autorização (cAut)"),
+                )
+                if not str(cartao.get(campo) or "").strip()
+            ]
+            if faltantes:
+                raise ValueError(
+                    f"Pagamento com integração de TEF (tpIntegra=1) exige: {', '.join(faltantes)}. "
+                    "Preencha os dados da transação ou use tpIntegra=2 (POS não integrado)."
+                )
+
+        bandeira = str(cartao.get("bandeira") or "").strip()
+        if bandeira.isdigit() and len(bandeira) == 1:
+            bandeira = bandeira.zfill(2)
+
+        pagamento_kwargs.update({
+            "tp_integra": tp_integra,
+            "cnpj": str(cartao.get("cnpj") or "").strip(),
+            "t_band": bandeira,
+            "c_aut": str(cartao.get("aut") or "").strip(),
+        })
+
+    nota_fiscal.adicionar_pagamento(**pagamento_kwargs)
 
     # 9. Serialização & Assinatura Digital A1
     homolog = bool(payload.get("homologacao", settings.HOMOLOGACAO))
-    serializador = SerializacaoXML(_fonte_dados, homologacao=homolog)
+    # `contingencia=` injeta <dhCont> e <xJust> no <ide> (exigidos quando tpEmis != 1)
+    serializador = SerializacaoXML(
+        _fonte_dados, homologacao=homolog, contingencia=contingencia_just
+    )
     xml_tree = serializador.exportar(nota_fiscal)
 
     assinador = AssinaturaA1(cert_rec["path"], cert_rec["password"])
@@ -473,73 +1028,88 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not chave_acesso or len(chave_acesso) != 44:
         raise ValueError(f"Chave de acesso inválida gerada pelo PyNFe: {chave_acesso!r}")
 
+    # 9.5. Validação do leiaute XSD oficial ANTES de transmitir.
+    # Erro local é gratuito; a mesma falha na SEFAZ custa cStat 215/225 e
+    # desgasta a cota do certificado (rejeição 656 - consumo indevido).
+    violacoes = validar_xml(xml_assinado_str, esperado="NFe")
+    if violacoes:
+        detalhes = "\n".join(f"  • {e}" for e in violacoes[:8])
+        logger.error("[NFE EMISSAO] XML fora do leiaute XSD. Chave %s:\n%s", chave_acesso, detalhes)
+        raise ValueError(
+            "O XML da NF-e não corresponde ao leiaute oficial (validação XSD local). "
+            "Nada foi transmitido à SEFAZ.\n" + detalhes
+        )
+
     # 10. Transmissão para a SEFAZ
-    status_sefaz = "Autorizada"
-    protocolo = f"135260000{now.strftime('%H%M%S%f')[:7]}"
-    motivo = "Autorizado o uso da NF-e"
-    c_stat = "100"
-    dh_recbto = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
-    dig_val = "z8Fj19K4/6r+pXyV0A=="
+    # NADA é fabricado localmente: protocolo, digVal, verAplic, cStat e data de
+    # recebimento vêm exclusivamente do webservice. Sem resposta da SEFAZ não
+    # existe autorização — a nota nasce como "Pendente".
+    status_sefaz = "Pendente"
+    protocolo = ""
+    motivo = "NF-e ainda não transmitida."
+    c_stat = ""
+    dh_recbto = ""
+    dig_val = ""
+    xml_proc_completo = ""       # só é preenchido quando a SEFAZ autoriza
     sefaz_error = None
 
     try:
         con = ComunicacaoSefaz(emit_uf, cert_rec["path"], cert_rec["password"], homologacao=homolog)
-        envio_resp = con.autorizacao(modelo="nfe", nota_fiscal=xml_assinado_element)
-        if hasattr(envio_resp, "status_code") and envio_resp.status_code == 200:
-            xml_resp = envio_resp.text if hasattr(envio_resp, "text") else str(envio_resp)
-            ns = {"ns": "http://www.portalfiscal.inf.br/nfe"}
-            root = etree.fromstring(xml_resp)
-            infProt = root.find(".//ns:infProt", namespaces=ns)
-            if infProt is not None:
-                c_stat_elem = infProt.find("ns:cStat", namespaces=ns)
-                xMotivo_elem = infProt.find("ns:xMotivo", namespaces=ns)
-                nProt_elem = infProt.find("ns:nProt", namespaces=ns)
-                dhRecbto_elem = infProt.find("ns:dhRecbto", namespaces=ns)
-                digVal_elem = infProt.find("ns:digVal", namespaces=ns)
-                if c_stat_elem is not None and c_stat_elem.text:
-                    c_stat = c_stat_elem.text.strip()
-                if xMotivo_elem is not None and xMotivo_elem.text:
-                    motivo = xMotivo_elem.text.strip()
-                if nProt_elem is not None and nProt_elem.text:
-                    protocolo = nProt_elem.text.strip()
-                if dhRecbto_elem is not None and dhRecbto_elem.text:
-                    dh_recbto = dhRecbto_elem.text.strip()
-                if digVal_elem is not None and digVal_elem.text:
-                    dig_val = digVal_elem.text.strip()
-            else:
-                motivo = "Resposta SEFAZ sem protocolo de autorização (infProt não encontrado)"
-                sefaz_error = motivo
-        else:
-            motivo = f"SEFAZ retornou HTTP {getattr(envio_resp, 'status_code', '?')}"
-            sefaz_error = motivo
+        # ATENÇÃO: o PyNFe devolve UMA TUPLA (código, resultado), nunca um
+        # objeto HTTP. Tratar como Response fazia o retorno ser descartado e a
+        # nota era gravada como "Autorizada" mesmo em rejeição.
+        envio_resp = con.autorizacao(
+            modelo="nfe",
+            nota_fiscal=xml_assinado_element,
+            id_lote=1,
+            ind_sinc=1,
+            timeout=SEFAZ_TIMEOUT,
+            # Em contingência o endpoint muda (SVAN/SVRS) — o PyNFe decide pela UF.
+            contingencia=tp_emis != TPEMIS_NORMAL,
+        )
+        retorno = _parse_retorno_autorizacao(envio_resp, xml_assinado_str)
+        c_stat = retorno["c_stat"]
+        motivo = retorno["motivo"] or "Sem descrição retornada pela SEFAZ."
+        protocolo = retorno["protocolo"]
+        dh_recbto = retorno["dh_recbto"]
+        dig_val = retorno["dig_val"]
+        sefaz_error = retorno["erro"]
+        xml_proc_completo = retorno["xml_proc"]
+        status_sefaz = _situacao_de_cstat(c_stat, protocolo)
     except Exception as sefaz_err:
-        sefaz_error = str(sefaz_err)
-        motivo = f"Erro na transmissão SEFAZ: {sefaz_err}"
-        c_stat = "999"
+        logger.exception("[NFE EMISSAO] Falha de transmissão SEFAZ para a chave %s", chave_acesso)
+        from backend.services.tls_sefaz import mensagem_erro_tls
+        erro_tls = mensagem_erro_tls(sefaz_err)
+        sefaz_error = erro_tls or str(sefaz_err)
+        motivo = erro_tls or f"Erro na transmissão SEFAZ: {sefaz_err}"
+        c_stat = ""
+        status_sefaz = "Pendente"
+        xml_proc_completo = ""
 
-    # 11. Montagem do nfeProc final (XML oficial com protocolo de autorização)
-    xml_proc_completo = f"""<?xml version="1.0" encoding="UTF-8"?>
-<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-{xml_assinado_str.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0" encoding="utf-8"?>', '').strip()}
-<protNFe versao="4.00">
-    <infProt>
-        <tpAmb>{'2' if homolog else '1'}</tpAmb>
-        <verAplic>SP_NFE_PL_009_V4</verAplic>
-        <chNFe>{chave_acesso}</chNFe>
-        <dhRecbto>{dh_recbto}</dhRecbto>
-        <nProt>{protocolo}</nProt>
-        <digVal>{dig_val}</digVal>
-        <cStat>{c_stat}</cStat>
-        <xMotivo>{motivo}</xMotivo>
-    </infProt>
-</protNFe>
-</nfeProc>"""
+    # Defesa em profundidade: só há autorização se a SEFAZ devolveu um nfeProc.
+    autorizada = status_sefaz == "Autorizada" and bool(xml_proc_completo)
+    if status_sefaz == "Autorizada" and not autorizada:
+        status_sefaz = "Pendente"
+        motivo = "Resposta interpretada como autorizada sem XML de protocolo — transmissão não confirmada."
 
-    # 12. Salva o XML em disco data/xmls/ e no banco SQLite nfe_docs
-    xml_path = os.path.join(XML_STORAGE_DIR, f"{chave_acesso}.xml")
-    with open(xml_path, "w", encoding="utf-8") as f:
-        f.write(xml_proc_completo)
+    # 11. NÃO montamos nfeProc manualmente. Persiste-se byte a byte o retorno da
+    # SEFAZ quando autorizada; caso contrário, guarda-se apenas o <NFe> assinado
+    # (coluna xml_assinado) para retransmissão idempotente.
+    if not xml_proc_completo:
+        status_sefaz = "Pendente" if status_sefaz == "Autorizada" else status_sefaz
+    elif not xml_proc_completo.lstrip().startswith("<?xml"):
+        xml_proc_completo = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_proc_completo.lstrip()
 
+    dh_emissao = now.isoformat()
+    m_dhemi = re.search(r"<dhEmi>([^<]+)</dhEmi>", xml_assinado_str)
+    if m_dhemi and m_dhemi.group(1).strip():
+        dh_emissao = m_dhemi.group(1).strip()
+
+    # Totais lidos do próprio XML (ICMSTot) — nunca chumbados como 0,00
+    totais_do_xml = _extrair_icms_tot(xml_assinado_str)
+
+    # 12. Gravação no banco (upsert). O XML oficial só vai para data/xmls/ quando
+    # há protocolo real — save_nfe_doc escreve em disco apenas se xml_raw vier.
     doc_dict = {
         "chave": chave_acesso,
         "empresa_cnpj": emit_cnpj_clean,
@@ -547,30 +1117,40 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
         "serie": serie,
         "modelo": "55",
         "tipo_doc": 1, # 1=Saída para Cliente
-        "data_emissao": dh_recbto,
-        "data_autorizacao": dh_recbto,
+        "data_emissao": dh_emissao,
+        "data_autorizacao": dh_recbto or "",
         "emitente": {
             "nome": cert_rec["razao_social"],
             "cnpj": emit_cnpj_clean,
             "uf": emit_uf,
             "municipio": emit_municipio,
+            "endereco": {"uf": emit_uf, "municipio": emit_municipio},
         },
+        "emitente_uf": emit_uf,
         "destinatario": {
             "nome": dest_nome,
             "cnpj": dest_doc_clean if dest_tipo_doc == "CNPJ" else "",
             "cpf": dest_doc_clean if dest_tipo_doc == "CPF" else "",
             "uf": dest_uf,
             "municipio": dest_municipio,
+            "endereco": {"uf": dest_uf, "municipio": dest_municipio},
         },
+        "destinatario_uf": dest_uf,
         "totais": {
             "v_nf": f"{tot_nota:.2f}",
-            "v_icms": "0.00",
-            "v_pis": "0.00",
-            "v_cofins": "0.00",
-            "v_ipi": "0.00",
+            "v_icms": totais_do_xml.get("vICMS", "0.00"),
+            "v_pis": totais_do_xml.get("vPIS", "0.00"),
+            "v_cofins": totais_do_xml.get("vCOFINS", "0.00"),
+            "v_ipi": totais_do_xml.get("vIPI", "0.00"),
         },
         "situacao": status_sefaz,
         "protocolo": protocolo,
+        "c_stat": c_stat,
+        "x_motivo": motivo,
+        "tp_amb": 2 if homolog else 1,
+        "tp_emis": int(tp_emis),
+        "dh_recbto": dh_recbto,
+        "xml_assinado": "" if xml_proc_completo else xml_assinado_str,
         "produtos": [
             {
                 "n_item": i,
@@ -582,123 +1162,519 @@ def emitir_nfe_profissional(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "quantidade": float(p.quantidade_comercial),
                 "valor_unitario": float(p.valor_unitario_comercial),
                 "valor_total": float(p.valor_total_bruto),
+                "cst": getattr(p, "icms_modalidade", "") or "",
+                "v_icms": float(getattr(p, "icms_valor", 0) or 0),
             } for i, p in enumerate(nota_fiscal.produtos_e_servicos, start=1)
         ]
     }
 
-    saved = save_nfe_doc(doc_dict, xml_raw=xml_proc_completo, empresa_cnpj=emit_cnpj_clean)
+    try:
+        saved = save_nfe_doc(doc_dict, xml_raw=xml_proc_completo or None, empresa_cnpj=emit_cnpj_clean)
+    except Exception:
+        logger.exception(
+            "[NFE EMISSAO] EXCEÇÃO AO SALVAR no banco: chave=%s (número %s da série %s do CNPJ %s "
+            "foi consumido — confira a numeração e a situação na SEFAZ)",
+            chave_acesso, numero, serie, emit_cnpj_clean,
+        )
+        raise
     if not saved:
         logger.error(f"[NFE EMISSAO] FALHA AO SALVAR no banco: chave={chave_acesso} emit_cnpj={emit_cnpj_clean}")
         raise RuntimeError(f"Falha ao salvar NF-e no banco local (chave={chave_acesso}). Verifique os logs.")
-    logger.info(f"[NFE EMISSAO] Salvo no banco: chave={chave_acesso} data_emissao={doc_dict.get('data_emissao')} valor={doc_dict.get('totais', {}).get('v_nf')}")
+    logger.info(
+        "[NFE EMISSAO] Salvo: chave=%s nº=%s série=%s situação=%s cStat=%s protocolo=%s valor=%.2f",
+        chave_acesso, numero, serie, status_sefaz, c_stat, protocolo or "-", float(tot_nota),
+    )
 
     if sefaz_error:
         logger.error(f"[NFE EMISSAO] ERRO SEFAZ para chave {chave_acesso}: {sefaz_error} | cStat={c_stat} | motivo={motivo}")
     else:
-        logger.info(f"[NFE EMISSAO] Sucesso: chave={chave_acesso} | cStat={c_stat} | protocolo={protocolo}")
+        logger.info(f"[NFE EMISSAO] Retorno: chave={chave_acesso} | cStat={c_stat or '-'} | protocolo={protocolo or '-'} | {status_sefaz}")
 
-    # 13. Gera automaticamente o PDF do DANFE em disco
-    try:
-        pdf_io = generate_danfe_pdf(xml_proc_completo.encode("utf-8"))
-        if pdf_io:
-            pdf_dir = os.path.join(settings.DATA_DIR, "danfe_pdfs")
-            os.makedirs(pdf_dir, exist_ok=True)
-            with open(os.path.join(pdf_dir, f"{chave_acesso}.pdf"), "wb") as f_pdf:
-                f_pdf.write(pdf_io.getvalue())
-    except Exception as pdf_err:
-        print(f"Aviso ao gerar DANFE PDF de saída: {pdf_err}")
+    # 13. DANFE em disco somente para nota COM protocolo real da SEFAZ.
+    # Emitir DANFE de nota não autorizada produziria documento sem validade fiscal.
+    pdf_gerado = False
+    if autorizada:
+        try:
+            pdf_io = generate_danfe_pdf(xml_proc_completo.encode("utf-8"))
+            if pdf_io:
+                pdf_dir = os.path.join(settings.DATA_DIR, "danfe_pdfs")
+                os.makedirs(pdf_dir, exist_ok=True)
+                with open(os.path.join(pdf_dir, f"{chave_acesso}.pdf"), "wb") as f_pdf:
+                    f_pdf.write(pdf_io.getvalue())
+                pdf_gerado = True
+        except Exception:
+            logger.exception("[NFE EMISSAO] Falha ao gerar DANFE PDF da chave %s", chave_acesso)
 
     return {
-        "success": True,
+        # `success` só é verdadeiro com autorização real da SEFAZ.
+        "success": autorizada,
+        "autorizada": autorizada,
+        "denegada": status_sefaz == "Denegada",
+        "situacao": status_sefaz,
         "chave": chave_acesso,
         "numero": numero,
         "serie": serie,
         "protocolo": protocolo,
         "c_stat": c_stat,
         "motivo": motivo,
+        "x_motivo": motivo,
+        "detail": motivo,          # lido pelo front na tela de rejeição
+        "error": motivo if not autorizada else None,
+        "dh_recbto": dh_recbto,
+        "dig_val": dig_val,
         "emitente": cert_rec["razao_social"],
         "emitente_cnpj": emit_cnpj_clean,
         "destinatario": dest_nome,
         "destinatario_doc": dest_doc_clean,
         "valor_total": float(tot_nota),
-        "data_emissao": dh_recbto,
+        "data_emissao": dh_emissao,
         "ambiente": "Homologação" if homolog else "Produção",
-        "has_xml": 1,
+        "xml_gerado": bool(xml_proc_completo),
+        "has_xml": 1 if xml_proc_completo else 0,
+        "pdf_gerado": pdf_gerado,
+        "tp_emis": int(tp_emis),
+        "contingencia": tp_emis != TPEMIS_NORMAL,
+        "sefaz_error": sefaz_error,
     }
+
+
+# ====================================================================
+# EVENTOS FISCAIS (cancelamento 110111, CC-e 110110) e Inutilização 404/405
+# Tudo é TRANSMITIDO à SEFAZ. Nenhum protocolo é fabricado localmente.
+# ====================================================================
+
+def _extrair_retorno_consulta(xml_texto) -> Dict[str, str]:
+    """Lê o retorno de ``consulta_nota`` (``retConsSitNFe``).
+
+    ``cStat``/``xMotivo`` ficam no nível raiz da resposta; o protocolo vem em
+    ``protNFe/infProt/nProt`` (só existe quando a nota está na base da SEFAZ).
+    """
+    out = {"c_stat": "", "motivo": "", "protocolo": "", "erro": ""}
+    if not xml_texto:
+        out["erro"] = "Resposta vazia do webservice da SEFAZ."
+        return out
+    try:
+        bruto = xml_texto if not isinstance(xml_texto, str) else xml_texto.encode("utf-8")
+        raiz = etree.fromstring(bruto)
+    except Exception as exc:
+        out["erro"] = f"Resposta da SEFAZ ilegível: {exc}"
+        return out
+
+    # cStat de nível de serviço (fora de infProt/infEvento)
+    candidatos = raiz.xpath(
+        "//*[local-name()='retConsSitNFe' or local-name()='retConsStatServ']"
+        "/*[local-name()='cStat']"
+    )
+    if not candidatos:
+        candidatos = raiz.xpath("//*[local-name()='cStat']")
+    if candidatos:
+        out["c_stat"] = (candidatos[0].text or "").strip()
+
+    motivos = raiz.xpath(
+        "//*[local-name()='retConsSitNFe' or local-name()='retConsStatServ']"
+        "/*[local-name()='xMotivo']"
+    )
+    if motivos:
+        out["motivo"] = (motivos[0].text or "").strip()
+
+    prots = raiz.xpath("//*[local-name()='protNFe']//*[local-name()='nProt']")
+    if prots:
+        out["protocolo"] = (prots[0].text or "").strip()
+
+    if not out["c_stat"]:
+        fault = raiz.xpath("//*[local-name()='faultstring']/text()")
+        out["erro"] = fault[0].strip() if fault else "Retorno da SEFAZ sem cStat."
+    return out
+
+
+def _extrair_infret(xml_texto) -> Dict[str, str]:
+    """Lê ``cStat``/``xMotivo``/``nProt`` do retorno de eventos e inutilização.
+
+    Aceita ``<retEnviEvento><retEvento><infEvento>`` e ``<retInutNFe><infInut>``.
+    """
+    out = {"c_stat": "", "motivo": "", "protocolo": "", "dh_reg": "", "erro": ""}
+    if not xml_texto:
+        out["erro"] = "Resposta vazia do webservice da SEFAZ."
+        return out
+    try:
+        bruto = xml_texto if not isinstance(xml_texto, str) else xml_texto.encode("utf-8")
+        raiz = etree.fromstring(bruto)
+    except Exception as exc:
+        out["erro"] = f"Resposta da SEFAZ ilegível: {exc}"
+        return out
+
+    nos = raiz.xpath("//*[local-name()='infEvento' or local-name()='infInut']")
+    if not nos:
+        fault = raiz.xpath("//*[local-name()='faultstring']/text()")
+        out["erro"] = fault[0].strip() if fault else "Resposta sem infEvento/infInut."
+        return out
+
+    bloco = nos[0]
+
+    def _g(nome: str) -> str:
+        achou = bloco.xpath(f".//*[local-name()='{nome}']")
+        return (achou[0].text or "").strip() if achou else ""
+
+    out["c_stat"] = _g("cStat")
+    out["motivo"] = _g("xMotivo")
+    out["protocolo"] = _g("nProt")
+    out["dh_reg"] = _g("dhRegEvento") or _g("dhRecbto")
+    if not out["c_stat"]:
+        # Sem cStat não há como decidir — trate como falha de comunicação.
+        out["erro"] = "Retorno da SEFAZ sem cStat."
+    return out
+
+
+def _montar_evento(
+    tp_evento: str,
+    chave: str,
+    cnpj: str,
+    uf: str,
+    homolog: bool,
+    det_campos: Dict[str, str],
+    n_seq: int = 1,
+    desc_evento: str = "",
+    x_cond_uso: Optional[str] = None,
+):
+    """Monta e assina um evento NF-e (cancelamento, CC-e, manifestação)."""
+    from pynfe.utils.flags import CODIGOS_ESTADOS, NAMESPACE_NFE
+
+    clean_chave = "".join(c for c in chave if c.isdigit())
+    clean_cnpj = "".join(c for c in cnpj if c.isdigit())
+    cod_uf = CODIGOS_ESTADOS.get(str(uf).upper(), "35")
+
+    evento = etree.Element("evento", versao="1.00", xmlns=NAMESPACE_NFE)
+    inf_evento = etree.SubElement(
+        evento, "infEvento", Id=f"ID{tp_evento}{clean_chave}{int(n_seq):02d}"
+    )
+    etree.SubElement(inf_evento, "cOrgao").text = str(cod_uf)
+    etree.SubElement(inf_evento, "tpAmb").text = "2" if homolog else "1"
+    if len(clean_cnpj) == 11:
+        etree.SubElement(inf_evento, "CPF").text = clean_cnpj
+    else:
+        etree.SubElement(inf_evento, "CNPJ").text = clean_cnpj
+    etree.SubElement(inf_evento, "chNFe").text = clean_chave
+    etree.SubElement(inf_evento, "dhEvento").text = datetime.now().strftime("%Y-%m-%dT%H:%M:%S-03:00")
+    etree.SubElement(inf_evento, "tpEvento").text = str(tp_evento)
+    etree.SubElement(inf_evento, "nSeqEvento").text = str(int(n_seq))
+    etree.SubElement(inf_evento, "verEvento").text = "1.00"
+
+    det_evento = etree.SubElement(inf_evento, "detEvento", versao="1.00")
+    etree.SubElement(det_evento, "descEvento").text = desc_evento
+    if x_cond_uso:
+        etree.SubElement(det_evento, "xCondUso").text = x_cond_uso
+    for tag, valor in det_campos.items():
+        if valor not in (None, ""):
+            etree.SubElement(det_evento, tag).text = str(valor)
+
+    return evento
+
+
+def _transmitir_evento(cert_rec: Dict[str, Any], uf: str, homolog: bool, evento_assinado, modelo: str = "nfe") -> Dict[str, str]:
+    con = ComunicacaoSefaz(uf, cert_rec["path"], cert_rec["password"], homologacao=homolog)
+    resp = con.evento(modelo, evento_assinado, id_lote=1)
+    corpo = getattr(resp, "text", "") or ""
+    status_http = getattr(resp, "status_code", None)
+    if status_http not in (None, 200):
+        return {"c_stat": "", "motivo": "", "protocolo": "", "dh_reg": "",
+                "erro": f"HTTP {status_http} no webservice de eventos da SEFAZ."}
+    return _extrair_infret(corpo)
 
 
 def cancelar_nfe_profissional(chave: str, justificativa: str, protocolo: Optional[str] = None, homologacao: Optional[bool] = None) -> Dict[str, Any]:
     """
-    Cancela uma NF-e de saída perante a SEFAZ (Evento 110111) e atualiza o banco de dados.
-    A justificativa deve conter no mínimo 15 caracteres conforme exigido pela SEFAZ.
+    Cancela uma NF-e de saída perante a SEFAZ (Evento 110111) e atualiza o banco.
+
+    A justificativa deve conter de 15 a 255 caracteres (MOC 7.0).
+    O banco só é alterado quando a SEFAZ confirma com cStat 135.
     """
     chave_clean = "".join(c for c in str(chave) if c.isdigit())
     if len(chave_clean) != 44:
         raise ValueError("Chave de acesso inválida (deve conter 44 dígitos).")
 
-    just_limpa = str(justificativa).strip()
+    just_limpa = remover_acentos_sefaz(str(justificativa).strip())
     if len(just_limpa) < 15:
         raise ValueError("A justificativa de cancelamento deve conter no mínimo 15 caracteres.")
+    if len(just_limpa) > 255:
+        raise ValueError("A justificativa de cancelamento deve conter no máximo 255 caracteres.")
 
     doc = get_nfe_detail(chave_clean)
     if not doc:
         raise ValueError(f"NF-e com chave {chave_clean} não encontrada no banco de dados.")
+
+    situacao_atual = str(doc.get("situacao") or "")
+    if situacao_atual.startswith("Cancelada"):
+        return {
+            "success": False, "ja_executado": True, "chave": chave_clean,
+            "c_stat": "", "motivo": f"NF-e já consta como cancelada ({situacao_atual}).",
+            "detail": f"NF-e já consta como cancelada ({situacao_atual}).",
+            "situacao": situacao_atual,
+        }
+    if not situacao_atual.startswith("Autorizada"):
+        msg = (
+            f"Somente NF-e AUTORIZADA pode ser cancelada. Esta nota está como "
+            f"'{situacao_atual or 'desconhecida'}'."
+        )
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": msg,
+                "detail": msg, "situacao": situacao_atual}
 
     emit_cnpj = doc.get("emitente_cnpj") or chave_clean[6:20]
     cert_rec = get_certificate_record(emit_cnpj)
+    if not cert_rec:
+        raise ValueError(f"Certificado A1 não encontrado para o CNPJ {emit_cnpj}.")
 
-    homolog = homologacao if homologacao is not None else settings.HOMOLOGACAO
-    now = datetime.now()
-    prot_cancel = f"13526000{now.strftime('%H%M%S%f')[:8]}"
+    prot_aut = str(protocolo or doc.get("protocolo") or "")
+    if not prot_aut:
+        msg = (
+            "A NF-e não possui protocolo de autorização registrado localmente. "
+            "Consulte a situação na SEFAZ antes de cancelar."
+        )
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": msg,
+                "detail": msg, "situacao": situacao_atual}
 
-    # Registra o cancelamento no banco de dados e cria o evento fiscal
-    cancelar_nfe_doc(chave_clean, prot_cancel, just_limpa)
+    homolog = homologacao if homologacao is not None else _homolog_do_documento(doc)
+    uf = _uf_do_documento(doc, chave_clean)
+
+    evento = _montar_evento(
+        tp_evento="110111",
+        chave=chave_clean,
+        cnpj=emit_cnpj,
+        uf=uf,
+        homolog=homolog,
+        det_campos={"nProt": prot_aut, "xJust": just_limpa},
+        n_seq=1,
+        desc_evento="Cancelamento",
+    )
+
+    from pynfe.processamento.assinatura import AssinaturaA1
+    try:
+        evento_assinado = AssinaturaA1(cert_rec["path"], cert_rec["password"]).assinar(evento)
+    except Exception:
+        logger.exception("[CANCELAMENTO] Falha ao assinar o evento da chave %s", chave_clean)
+        raise ValueError("Falha ao assinar o evento de cancelamento com o certificado A1.")
+
+    try:
+        retorno = _transmitir_evento(cert_rec, uf, homolog, evento_assinado)
+    except Exception as exc:
+        logger.exception("[CANCELAMENTO] Falha de comunicação SEFAZ para a chave %s", chave_clean)
+        msg = f"Falha de comunicação com a SEFAZ: {exc}"
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": msg,
+                "detail": msg, "situacao": situacao_atual}
+
+    c_stat = retorno["c_stat"]
+    motivo = retorno["motivo"] or retorno["erro"] or "Sem retorno da SEFAZ."
+    homologado = c_stat in ("135", "136")   # 135=evento registrado, 136=evento registrado com advertência
+
+    if retorno["erro"] and not c_stat:
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": retorno["erro"],
+                "detail": retorno["erro"], "situacao": situacao_atual}
+
+    if not homologado:
+        msg = f"cStat {c_stat}: {motivo}"
+        logger.warning("[CANCELAMENTO] Rejeitado para a chave %s — %s", chave_clean, msg)
+        return {"success": False, "chave": chave_clean, "c_stat": c_stat, "motivo": msg,
+                "detail": msg, "situacao": situacao_atual, "protocolo_evento": retorno["protocolo"]}
+
+    # Só aqui o banco é alterado — o cancelamento foi aceito pela SEFAZ.
+    cancelar_nfe_doc(chave_clean, retorno["protocolo"], just_limpa)
+    save_nfe_event({
+        "chave": chave_clean,
+        "tipo_evento": "110111",
+        "desc_evento": "Cancelamento de NF-e",
+        "n_seq": 1,
+        "dh_evento": retorno["dh_reg"] or datetime.now().isoformat(),
+        "protocolo": retorno["protocolo"],
+        "c_stat": c_stat,
+        "x_motivo": motivo,
+    })
 
     return {
         "success": True,
         "chave": chave_clean,
-        "protocolo": prot_cancel,
-        "c_stat": "135",
-        "motivo": "Evento registrado e homologado (Cancelamento de NF-e)",
+        "protocolo": retorno["protocolo"],
+        "protocolo_autorizacao": prot_aut,
+        "c_stat": c_stat,
+        "motivo": motivo,
+        "x_motivo": motivo,
+        "detail": motivo,
         "justificativa": just_limpa,
-        "data_cancelamento": now.isoformat(),
+        "data_cancelamento": retorno["dh_reg"] or datetime.now().isoformat(),
+        "situacao": "Cancelada",
     }
 
 
-def emitir_carta_correcao_nfe(chave: str, texto_correcao: str, seq_evento: int = 1, homologacao: Optional[bool] = None) -> Dict[str, Any]:
+def emitir_carta_correcao_nfe(chave: str, texto_correcao: str, seq_evento: Optional[int] = None, homologacao: Optional[bool] = None) -> Dict[str, Any]:
     """
     Emite uma Carta de Correção Eletrônica (CC-e - Evento 110110) perante a SEFAZ.
+
     Conforme o MOC / NT 2011.003:
     - Mínimo de 15 caracteres e máximo de 1000 caracteres.
-    - É proibido corrigir: valores/impostos, dados cadastrais que alterem emitente/destinatário, data de emissão/saída.
+    - É proibido corrigir: valores/impostos, dados cadastrais que alterem
+      emitente/destinatário, data de emissão/saída.
+    - ``nSeqEvento`` é sequencial por chave (máximo 20 eventos).
     """
     chave_clean = "".join(c for c in str(chave) if c.isdigit())
     if len(chave_clean) != 44:
         raise ValueError("Chave de acesso inválida (deve conter 44 dígitos).")
 
-    texto_limpo = remover_acentos_sefaz(texto_correcao)
+    texto_limpo = remover_acentos_sefaz(str(texto_correcao).strip())
     if len(texto_limpo) < 15:
         raise ValueError("O texto da Carta de Correção deve conter no mínimo 15 caracteres.")
     if len(texto_limpo) > 1000:
-        texto_limpo = texto_limpo[:1000]
+        raise ValueError("O texto da Carta de Correção deve conter no máximo 1000 caracteres.")
 
     doc = get_nfe_detail(chave_clean)
     if not doc:
         raise ValueError(f"NF-e com chave {chave_clean} não encontrada no banco de dados.")
 
-    now = datetime.now()
-    prot_cce = f"13526000{now.strftime('%H%M%S%f')[:8]}"
+    situacao_atual = str(doc.get("situacao") or "")
+    if situacao_atual.startswith("Cancelada"):
+        msg = "NF-e cancelada não pode receber Carta de Correção."
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": msg,
+                "detail": msg, "situacao": situacao_atual}
+
+    emit_cnpj = doc.get("emitente_cnpj") or chave_clean[6:20]
+    cert_rec = get_certificate_record(emit_cnpj)
+    if not cert_rec:
+        raise ValueError(f"Certificado A1 não encontrado para o CNPJ {emit_cnpj}.")
+
+    # Sequência do evento: explícita > próxima livre local > 1
+    seq = int(seq_evento) if seq_evento else _proxima_sequencia_evento(chave_clean, "110110")
+    if not (1 <= seq <= 20):
+        raise ValueError("A sequência da Carta de Correção deve estar entre 1 e 20.")
+
+    homolog = homologacao if homologacao is not None else _homolog_do_documento(doc)
+    uf = _uf_do_documento(doc, chave_clean)
+
+    evento = _montar_evento(
+        tp_evento="110110",
+        chave=chave_clean,
+        cnpj=emit_cnpj,
+        uf=uf,
+        homolog=homolog,
+        det_campos={"xCorrecao": texto_limpo, "xCondUso": (
+            "A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, "
+            "de 15 de dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido "
+            "na emissao de documento fiscal, desde que o erro nao esteja relacionado com: I - as "
+            "variaveis que determinam o valor do imposto tais como: base de calculo, aliquota, "
+            "diferenca de preco, quantidade, valor da operacao ou da prestacao; II - a correcao de "
+            "dados cadastrais que implique mudanca do remetente ou do destinatario; III - a data de "
+            "emissao ou de saida."
+        )},
+        n_seq=seq,
+        desc_evento="Carta de Correcao",
+    )
+
+    from pynfe.processamento.assinatura import AssinaturaA1
+    try:
+        evento_assinado = AssinaturaA1(cert_rec["path"], cert_rec["password"]).assinar(evento)
+    except Exception:
+        logger.exception("[CC-e] Falha ao assinar o evento da chave %s", chave_clean)
+        raise ValueError("Falha ao assinar a Carta de Correção com o certificado A1.")
+
+    try:
+        retorno = _transmitir_evento(cert_rec, uf, homolog, evento_assinado)
+    except Exception as exc:
+        logger.exception("[CC-e] Falha de comunicação SEFAZ para a chave %s", chave_clean)
+        msg = f"Falha de comunicação com a SEFAZ: {exc}"
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": msg,
+                "detail": msg, "sequencia_evento": seq}
+
+    c_stat = retorno["c_stat"]
+    motivo = retorno["motivo"] or retorno["erro"] or "Sem retorno da SEFAZ."
+
+    if retorno["erro"] and not c_stat:
+        return {"success": False, "chave": chave_clean, "c_stat": "", "motivo": retorno["erro"],
+                "detail": retorno["erro"], "sequencia_evento": seq}
+
+    if c_stat not in ("135", "136"):
+        msg = f"cStat {c_stat}: {motivo}"
+        logger.warning("[CC-e] Rejeitada para a chave %s — %s", chave_clean, msg)
+        return {"success": False, "chave": chave_clean, "c_stat": c_stat, "motivo": msg,
+                "detail": msg, "sequencia_evento": seq, "correcao": texto_limpo}
+
+    # Persiste o evento para que o DACCE possa ser gerado (cce_service exige a linha).
+    save_nfe_event({
+        "chave": chave_clean,
+        "tipo_evento": "110110",
+        "desc_evento": "Carta de Correcao Eletronica",
+        "n_seq": seq,
+        "dh_evento": retorno["dh_reg"] or datetime.now().isoformat(),
+        "protocolo": retorno["protocolo"],
+        "c_stat": c_stat,
+        "x_motivo": motivo,
+    })
 
     return {
         "success": True,
         "chave": chave_clean,
-        "sequencia_evento": seq_evento,
-        "protocolo": prot_cce,
-        "c_stat": "135",
-        "motivo": "Evento registrado e homologado (Carta de Correção Eletrônica - CC-e)",
+        "sequencia_evento": seq,
+        "protocolo": retorno["protocolo"],
+        "c_stat": c_stat,
+        "motivo": motivo,
+        "x_motivo": motivo,
+        "detail": motivo,
         "correcao": texto_limpo,
-        "data_evento": now.isoformat(),
+        "data_evento": retorno["dh_reg"] or datetime.now().isoformat(),
     }
+
+
+_UF_POR_CODIGO = {
+    "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO",
+    "21": "MA", "22": "PI", "23": "CE", "24": "RN", "25": "PB", "26": "PE", "27": "AL",
+    "28": "SE", "29": "BA", "31": "MG", "32": "ES", "33": "RJ", "35": "SP", "41": "PR",
+    "42": "SC", "43": "RS", "50": "MS", "51": "MT", "52": "GO", "53": "DF",
+}
+
+
+def _uf_de_cod_uf(codigo: str) -> str:
+    """Converte o código IBGE de UF (2 dígitos da chave) na sigla."""
+    return _UF_POR_CODIGO.get(str(codigo), "")
+
+
+def _uf_do_documento(doc: Dict[str, Any], chave: str) -> str:
+    """Resolve a UF do emitente: cadastro local → código IBGE da chave → default."""
+    uf = str(doc.get("emitente_uf") or "").strip().upper()
+    if uf and len(uf) == 2 and uf.isalpha():
+        return uf
+    return _uf_de_cod_uf(chave[:2]) or settings.DEFAULT_UF
+
+
+def _homolog_do_documento(doc: Dict[str, Any]) -> bool:
+    """
+    Ambiente do evento = ambiente em que a NF-e foi emitida.
+
+    Cancelar/CC-e uma nota de homologação contra o webservice de produção (ou
+    vice-versa) devolve cStat 217/502. Só cai no ``settings.HOMOLOGACAO`` quando
+    o registro não guarda o ``tp_amb``.
+    """
+    tp_amb = doc.get("tp_amb")
+    if str(tp_amb) in ("1", "2"):
+        return str(tp_amb) == "2"
+    return bool(settings.HOMOLOGACAO)
+
+
+def _proxima_sequencia_evento(chave: str, tipo_evento: str) -> int:
+    """Próxima sequência livre de um evento para a chave (limitada a 20)."""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT MAX(n_seq) FROM nfe_events WHERE chave = ? AND tipo_evento = ?",
+                (chave, tipo_evento),
+            )
+            row = cursor.fetchone()
+            atual = int(row[0] or 0)
+        proxima = atual + 1
+        if proxima > 20:
+            raise ValueError(
+                "A NF-e atingiu o limite de 20 Cartas de Correção para a mesma chave."
+            )
+        return proxima
+    except ValueError:
+        raise
+    except Exception:
+        return 1
 
 
 # Dicionário de Diagnóstico Didático para Retornos e Rejeições da SEFAZ
@@ -834,9 +1810,17 @@ SEFAZ_EXPLICATIVO_CSTAT = {
 
 def reenviar_nfe_sefaz(chave: str, homologacao: Optional[bool] = None) -> Dict[str, Any]:
     """
-    Reenvia ou consulta a situação oficial de uma NF-e perante a SEFAZ.
-    Especialmente útil para notas pendentes ou com rejeição.
-    Atualiza o banco e retorna diagnóstico minucioso com código cStat, motivo e solução didática.
+    Consulta a situação oficial da NF-e na SEFAZ e, se a nota estiver **Pendente
+    de transmissão** e não existir na base delas, retransmite o XML assinado.
+
+    Fluxo:
+      1. ``consulta_nota`` → se a SEFAZ já conhece a chave, adota o estado real
+         (autorizada / denegada / rejeitada) sem reenviar nada;
+      2. caso responda 217 (não consta) e tenhamos o ``<NFe> assinado`` local,
+         retransmite — aí sim é um reenvio de fato.
+
+    Nunca fabrica cStat nem protocolo: sem resposta da SEFAZ o estado continua
+    o que já estava registrado localmente.
     """
     chave_clean = "".join(c for c in str(chave) if c.isdigit())
     if len(chave_clean) != 44:
@@ -852,78 +1836,141 @@ def reenviar_nfe_sefaz(chave: str, homologacao: Optional[bool] = None) -> Dict[s
         certs = list_certificates_db()
         cert_rec = next((c for c in certs if c["cnpj"] == emit_cnpj), None)
 
-    homolog = homologacao if homologacao is not None else settings.HOMOLOGACAO
+    situacao_local = str(doc.get("situacao") or "Pendente")
+    if situacao_local.startswith("Cancelada"):
+        # Cancelamento é estado final e prevalece sobre qualquer consulta.
+        return {
+            "success": True, "autorizada": False, "ja_executado": True,
+            "chave": chave_clean, "c_stat": doc.get("c_stat") or "",
+            "x_motivo": "NF-e cancelada — a consulta não altera o estado final.",
+            "situacao": situacao_local, "protocolo": doc.get("protocolo"),
+            "status_geral": "NF-e Cancelada",
+            "explicacao_didatica": "O cancelamento registrado localmente é estado final e não é revertido por consulta.",
+            "solucao_recomendada": "Nenhuma ação necessária.",
+            "tipo_retorno": "alerta",
+        }
+
+    # O ambiente vem do próprio registro: consultar homologação por uma nota
+    # de produção (ou vice-versa) devolve cStat 217 e rebaixaria a situação.
+    tp_amb_local = doc.get("tp_amb")
+    homolog = homologacao if homologacao is not None else (
+        bool(int(tp_amb_local)) if str(tp_amb_local) in ("1", "2") else settings.HOMOLOGACAO
+    )
     now = datetime.now()
-    emit_uf = (doc.get("emitente_uf") or (cert_rec.get("uf") if cert_rec else "SP") or "SP").upper()
+    emit_uf = (doc.get("emitente_uf") or (cert_rec.get("uf") if cert_rec else None) or settings.DEFAULT_UF).upper()
 
-    c_stat = "100"
-    x_motivo = "Autorizado o uso da NF-e"
-    protocolo = doc.get("protocolo") or f"135260000{now.strftime('%H%M%S%f')[:7]}"
-    autorizada = True
+    c_stat = str(doc.get("c_stat") or "")
+    x_motivo = str(doc.get("x_motivo") or "")
+    protocolo = str(doc.get("protocolo") or "")
+    erro_comunicacao = None
+    retransmitido = False
 
-    # Comunicação real com a SEFAZ se certificado existir
-    if cert_rec and os.path.exists(cert_rec.get("path", "")):
+    if not cert_rec or not os.path.exists(cert_rec.get("path", "")):
+        erro_comunicacao = (
+            f"Certificado A1 do CNPJ {emit_cnpj} não encontrado ou arquivo inexistente — "
+            "a consulta à SEFAZ não foi realizada."
+        )
+    else:
         try:
             con = ComunicacaoSefaz(emit_uf, cert_rec["path"], cert_rec["password"], homologacao=homolog)
-            resp_cons = con.consulta_nota(modelo="nfe", chave=chave_clean)
-            if hasattr(resp_cons, "status_code") and resp_cons.status_code == 200:
-                try:
-                    root_resp = etree.fromstring(resp_cons.content)
-                    ns = {"ns": "http://www.portalfiscal.inf.br/nfe"}
-                    cstat_found = root_resp.xpath("//ns:cStat/text()", namespaces=ns) or root_resp.xpath("//cStat/text()")
-                    motivo_found = root_resp.xpath("//ns:xMotivo/text()", namespaces=ns) or root_resp.xpath("//xMotivo/text()")
-                    prot_found = root_resp.xpath("//ns:nProt/text()", namespaces=ns) or root_resp.xpath("//nProt/text()")
-                    if cstat_found:
-                        c_stat = str(cstat_found[0])
-                    if motivo_found:
-                        x_motivo = str(motivo_found[0])
-                    if prot_found:
-                        protocolo = str(prot_found[0])
-                except Exception:
-                    pass
-        except Exception as sefaz_err:
-            print(f"Tentativa de consulta/reenvio SEFAZ: {sefaz_err}")
-            if "Rejeit" in str(doc.get("situacao", "")) or "Erro" in str(doc.get("situacao", "")):
-                c_stat = "204"
-                x_motivo = f"Rejeicao: Duplicidade de NF-e (Simulada em Homologação - {sefaz_err})"
-            else:
-                c_stat = "100"
-                x_motivo = f"Autorizado o uso da NF-e (Homologação - {sefaz_err})"
 
-    autorizada = (c_stat in ["100", "150"])
+            # 1) Consulta primeiro — nunca retransmite às cegas.
+            # Nota emitida em contingência é consultada no endpoint da SEFAZ
+            # Virtual, senão a SEFAZ responde 217 (não consta).
+            tp_emis_doc = str(doc.get("tp_emis") or "1")
+            resp_cons = con.consulta_nota(
+                modelo="nfe", chave=chave_clean, contingencia=tp_emis_doc != "1"
+            )
+            consulta = _extrair_retorno_consulta(getattr(resp_cons, "text", ""))
+            c_cons = consulta["c_stat"]
+
+            if c_cons in ("100", "150"):
+                c_stat, x_motivo = c_cons, consulta["motivo"] or "Autorizado o uso da NF-e"
+                protocolo = consulta["protocolo"] or protocolo
+            elif c_cons in CSTAT_DENEGADO:
+                c_stat, x_motivo = c_cons, consulta["motivo"] or "Uso denegado"
+                protocolo = consulta["protocolo"] or protocolo
+            elif c_cons == "217":
+                # A nota não consta na SEFAZ: só retransmite se formos nós que
+                # a emitimos e ela ficou pendente (falha de rede, lote, etc).
+                xml_assinado_local = str(doc.get("xml_assinado") or "")
+                if xml_assinado_local:
+                    elem = etree.fromstring(xml_assinado_local.encode("utf-8"))
+                    resp_envio = con.autorizacao(
+                        modelo="nfe", nota_fiscal=elem, id_lote=1,
+                        ind_sinc=1, timeout=SEFAZ_TIMEOUT,
+                    )
+                    envio = _parse_retorno_autorizacao(resp_envio)
+                    if envio["erro"] and not envio["c_stat"]:
+                        erro_comunicacao = envio["erro"]
+                    else:
+                        c_stat = envio["c_stat"]
+                        x_motivo = envio["motivo"] or "Sem descrição da SEFAZ."
+                        protocolo = envio["protocolo"]
+                        retransmitido = True
+                        if envio["xml_proc"]:
+                            try:
+                                with get_db_connection() as conn:
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        "UPDATE nfe_docs SET xml_raw = ? WHERE chave = ?",
+                                        (envio["xml_proc"], chave_clean),
+                                    )
+                                    conn.commit()
+                            except Exception:
+                                logger.exception(
+                                    "[REENVIO] Falha ao gravar nfeProc autorizado da chave %s", chave_clean
+                                )
+                else:
+                    c_stat, x_motivo = c_cons, consulta["motivo"] or "NF-e não consta na SEFAZ."
+            else:
+                # 108/110 serviço parado, 217 sem consulta possível, HTTP != 200...
+                if c_cons:
+                    c_stat, x_motivo = c_cons, consulta["motivo"] or consulta["erro"] or ""
+                else:
+                    erro_comunicacao = consulta["erro"] or "Sem retorno interpretável da SEFAZ."
+        except Exception as sefaz_err:
+            logger.exception("[REENVIO] Falha de comunicação SEFAZ para a chave %s", chave_clean)
+            erro_comunicacao = f"Falha de comunicação com a SEFAZ: {sefaz_err}"
+
+    autorizada = c_stat in CSTAT_AUTORIZADO
+    denegada = c_stat in CSTAT_DENEGADO
+    situacao_nova = _situacao_de_cstat(c_stat, protocolo) if c_stat else situacao_local
+
+    # Nunca rebaixa estados terminais.
+    if situacao_e_terminal(situacao_local):
+        situacao_nova = situacao_local
+
+    if c_stat:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE nfe_docs
+                SET situacao = ?, c_stat = ?, x_motivo = ?, protocolo = COALESCE(NULLIF(?, ''), protocolo),
+                    data_autorizacao = CASE WHEN ? AND (data_autorizacao IS NULL OR data_autorizacao = '')
+                                            THEN ? ELSE data_autorizacao END,
+                    updated_at = ?
+                WHERE chave = ?
+                """,
+                (situacao_nova, c_stat, x_motivo, protocolo, str(autorizada),
+                 now.isoformat(), now.isoformat(), chave_clean),
+            )
+            conn.commit()
 
     info_explicativa = SEFAZ_EXPLICATIVO_CSTAT.get(c_stat, {
-        "status_geral": f"Código SEFAZ {c_stat}",
-        "explicacao": x_motivo,
+        "status_geral": f"Código SEFAZ {c_stat}" if c_stat else "Consulta não realizada",
+        "explicacao": x_motivo or (erro_comunicacao or "Sem descrição disponível."),
         "solucao": "Verifique os dados cadastrais da empresa e do cliente conforme a mensagem oficial da SEFAZ.",
-        "tipo": "sucesso" if autorizada else "erro"
+        "tipo": "sucesso" if autorizada else "erro",
     })
 
-    if autorizada:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE nfe_docs
-                SET situacao = 'Autorizada',
-                    data_autorizacao = COALESCE(data_autorizacao, ?),
-                    updated_at = ?
-                WHERE chave = ?
-            """, (now.isoformat(), now.isoformat(), chave_clean))
-            conn.commit()
-    else:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE nfe_docs
-                SET situacao = ?,
-                    updated_at = ?
-                WHERE chave = ?
-            """, (f"Rejeitada ({c_stat})", now.isoformat(), chave_clean))
-            conn.commit()
-
     return {
-        "success": True,
+        "success": erro_comunicacao is None,
         "autorizada": autorizada,
+        "denegada": denegada,
+        "retransmitido": retransmitido,
+        "erro": erro_comunicacao,
         "chave": chave_clean,
         "numero": doc.get("numero", "1"),
         "serie": doc.get("serie", "1"),
@@ -934,8 +1981,10 @@ def reenviar_nfe_sefaz(chave: str, homologacao: Optional[bool] = None) -> Dict[s
         "destinatario_cnpj": doc.get("destinatario_cnpj", ""),
         "valor_total": float(doc.get("valor_total", 0.0)),
         "c_stat": c_stat,
-        "x_motivo": x_motivo,
-        "protocolo": protocolo if autorizada else None,
+        "x_motivo": x_motivo or erro_comunicacao or "",
+        "detail": x_motivo or erro_comunicacao or "",
+        "situacao": situacao_nova,
+        "protocolo": protocolo if autorizada else (protocolo or None),
         "ambiente": "Homologação" if homolog else "Produção",
         "data_retorno": now.strftime("%d/%m/%Y %H:%M:%S"),
         "status_geral": info_explicativa.get("status_geral"),
@@ -947,40 +1996,116 @@ def reenviar_nfe_sefaz(chave: str, homologacao: Optional[bool] = None) -> Dict[s
 
 def inutilizar_numeracao_nfe(empresa_cnpj: str, serie: str, numero_inicial: int, numero_final: int, justificativa: str, modelo: str = "55", homologacao: Optional[bool] = None) -> Dict[str, Any]:
     """
-    Inutiliza uma faixa de numeração de NF-e/NFC-e perante a SEFAZ para justificar quebras de sequência numérica.
-    - Justificativa mínima de 15 caracteres.
+    Inutiliza uma faixa de numeração de NF-e/NFC-e perante a SEFAZ (serviço 404/405).
+
+    - Justificativa de 15 a 255 caracteres.
     - modelo: 55 (NF-e) ou 65 (NFC-e).
+    - O registro só entra no banco depois que a SEFAZ confirma cStat 102
+      (ou 404, quando a faixa já constava como inutilizada — idempotente).
     """
     cnpj_clean = "".join(c for c in str(empresa_cnpj) if c.isdigit())
-    if len(cnpj_clean) != 14:
-        raise ValueError("CNPJ da empresa emitente deve conter 14 dígitos.")
+    if len(cnpj_clean) not in (11, 14):
+        raise ValueError("CNPJ/CPF do emitente é inválido.")
 
-    just_limpa = remover_acentos_sefaz(justificativa)
+    just_limpa = remover_acentos_sefaz(str(justificativa).strip())
     if len(just_limpa) < 15:
         raise ValueError("A justificativa de inutilização deve conter no mínimo 15 caracteres.")
+    if len(just_limpa) > 255:
+        raise ValueError("A justificativa de inutilização deve conter no máximo 255 caracteres.")
 
+    numero_inicial = int(numero_inicial)
+    numero_final = int(numero_final)
     if numero_final < numero_inicial:
         raise ValueError("O número final não pode ser menor que o número inicial.")
+    if (numero_final - numero_inicial) > 9999:
+        raise ValueError("A faixa de inutilização não pode exceder 10.000 numerações por vez.")
+    if numero_inicial < 1:
+        raise ValueError("O número inicial da faixa deve ser maior que zero.")
+
+    modelo = str(modelo or "55")
+    if modelo not in ("55", "65"):
+        raise ValueError("Modelo inválido: use 55 (NF-e) ou 65 (NFC-e).")
+
+    # Guarda local: não inutiliza faixa que contém nota já emitida.
+    com_ocupados = _numeros_ocupados_na_faixa(cnpj_clean, serie, modelo, numero_inicial, numero_final)
+    if com_ocupados:
+        raise ValueError(
+            "A faixa informada contém números já utilizados: "
+            + ", ".join(str(n) for n in com_ocupados[:10])
+            + ". Reduza a faixa antes de inutilizar."
+        )
+
+    homolog = homologacao if homologacao is not None else settings.HOMOLOGACAO
+    uf = settings.DEFAULT_UF
+    cert_rec = get_certificate_record(cnpj_clean)
+    if not cert_rec:
+        raise ValueError(f"Certificado A1 não encontrado para o CNPJ {cnpj_clean}.")
+    uf = str(cert_rec.get("uf") or uf).upper()
+
+    try:
+        con = ComunicacaoSefaz(uf, cert_rec["path"], cert_rec["password"], homologacao=homolog)
+        response = con.inutilizacao(
+            "nfe" if modelo == "55" else "nfce",
+            cnpj_clean,
+            numero_inicial,
+            numero_final,
+            justificativa=just_limpa,
+            ano=datetime.now().year,
+            serie=str(serie or "1"),
+        )
+    except Exception as exc:
+        logger.exception("[INUTILIZACAO] Falha de comunicação SEFAZ (%s/%s)", numero_inicial, numero_final)
+        return {
+            "success": False, "empresa_cnpj": cnpj_clean, "modelo": modelo, "serie": str(serie),
+            "numero_inicial": numero_inicial, "numero_final": numero_final,
+            "c_stat": "", "motivo": f"Falha de comunicação com a SEFAZ: {exc}",
+            "detail": f"Falha de comunicação com a SEFAZ: {exc}",
+        }
+
+    corpo = getattr(response, "text", "") or ""
+    status_http = getattr(response, "status_code", None)
+    if status_http not in (None, 200):
+        msg = f"HTTP {status_http} no webservice de inutilização da SEFAZ."
+        return {"success": False, "empresa_cnpj": cnpj_clean, "modelo": modelo, "serie": str(serie),
+                "numero_inicial": numero_inicial, "numero_final": numero_final,
+                "c_stat": "", "motivo": msg, "detail": msg}
+
+    retorno = _extrair_infret(corpo)
+    c_stat = retorno["c_stat"]
+    motivo = retorno["motivo"] or retorno["erro"] or "Sem retorno da SEFAZ."
+
+    # 102 = inutilização homologada; 404 = faixa já inutilizada (idempotente).
+    aceito = c_stat in ("102", "404")
+    if not aceito:
+        msg = f"cStat {c_stat}: {motivo}"
+        logger.warning("[INUTILIZACAO] Rejeitada (%s..%s) — %s", numero_inicial, numero_final, msg)
+        return {
+            "success": False, "empresa_cnpj": cnpj_clean, "modelo": modelo, "serie": str(serie),
+            "numero_inicial": numero_inicial, "numero_final": numero_final,
+            "c_stat": c_stat, "motivo": msg, "detail": msg,
+        }
 
     now = datetime.now()
-    prot_inut = f"13526000{now.strftime('%H%M%S%f')[:8]}"
+    prot_inut = retorno["protocolo"] or ""
+    if c_stat == "404":
+        motivo = motivo or "Faixa de numeração já inutilizada na SEFAZ."
 
-    # Registra no banco SQLite de inutilizações
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO nfe_inutilizacoes (
-                    empresa_cnpj, ano, modelo, serie, numero_inicial, numero_final,
-                    protocolo, justificativa, data_homologacao, c_stat, x_motivo, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                cnpj_clean, now.year, modelo, int(serie or 1), numero_inicial, numero_final,
-                prot_inut, just_limpa, now.isoformat(), "102", "Inutilização de número homologada com sucesso", now.isoformat()
-            ))
-            conn.commit()
-    except Exception as db_err:
-        print(f"Aviso ao registrar inutilização no banco: {db_err}")
+        save_inutilizacao({
+            "empresa_cnpj": cnpj_clean,
+            "ano": now.year,
+            "modelo": modelo,
+            "serie": serie,
+            "numero_inicial": numero_inicial,
+            "numero_final": numero_final,
+            "protocolo": prot_inut,
+            "justificativa": just_limpa,
+            "data_homologacao": retorno["dh_reg"] or now.isoformat(),
+            "c_stat": c_stat,
+            "x_motivo": motivo,
+        })
+    except Exception:
+        logger.exception("[INUTILIZACAO] Falha ao registrar no banco local.")
 
     return {
         "success": True,
@@ -990,11 +2115,36 @@ def inutilizar_numeracao_nfe(empresa_cnpj: str, serie: str, numero_inicial: int,
         "numero_inicial": numero_inicial,
         "numero_final": numero_final,
         "protocolo": prot_inut,
-        "c_stat": "102",
-        "motivo": "Inutilização de número homologada com sucesso",
+        "c_stat": c_stat,
+        "motivo": motivo,
+        "x_motivo": motivo,
+        "detail": motivo,
         "justificativa": just_limpa,
-        "data_inutilizacao": now.isoformat(),
+        "data_inutilizacao": retorno["dh_reg"] or now.isoformat(),
+        "ambiente": "Homologação" if homolog else "Produção",
     }
+
+
+def _numeros_ocupados_na_faixa(cnpj: str, serie: str, modelo: str, ini: int, fim: int) -> List[int]:
+    """Retorna números da faixa que já existem em nfe_docs (evita Rejeição 405)."""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT DISTINCT CAST(numero AS INTEGER) AS n
+                FROM nfe_docs
+                WHERE emitente_cnpj = ? AND serie = ?
+                  AND (modelo = ? OR modelo IS NULL OR modelo = '')
+                  AND CAST(numero AS INTEGER) BETWEEN ? AND ?
+                  AND numero IS NOT NULL AND numero != ''
+                ORDER BY n
+                """,
+                (cnpj, str(serie or "1"), modelo, ini, fim),
+            )
+            return [int(r[0]) for r in cursor.fetchall()]
+    except Exception:
+        return []
 
 
 def importar_lote_xmls_saida(arquivos: List[Tuple[str, bytes]]) -> Dict[str, Any]:
@@ -1026,7 +2176,7 @@ def importar_lote_xmls_saida(arquivos: List[Tuple[str, bytes]]) -> Dict[str, Any
     for fname, xml_bytes in xml_items:
         total_processados += 1
         try:
-            xml_str = xml_bytes.decode("utf-8", errors="ignore")
+            xml_str = decode_xml(xml_bytes)
             parsed = parse_nfe_xml(xml_bytes)
             if not parsed or "error" in parsed:
                 continue
@@ -1544,15 +2694,16 @@ def consultar_status_servico_sefaz(
     homologacao: Optional[bool] = None
 ) -> Dict[str, Any]:
     """
-    Testa a comunicação com o Web Service da SEFAZ (SP) e mede o tempo de resposta em milissegundos.
+    Consulta oficial do ``NFeStatusServico4`` e mede o tempo de resposta (ms).
+
+    O semáforo só acende verde com **cStat 107 real**. Qualquer falha de
+    comunicação devolve ``online=False`` — nunca simula operação.
     """
     import time
-    from pynfe.processamento.comunicacao import ComunicacaoSefaz
 
     is_homolog = homologacao if homologacao is not None else getattr(settings, "HOMOLOGACAO", True)
-    uf = "SP"
 
-    # Seleciona certificado
+    # Seleciona certificado (o WS de status exige certificado cliente)
     cert_rec = None
     if empresa_cnpj:
         clean_cnpj = "".join(c for c in str(empresa_cnpj) if c.isdigit())
@@ -1569,35 +2720,48 @@ def consultar_status_servico_sefaz(
             "x_motivo": "Nenhum certificado A1 configurado no sistema.",
             "tempo_resposta_ms": 0,
             "ambiente": "Homologação" if is_homolog else "Produção",
-            "uf": uf,
+            "uf": settings.DEFAULT_UF,
             "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         }
 
+    if not cert_rec.get("path") or not os.path.exists(cert_rec["path"]):
+        return {
+            "online": False,
+            "c_stat": "999",
+            "x_motivo": f"Arquivo do certificado A1 não encontrado para o CNPJ {cert_rec.get('cnpj')}.",
+            "tempo_resposta_ms": 0,
+            "ambiente": "Homologação" if is_homolog else "Produção",
+            "uf": str(cert_rec.get("uf") or settings.DEFAULT_UF).upper(),
+            "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        }
+
+    uf = str(cert_rec.get("uf") or settings.DEFAULT_UF).upper()
     start_time = time.time()
     try:
-        cert_a1 = AssinaturaA1(cert_rec["pfx_bytes"], cert_rec["password"])
-        con = ComunicacaoSefaz(uf=uf, certificado=cert_a1, homologacao=is_homolog)
-        resp = con.status_servico(modelo="55")
+        # ComunicacaoSefaz(uf, certificado, certificado_senha, homologacao=...)
+        con = ComunicacaoSefaz(uf, cert_rec["path"], cert_rec["password"], homologacao=is_homolog)
+        resp = con.status_servico("nfe", timeout=SEFAZ_TIMEOUT)
         elapsed_ms = int((time.time() - start_time) * 1000)
 
-        # Parse do retorno
-        xml_resp = resp.text if hasattr(resp, "text") else str(resp)
-        c_stat = "107"
-        x_motivo = "Servico em Operacao"
+        corpo = getattr(resp, "text", "") or ""
+        status_http = getattr(resp, "status_code", None)
+        if status_http not in (None, 200):
+            return {
+                "online": False,
+                "c_stat": str(status_http),
+                "x_motivo": f"HTTP {status_http} no webservice de status da SEFAZ.",
+                "tempo_resposta_ms": elapsed_ms,
+                "ambiente": "Homologação" if is_homolog else "Produção",
+                "uf": uf,
+                "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            }
 
-        if "<cStat>" in xml_resp:
-            m = re.search(r"<cStat>(\d+)</cStat>", xml_resp)
-            if m:
-                c_stat = m.group(1)
-        if "<xMotivo>" in xml_resp:
-            m = re.search(r"<xMotivo>([^<]+)</xMotivo>", xml_resp)
-            if m:
-                x_motivo = m.group(1)
-
-        is_online = c_stat == "107"
+        retorno = _extrair_retorno_consulta(corpo)
+        c_stat = retorno["c_stat"] or "999"
+        x_motivo = retorno["motivo"] or retorno["erro"] or "Sem descrição retornada pela SEFAZ."
 
         return {
-            "online": is_online,
+            "online": c_stat == "107",
             "c_stat": c_stat,
             "x_motivo": x_motivo,
             "tempo_resposta_ms": elapsed_ms,
@@ -1605,14 +2769,14 @@ def consultar_status_servico_sefaz(
             "uf": uf,
             "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         }
-    except Exception:
+    except Exception as exc:
         elapsed_ms = int((time.time() - start_time) * 1000)
-        # Se for erro transitório de SSL em ambiente local sem internet, simula resposta positiva
+        logger.warning("[SEFAZ STATUS] Falha ao consultar status (%s): %s", uf, exc)
         return {
-            "online": True,
-            "c_stat": "107",
-            "x_motivo": "Serviço em Operação (SEFAZ-SP)",
-            "tempo_resposta_ms": max(elapsed_ms, 85),
+            "online": False,
+            "c_stat": "999",
+            "x_motivo": f"Falha de comunicação com a SEFAZ-{uf}: {exc}",
+            "tempo_resposta_ms": elapsed_ms,
             "ambiente": "Homologação" if is_homolog else "Produção",
             "uf": uf,
             "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),

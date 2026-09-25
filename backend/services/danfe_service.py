@@ -14,6 +14,8 @@ from typing import Any, Dict, Optional
 
 from lxml import etree
 
+from backend.utils import decode_xml
+
 
 def _t(tag: str) -> str:
     return re.sub(r"^[^}]+}", "", tag)
@@ -620,7 +622,7 @@ def parse_distribuicao_xml(xml_text: str) -> Dict[str, Any]:
                     "nsu": nsu,
                     "schema": schema,
                     "tag": tag_name,
-                    "xml_raw": xml_bytes.decode("utf-8", errors="ignore"),
+                    "xml_raw": decode_xml(xml_bytes),
                     "chave": "",
                     "cnpj_emitente": "",
                     "nome_emitente": "",

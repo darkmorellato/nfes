@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from backend.database import (
     get_certificate_record,
     delete_certificate_record,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def save_certificate(content: bytes, password: str, filename: str = "certificado.pfx") -> Dict[str, Any]:
@@ -58,6 +61,11 @@ def save_certificate(content: bytes, password: str, filename: str = "certificado
 
     with open(cert_path, "wb") as f:
         f.write(content)
+    # O .pfx é credencial de emissão fiscal: restrito ao dono do arquivo.
+    try:
+        os.chmod(cert_path, 0o600)
+    except Exception:
+        logger.warning("Não foi possível restringir permissões de %s", cert_path)
 
     val_from = cert.not_valid_before_utc.strftime("%d/%m/%Y")
     val_to = cert.not_valid_after_utc.strftime("%d/%m/%Y")

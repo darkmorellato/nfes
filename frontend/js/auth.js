@@ -167,8 +167,8 @@ function buildLoginHTML() {
                             outline: none;
                             transition: border-color 0.2s;
                         "
-                        onfocus="this.style.borderColor='#4b6a82'; this.style.background='#fff';"
-                        onblur="this.style.borderColor='#e6e1d8'; this.style.background='#faf8f5';"
+                        data-onfocus="${escapeAttrJson(JSON.stringify({"fn": "realcarCampoAuth", "args": ["$this"]}))}"
+                        data-onblur="${escapeAttrJson(JSON.stringify({"fn": "soltarCampoAuth", "args": ["$this"]}))}"
                     >
                 </div>
 
@@ -203,8 +203,8 @@ function buildLoginHTML() {
                                 outline: none;
                                 transition: border-color 0.2s;
                             "
-                            onfocus="this.style.borderColor='#4b6a82'; this.style.background='#fff';"
-                            onblur="this.style.borderColor='#e6e1d8'; this.style.background='#faf8f5';"
+                            data-onfocus="${escapeAttrJson(JSON.stringify({"fn": "realcarCampoAuth", "args": ["$this"]}))}"
+                            data-onblur="${escapeAttrJson(JSON.stringify({"fn": "soltarCampoAuth", "args": ["$this"]}))}"
                         >
                         <button
                             type="button"
@@ -379,21 +379,16 @@ async function handleLogin() {
             ts: Date.now(),
         }));
 
-        // Registra acesso no Firestore (auditoria — silencioso se falhar)
-        try {
-            if (isFirestoreAvailable && firestoreDb) {
-                await firestoreDb.collection("acessos_log").add({
-                    email: AuthSession.userEmail,
-                    nome: AuthSession.userName,
-                    ts: firebase.firestore.FieldValue.serverTimestamp(),
-                    resultado: "sucesso",
-                });
-            }
-        } catch (_) { /* não bloqueia o login */ }
-
+        // A auditoria no Firestore NÃO pode segurar a tela de login: uma
+        // escrita pendente (cota do Spark estourada, rede instável) fazia o
+        // `await` nunca resolver e o usuário ficava preso em
+        // "Verificando credenciais..." até recarregar o navegador.
+        // Ordem correta: liberar a UI primeiro, registrar em segundo plano.
         setLoginLoading(false);
         hideLoginOverlay();
         showWelcomeToast(AuthSession.userName);
+
+        registrarAcessoNoFirestore();
 
         // Se senha padrão, forçar alteração
         if (AuthSession.senha_padrao) {
@@ -410,6 +405,40 @@ async function handleLogin() {
         showLoginError("⚠️ Não foi possível conectar ao servidor. Verifique se o sistema está rodando.");
         setLoginLoading(false);
     }
+}
+
+/**
+ * Auditoria de acesso no Firestore, sem bloquear a interface.
+ *
+ * Nunca é aguardada pelo fluxo de login e tem teto de 3 s: se o Firestore
+ * estiver fora de cota (`HTTP 429`), o registro simplesmente é descartado —
+ * o login já foi concluído e a sessão local continua válida.
+ */
+function registrarAcessoNoFirestore(resultado = "sucesso") {
+    if (!(typeof isFirestoreAvailable !== "undefined" && isFirestoreAvailable) ||
+        typeof firestoreDb === "undefined" || !firestoreDb) {
+        return;
+    }
+
+    const escrita = firestoreDb.collection("acessos_log").add({
+        email: AuthSession.userEmail,
+        nome: AuthSession.userName,
+        ts: (typeof firebase !== "undefined"
+            ? firebase.firestore.FieldValue.serverTimestamp()
+            : new Date()),
+        resultado,
+    });
+
+    const comTeto = Promise.race([
+        escrita,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout auditoria")), 3000)),
+    ]);
+
+    comTeto.catch((erro) => {
+        if (typeof console !== "undefined") {
+            console.warn("[Auth] Auditoria de acesso não registrada no Firestore:", erro && erro.message);
+        }
+    });
 }
 
 /**

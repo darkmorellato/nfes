@@ -62,8 +62,8 @@ async function loadGestaoDocs(page = 1) {
                 <div style="font-size:15px;color:#555;font-weight:bold;margin-bottom:8px;">${escapeHtml(msgVazio)}</div>
                 <div style="font-size:12px;color:#777;margin-bottom:15px;">${escapeHtml(subMsg)}</div>
                 <div style="display:flex;gap:10px;justify-content:center;">
-                    <button type="button" class="botao botao-primario" onclick="showSection('${tipoDoc === "1" ? "emissor-rapido" : "gestao-sync"}');" style="background:#27ae60;border-color:#27ae60;">${tipoDoc === "1" ? "📤 Nova Emissão" : "⚡ Ir para Robô DF-e"}</button>
-                    <button type="button" class="botao" onclick="document.getElementById('gestao-input-xml-lote').click();">📁 Importar XMLs</button>
+                    <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "showSection", "args": [tipoDoc === "1" ? "emissor-rapido" : "gestao-sync"]}))}" style="background:#27ae60;border-color:#27ae60;">${tipoDoc === "1" ? "📤 Nova Emissão" : "⚡ Ir para Robô DF-e"}</button>
+                    <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirInputXmlLote", "args": []}))}">📁 Importar XMLs</button>
                 </div>
             </div>
         `;
@@ -94,13 +94,13 @@ async function loadGestaoDocs(page = 1) {
             : `<span class="badge" style="background:var(--pastel-blue-bg);color:var(--pastel-blue-text);border:1px solid var(--pastel-blue-border);font-size:9.5px;padding:2.5px 7px;border-radius:4px;font-weight:600;display:inline-flex;align-items:center;gap:3px;">📤 Saída</span>`;
 
         return `
-            <tr style="cursor:pointer;" onclick="if (!event.target.closest('button, input, a')) abrirDrawerDetalhes('${d.chave}');" title="Clique para abrir detalhes rápidos na gaveta lateral">
-                <td style="text-align:center;"><input type="checkbox" class="gestao-row-chk" value="${d.chave}" onchange="atualizarSelecaoLote();"></td>
+            <tr style="cursor:pointer;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirDrawerDetalhesSeNaoAlvo", "args": ["$event", d.chave]}))}" title="Clique para abrir detalhes rápidos na gaveta lateral">
+                <td style="text-align:center;"><input type="checkbox" class="gestao-row-chk" value="${d.chave}" data-onchange="${escapeAttrJson(JSON.stringify({"fn": "atualizarSelecaoLote", "args": []}))}"></td>
                 <td style="text-align:center;">${tipoBadge}</td>
                 <td style="font-family:monospace;font-size:10px;line-height:1.35;vertical-align:middle;white-space:nowrap;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
                         <span style="font-weight:bold;letter-spacing:0.3px;">${formatarChaveVertical(d.chave)}</span>
-                        <button type="button" class="btn-copy-chave" onclick="copiarChaveAcesso('${d.chave}', this);" title="Copiar chave de 44 dígitos (sem espaços)" style="background:transparent;border:none;cursor:pointer;padding:2px 4px;font-size:11px;border-radius:4px;transition:all 0.15s ease;line-height:1;">📋</button>
+                        <button type="button" class="btn-copy-chave" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "copiarChaveAcesso", "args": [d.chave, "$this"]}))}" title="Copiar chave de 44 dígitos (sem espaços)" style="background:transparent;border:none;cursor:pointer;padding:2px 4px;font-size:11px;border-radius:4px;transition:all 0.15s ease;line-height:1;">📋</button>
                     </div>
                 </td>
                 <td><b>${escapeHtml(d.numero || "—")}</b><br><small style="color:#666;">Série ${escapeHtml(d.serie || "1")}</small></td>
@@ -111,13 +111,13 @@ async function loadGestaoDocs(page = 1) {
                 <td>${getSituacaoBadgeHtml(sit)}</td>
                 <td>
                     <div class="actions-cell">
-                        <button type="button" class="btn-action" onclick="abrirDrawerDetalhes('${d.chave}');" title="Ver Detalhes Rápidos">⚡ Rápido</button>
-                        <button type="button" class="btn-action btn-action-primary" onclick="visualizarDanfeChave('${d.chave}');" title="Ver DANFE Completo">👁️ DANFE</button>
-                        <button type="button" class="btn-action" onclick="downloadDanfePdf('${d.chave}');" title="Baixar PDF">📥 PDF</button>
-                        <button type="button" class="btn-action" onclick="executarCheckinEstoqueRapido('${d.chave}');" style="background:#27ae60;color:#fff;border-color:#27ae60;font-weight:bold;" title="Cadastrar produtos e somar no estoque">📥 Check-in</button>
-                        <button type="button" class="btn-action" onclick="imprimirEtiquetasChave('${d.chave}');" title="Gerar Etiquetas de Preço e Código de Barras">🏷️ Etiquetas</button>
-                        <button type="button" class="btn-action" onclick="abrirConferenciaEstoque('${d.chave}');" title="Conferir Estoque">📦 Conferir</button>
-                        <button type="button" class="btn-action" onclick="abrirManifestacaoChave('${d.chave}', '${d.destinatario_cnpj || d.empresa_cnpj || ''}');" title="Manifestar Nota">✍️ Manifestar</button>
+                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirDrawerDetalhes", "args": [d.chave]}))}" title="Ver Detalhes Rápidos">⚡ Rápido</button>
+                        <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarDanfeChave", "args": [d.chave]}))}" title="Ver DANFE Completo">👁️ DANFE</button>
+                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "downloadDanfePdf", "args": [d.chave]}))}" title="Baixar PDF">📥 PDF</button>
+                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "executarCheckinEstoqueRapido", "args": [d.chave]}))}" style="background:#27ae60;color:#fff;border-color:#27ae60;font-weight:bold;" title="Cadastrar produtos e somar no estoque">📥 Check-in</button>
+                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "imprimirEtiquetasChave", "args": [d.chave]}))}" title="Gerar Etiquetas de Preço e Código de Barras">🏷️ Etiquetas</button>
+                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirConferenciaEstoque", "args": [d.chave]}))}" title="Conferir Estoque">📦 Conferir</button>
+                        <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirManifestacaoChave", "args": [d.chave, d.destinatario_cnpj || d.empresa_cnpj || '']}))}" title="Manifestar Nota">✍️ Manifestar</button>
                     </div>
                 </td>
             </tr>
@@ -128,8 +128,8 @@ async function loadGestaoDocs(page = 1) {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:8px;background:#f8f9fa;border:1px solid #e9ecef;font-size:12px;">
             <div>Página <b>${page}</b> de <b>${totalPages}</b> (Total: ${total} notas)</div>
             <div style="display:flex;gap:5px;">
-                <button type="button" class="botao" ${page <= 1 ? "disabled" : ""} onclick="loadGestaoDocs(${page - 1});">◀ Anterior</button>
-                <button type="button" class="botao" ${page >= totalPages ? "disabled" : ""} onclick="loadGestaoDocs(${page + 1});">Próxima ▶</button>
+                <button type="button" class="botao" ${page <= 1 ? "disabled" : ""} data-onclick="${escapeAttrJson(JSON.stringify({"fn": "loadGestaoDocs", "args": [page - 1]}))}">◀ Anterior</button>
+                <button type="button" class="botao" ${page >= totalPages ? "disabled" : ""} data-onclick="${escapeAttrJson(JSON.stringify({"fn": "loadGestaoDocs", "args": [page + 1]}))}">Próxima ▶</button>
             </div>
         </div>
     `;
@@ -151,15 +151,15 @@ async function loadGestaoDocs(page = 1) {
             <table class="tabelaGrupo" style="width:100%;border-collapse:collapse;font-size:11px;">
                 <thead>
                     <tr class="linhaTitulo" style="background:#e9ecef;">
-                        <th style="width:25px;text-align:center;"><input type="checkbox" id="gestao-chk-all" onchange="toggleSelectAllDocs(this.checked);"></th>
-                        <th style="padding:6px;width:75px;text-align:center;cursor:pointer;user-select:none;" onclick="alternarFiltroTipoColuna();" title="Clique para alternar: Entradas ➔ Saídas ➔ Todas">Tipo ↕️</th>
+                        <th style="width:25px;text-align:center;"><input type="checkbox" id="gestao-chk-all" data-onchange="${escapeAttrJson(JSON.stringify({"fn": "toggleSelectAllDocs", "args": ["$this"]}))}"></th>
+                        <th style="padding:6px;width:75px;text-align:center;cursor:pointer;user-select:none;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "alternarFiltroTipoColuna", "args": []}))}" title="Clique para alternar: Entradas ➔ Saídas ➔ Todas">Tipo ↕️</th>
                         <th style="padding:6px;">Chave de Acesso</th>
                         <th style="padding:6px;">NF-e / Série</th>
                         <th style="padding:6px;">Emitente (Fornecedor)</th>
                         <th style="padding:6px;">Destinatário (Titular)</th>
                         <th style="padding:6px;">Data Emissão</th>
                         <th style="padding:6px;text-align:right;">Valor Total</th>
-                        <th style="padding:6px;cursor:pointer;user-select:none;" onclick="alternarFiltroSituacaoColuna();" title="Clique para agrupar e alternar por Situação (Pendentes ➔ Canceladas ➔ Rejeitadas ➔ Autorizadas ➔ Todas)">${situacaoHeaderHtml}</th>
+                        <th style="padding:6px;cursor:pointer;user-select:none;" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "alternarFiltroSituacaoColuna", "args": []}))}" title="Clique para agrupar e alternar por Situação (Pendentes ➔ Canceladas ➔ Rejeitadas ➔ Autorizadas ➔ Todas)">${situacaoHeaderHtml}</th>
                         <th style="padding:6px;">Ações</th>
                     </tr>
                 </thead>
@@ -338,7 +338,7 @@ async function abrirDebugNfe() {
 
         html += `</tbody></table></div>
             <div style="margin-top:15px;text-align:right;">
-                <button onclick="document.getElementById('modal-debug-nfe').style.display='none'" class="botao">Fechar</button>
+                <button data-onclick="${escapeAttrJson(JSON.stringify({"fn": "fecharModalDebugNfe", "args": []}))}" class="botao">Fechar</button>
             </div>
         `;
 
@@ -520,10 +520,10 @@ async function abrirDrawerDetalhes(chave) {
 
         if (acoes) {
             acoes.innerHTML = `
-                <button type="button" class="botao botao-primario" onclick="fecharDrawerDetalhes(); visualizarDanfeChave('${chave}');" style="font-size:11.5px;padding:6px 12px;">
+                <button type="button" class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"seq": [{"fn": "fecharDrawerDetalhes", "args": []}, {"fn": "visualizarDanfeChave", "args": [chave]}]}))}" style="font-size:11.5px;padding:6px 12px;">
                     👁️ Ver DANFE Completo
                 </button>
-                <button type="button" class="botao" onclick="downloadDanfePdf('${chave}');" style="font-size:11.5px;padding:6px 10px;">
+                <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "downloadDanfePdf", "args": [chave]}))}" style="font-size:11.5px;padding:6px 10px;">
                     📥 Baixar PDF
                 </button>
                 <a href="https://api.whatsapp.com/send?phone=5519989354849&text=${zapText}" target="_blank" class="botao" style="font-size:11px;padding:6px 10px;background:#25d366;color:#fff;border-color:#25d366;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">

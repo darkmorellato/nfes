@@ -111,7 +111,7 @@ function renderizarListaClientes(lista) {
             icon: '👥',
             title: 'Nenhum cliente cadastrado',
             description: 'Comece adicionando seu primeiro cliente para usar nas emissões de NF-e.',
-            actionHtml: '<button class="botao botao-primario" onclick="abrirModalNovoCliente()">➕ Cadastrar primeiro cliente</button>',
+            actionHtml: '<button class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalNovoCliente", "args": []}))}">➕ Cadastrar primeiro cliente</button>',
             containerId: 'tbody-cad-clientes',
         });
         return;
@@ -128,10 +128,10 @@ function renderizarListaClientes(lista) {
             <td>${escapeHtml(c.email || "—")}</td>
             <td style="text-align:center;">
                 <div class="actions-cell" style="justify-content:center;gap:4px;flex-wrap:wrap;">
-                    <button type="button" class="btn-action" onclick="visualizarClienteCad(${c.id});" title="Visualizar todos os dados do cliente" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd;font-weight:600;padding:2px 7px;">👁️ Ver</button>
-                    <button type="button" class="btn-action" onclick="abrirModalEditarCliente(${c.id});" title="Editar dados cadastrais do cliente" style="background:#fef3c7;color:#92400e;border-color:#fde68a;font-weight:600;padding:2px 7px;">✏️ Editar</button>
-                    <button type="button" class="btn-action btn-action-primary" onclick="usarClienteNaEmissao('${c.cpf_cnpj}');" title="Usar este cliente na emissão de NF-e" style="padding:2px 7px;">📄 Usar</button>
-                    <button type="button" class="btn-action" onclick="excluirClienteCad(${c.id});" style="color:#c0392b;padding:2px 7px;" title="Excluir cliente">🗑️</button>
+                    <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarClienteCad", "args": [c.id]}))}" title="Visualizar todos os dados do cliente" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd;font-weight:600;padding:2px 7px;">👁️ Ver</button>
+                    <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalEditarCliente", "args": [c.id]}))}" title="Editar dados cadastrais do cliente" style="background:#fef3c7;color:#92400e;border-color:#fde68a;font-weight:600;padding:2px 7px;">✏️ Editar</button>
+                    <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "usarClienteNaEmissao", "args": [c.cpf_cnpj]}))}" title="Usar este cliente na emissão de NF-e" style="padding:2px 7px;">📄 Usar</button>
+                    <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "excluirClienteCad", "args": [c.id]}))}" style="color:#c0392b;padding:2px 7px;" title="Excluir cliente">🗑️</button>
                 </div>
             </td>
         </tr>
@@ -464,10 +464,10 @@ function renderizarListaProdutos(lista) {
             <td style="text-align:center;"><small>${origens[p.origem] || "Nacional"}</small></td>
             <td style="text-align:center;">
                 <div class="actions-cell" style="justify-content:center;gap:4px;flex-wrap:wrap;">
-                    <button type="button" class="btn-action" onclick="visualizarProdutoCad(${p.id});" title="Visualizar ficha fiscal e técnica" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd;font-weight:600;padding:2px 7px;">👁️ Ver</button>
-                    <button type="button" class="btn-action" onclick="abrirModalEditarProduto(${p.id});" title="Editar dados cadastrais do produto" style="background:#fef3c7;color:#92400e;border-color:#fde68a;font-weight:600;padding:2px 7px;">✏️ Editar</button>
-                    <button type="button" class="btn-action btn-action-primary" onclick="usarProdutoNaEmissao('${p.codigo}');" title="Adicionar à emissão de NF-e" style="padding:2px 7px;">➕ Usar</button>
-                    <button type="button" class="btn-action" onclick="excluirProdutoCad(${p.id});" style="color:#c0392b;padding:2px 7px;" title="Excluir produto">🗑️</button>
+                    <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "visualizarProdutoCad", "args": [p.id]}))}" title="Visualizar ficha fiscal e técnica" style="background:#e0f2fe;color:#0369a1;border-color:#bae6fd;font-weight:600;padding:2px 7px;">👁️ Ver</button>
+                    <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalEditarProduto", "args": [p.id]}))}" title="Editar dados cadastrais do produto" style="background:#fef3c7;color:#92400e;border-color:#fde68a;font-weight:600;padding:2px 7px;">✏️ Editar</button>
+                    <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "usarProdutoNaEmissao", "args": [p.codigo]}))}" title="Adicionar à emissão de NF-e" style="padding:2px 7px;">➕ Usar</button>
+                    <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "excluirProdutoCad", "args": [p.id]}))}" style="color:#c0392b;padding:2px 7px;" title="Excluir produto">🗑️</button>
                 </div>
             </td>
         </tr>
@@ -938,8 +938,26 @@ async function abrirModalSyncRedeLocal() {
                 inputUrl.placeholder = `Ex: http://${data.ips[0]}:${data.porta || 8000}`;
             }
         }
+        // Segredo desta máquina, exibido para o operador copiar na outra máquina.
+        const tokenEl = document.getElementById("sync-rede-token");
+        if (data && data.sync_token) {
+            AppState._syncTokenLocal = data.sync_token;
+            if (tokenEl) tokenEl.textContent = data.sync_token;
+        } else if (tokenEl) {
+            tokenEl.textContent = "indisponível";
+        }
     } catch (e) {
         if (meuIpEl) meuIpEl.textContent = `http://${window.location.hostname || "127.0.0.1"}:8000`;
+    }
+}
+
+function copiarMeuTokenSync() {
+    const el = document.getElementById("sync-rede-token");
+    const token = (el && el.textContent) || (typeof AppState !== "undefined" && AppState._syncTokenLocal) || "";
+    if (!token || token === "indisponível" || token === "carregando...") return;
+    navigator.clipboard.writeText(token.trim());
+    if (typeof toast !== "undefined" && toast.info) {
+        toast.info("🔑 Token copiado! Cole na máquina de origem.");
     }
 }
 
@@ -978,6 +996,9 @@ async function executarSyncRedeLocal() {
 
     localStorage.setItem("nfe_p2p_sync_url", rawUrl);
 
+    // Token exibido na MÁQUINA DE ORIGEM — sem ele a origem recusa a exportação.
+    const tokenOrigem = (document.getElementById("sync-rede-token-origem")?.value || "").trim();
+
     if (btn) { btn.disabled = true; btn.innerHTML = "⏳ Sincronizando..."; }
     if (statusBox) {
         statusBox.style.display = "block";
@@ -988,7 +1009,10 @@ async function executarSyncRedeLocal() {
     }
 
     try {
-        let res = await apiPost("/api/gestao/rede/puxar-dados", { url_origem: rawUrl });
+        let res = await apiPost("/api/gestao/rede/puxar-dados", {
+            url_origem: rawUrl,
+            sync_token: tokenOrigem || undefined,
+        });
         let data = res.data || res;
 
         // Fallback: se o backend local responder 404 (servidor não reiniciado após atualização de código),
@@ -998,9 +1022,19 @@ async function executarSyncRedeLocal() {
                 statusBox.textContent = `Backend local em versão anterior. Executando importação direta pelo navegador de ${rawUrl}...`;
             }
 
+            if (!tokenOrigem) {
+                throw new Error(
+                    "Informe o token exibido na máquina de origem (campo logo abaixo do endereço). " +
+                    "Sem ele a máquina remota não entrega os dados."
+                );
+            }
+
             let directResp;
             try {
-                directResp = await fetch(`${rawUrl}/api/gestao/rede/exportar-dados`, { mode: "cors" });
+                directResp = await fetch(`${rawUrl}/api/gestao/rede/exportar-dados`, {
+                    mode: "cors",
+                    headers: { "X-Sync-Token": tokenOrigem },
+                });
             } catch (netErr) {
                 throw new Error(`Não foi possível conectar a ${rawUrl}. Verifique se o firewall da máquina principal liberou a porta 8000 (execute: sudo ufw allow 8000/tcp na máquina principal).`);
             }
@@ -1061,7 +1095,7 @@ async function executarSyncRedeLocal() {
                 statusBox.style.background = "#fef2f2";
                 statusBox.style.border = "1px solid #fecaca";
                 statusBox.style.color = "#991b1b";
-                statusBox.innerHTML = `❌ Falha ao sincronizar: <b>${err}</b><br><br>💡 <b>Atenção:</b> Reinicie o servidor na outra máquina (feche e abra o inicializador) para carregar os novos endpoints.`;
+                statusBox.innerHTML = `❌ Falha ao sincronizar: <b>${escapeHtml(err)}</b><br><br>💡 <b>Atenção:</b> Reinicie o servidor na outra máquina (feche e abra o inicializador) para carregar os novos endpoints.`;
             }
             if (typeof toast !== "undefined" && toast.error) {
                 toast.error("Erro na sincronização: " + err);

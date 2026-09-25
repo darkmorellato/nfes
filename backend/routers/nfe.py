@@ -15,6 +15,12 @@ from backend.services.pynfe_service import (
     inutilizar_numeracao,
     manifestacao_destinatario,
 )
+from backend.services.nfe_emissao_service import (
+    cancelar_nfe_profissional,
+    emitir_carta_correcao_nfe,
+    inutilizar_numeracao_nfe,
+)
+from backend.database import get_nfe_detail
 from backend.config import settings
 from backend.dependencies import require_session
 
@@ -45,7 +51,7 @@ class EventoRequest(BaseModel):
     protocolo: Optional[str] = None
     justificativa: Optional[str] = None
     texto: Optional[str] = None
-    nSeqEvento: int = 1
+    nSeqEvento: Optional[int] = None   # None = sequência automática por chave (1..20)
     modelo: str = "nfe"
     uf: Optional[str] = None
     homologacao: Optional[bool] = None
@@ -108,6 +114,31 @@ async def consulta_recibo(numero: str, uf: Optional[str] = None, homologacao: Op
 
 @router.post("/cancelar")
 async def cancelar(req: EventoRequest):
+    """
+    Cancela uma NF-e (Evento 110111).
+
+    Quando a nota existe localmente, delega ao fluxo profissional — que valida,
+    transmite e **só grava no banco após cStat 135/136**. Sem nota local (uso
+    avançado), mantém o envio cru do evento construído pelo cliente.
+    """
+    chave_clean = "".join(c for c in str(req.chave or "") if c.isdigit())
+    if len(chave_clean) == 44 and not req.xml_evento and get_nfe_detail(chave_clean):
+        try:
+            res = cancelar_nfe_profissional(
+                chave=chave_clean,
+                justificativa=req.justificativa or "",
+                protocolo=req.nProt or req.protocolo,
+                homologacao=req.homologacao,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        if not res.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail=res.get("motivo") or "A SEFAZ não homologou o cancelamento.",
+            )
+        return res
+
     try:
         result = cancelar_nota(
             xml_evento=req.xml_evento,
@@ -127,6 +158,25 @@ async def cancelar(req: EventoRequest):
 
 @router.post("/carta-correcao")
 async def cc(req: EventoRequest):
+    """Carta de Correção (Evento 110110) — ver nota de ``/cancelar``."""
+    chave_clean = "".join(c for c in str(req.chave or "") if c.isdigit())
+    if len(chave_clean) == 44 and not req.xml_evento and get_nfe_detail(chave_clean):
+        try:
+            res = emitir_carta_correcao_nfe(
+                chave=chave_clean,
+                texto_correcao=req.texto or "",
+                seq_evento=req.nSeqEvento,
+                homologacao=req.homologacao,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        if not res.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail=res.get("motivo") or "A SEFAZ não homologou a Carta de Correção.",
+            )
+        return res
+
     try:
         result = carta_correcao(
             xml_evento=req.xml_evento,
@@ -146,20 +196,26 @@ async def cc(req: EventoRequest):
 
 @router.post("/inutilizar")
 async def inutilizar(req: InutilizacaoRequest):
+    """
+    Inutiliza faixa de numeração (serviço 404/405).
+
+    Delega ao fluxo profissional: valida a faixa contra as notas locais,
+    transmite e só registra após confirmação da SEFAZ.
+    """
     try:
-        result = inutilizar_numeracao(
-            cnpj=req.cnpj,
+        return inutilizar_numeracao_nfe(
+            empresa_cnpj=req.cnpj,
+            serie=req.serie,
             numero_inicial=req.numero_inicial,
             numero_final=req.numero_final,
             justificativa=req.justificativa,
-            serie=req.serie,
-            ano=req.ano,
-            modelo=req.modelo or "nfe",
-            uf=req.uf,
+            modelo="55" if (req.modelo or "nfe") in ("nfe", "55") else "65",
             homologacao=req.homologacao,
         )
-        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.exception("[INUTILIZACAO] Erro inesperado")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -227,44 +283,21 @@ async def manifestacao(req: ManifestacaoRequest, request: Request):
 
 @router.post("/emitir/rapido")
 async def emitir_nfe_rapido(payload: dict):
-    """Gera, assina com o certificado A1 da empresa e autoriza NF-e de Venda, Devolução ou Transferência."""
-    from backend.database import get_certificate_record, list_certificates_db
+    """Endpoint legado de simulação — REMOVIDO por integridade fiscal.
 
-    emitente_cnpj = "".join(c for c in str(payload.get("emitente_cnpj", "")) if c.isdigit())
-    dest_cnpj = "".join(c for c in str(payload.get("destinatario_cnpj", "")) if c.isdigit())
-    dest_nome = payload.get("destinatario_nome", "CLIENTE/FORNECEDOR")
-    tipo_op = payload.get("tipo_operacao", "VENDA")  # VENDA, DEVOLUCAO, TRANSFERENCIA
-    homolog = payload.get("homologacao", True)
-    uf = payload.get("uf", "SP")
-    produtos = payload.get("produtos", [])
+    Este recurso devolvia ``cStat 100`` e um "protocolo" inventados sem
+    montar XML, assinar com o Certificado A1 nem transmitir à SEFAZ, o que
+    gerava notas aparentemente autorizadas sem validade fiscal.
 
-    cert_rec = get_certificate_record(emitente_cnpj)
-    if not cert_rec:
-        certs = list_certificates_db()
-        cert_rec = certs[0] if certs else None
-
-    if not cert_rec:
-        raise HTTPException(status_code=400, detail="Certificado da empresa emitente não encontrado.")
-
-    tot_val = sum(float(p.get("valor_total", 0.0)) for p in produtos)
-
-    # Simulação estruturada de retorno de autorização SEFAZ
-    now = datetime.now()
-    chave_simulada = f"35{now.strftime('%y%m')}{emitente_cnpj}55001{now.strftime('%H%M%S%f')[:9]}1"
-
-    return {
-        "success": True,
-        "tipo_operacao": tipo_op,
-        "chave": chave_simulada,
-        "protocolo": f"135260{now.strftime('%H%M%S%f')[:9]}",
-        "c_stat": "100",
-        "motivo": f"Autorizado o uso da NF-e ({tipo_op})",
-        "emitente": cert_rec["razao_social"],
-        "destinatario": dest_nome,
-        "valor_total": tot_val,
-        "ambiente": "Homologação" if homolog else "Produção",
-        "mensagem": f"NF-e de {tipo_op} gerada com sucesso e assinada pelo certificado {cert_rec['razao_social']}!",
-    }
+    Use ``POST /api/emissao/nfe/emitir`` — a emissão profissional real.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Endpoint descontinuado: ele apenas simulava a autorização. "
+            "Transmita a NF-e por POST /api/emissao/nfe/emitir."
+        ),
+    )
 
 
 # ====================================================================

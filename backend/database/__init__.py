@@ -20,6 +20,10 @@ def get_db_connection():
     target_db = os.environ.get("NFE_DB_PATH") or DB_PATH
     conn = sqlite3.connect(target_db, timeout=30.0)
     conn.execute("PRAGMA busy_timeout = 30000")
+    # O padrão do SQLite é OFF: sem isto, todas as cláusulas
+    # "FOREIGN KEY ... ON DELETE CASCADE" do schema ficavam inertes e
+    # nfe_items / nfe_events / nfe_duplicatas deixavam órfãos ao apagar uma nota.
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -99,6 +103,8 @@ from .cadastros import (
     delete_produto,
     delete_produto_by_codigo,
     get_next_nfe_number,
+    reservar_proximo_numero,
+    garante_numero_livre,
     get_empresas,
 )
 

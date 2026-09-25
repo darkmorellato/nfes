@@ -54,7 +54,7 @@ async function loadCertificatesUI() {
                     icon: '🏢',
                     title: 'Nenhum certificado cadastrado',
                     description: 'Você ainda não cadastrou um certificado digital A1.',
-                    actionHtml: '<button class="botao botao-primario" onclick="showSection(\'certificado\')">➕ Adicionar certificado</button>',
+                    actionHtml: '<button class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "showSection", "args": [\'certificado\']}))}">➕ Adicionar certificado</button>',
                     containerId: 'inicio-cards-certificados',
                 });
             } else {
@@ -83,9 +83,9 @@ async function loadCertificatesUI() {
                                 <div style="margin-bottom:10px;"><span style="${badgeStyle}font-size:10.5px;padding:3px 8px;border-radius:9999px;font-weight:600;">${escapeHtml(badgeText)}</span></div>
                             </div>
                             <div style="display:flex;gap:5px;border-top:1px solid var(--border-subtle);padding-top:10px;margin-top:6px;flex-wrap:wrap;">
-                                <button type="button" class="btn-action" onclick="abrirModalEditarDadosFiscaisCert('${c.cnpj}');" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;" title="Editar IE e Endereço desta empresa">✏️ Fiscal</button>
-                                <button type="button" class="btn-action btn-action-primary" onclick="filtrarNotasPorEmpresa('${c.cnpj}');" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;">🗄️ Notas</button>
-                                <button type="button" class="btn-action btn-action-success" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;">⚡ Sync</button>
+                                <button type="button" class="btn-action" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalEditarDadosFiscaisCert", "args": [c.cnpj]}))}" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;" title="Editar IE e Endereço desta empresa">✏️ Fiscal</button>
+                                <button type="button" class="btn-action btn-action-primary" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "filtrarNotasPorEmpresa", "args": [c.cnpj]}))}" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;">🗄️ Notas</button>
+                                <button type="button" class="btn-action btn-action-success" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "sincronizarEmpresaEspecifica", "args": [c.cnpj]}))}" style="flex:1;justify-content:center;padding:4px 6px;font-size:10.5px;">⚡ Sync</button>
                             </div>
                         </div>
                     `;
@@ -101,7 +101,7 @@ async function loadCertificatesUI() {
                     icon: '🏢',
                     title: 'Nenhum certificado cadastrado',
                     description: 'Você ainda não possui certificados digitais cadastrados no banco local.',
-                    actionHtml: '<button class="botao botao-primario" onclick="abrirModalCadCert()">➕ Adicionar certificado A1</button>',
+                    actionHtml: '<button class="botao botao-primario" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalCadCert", "args": []}))}">➕ Adicionar certificado A1</button>',
                     containerId: 'cert-lista-tabela',
                 });
             } else {
@@ -140,9 +140,9 @@ async function loadCertificatesUI() {
                                     <td><b>${days} dias</b></td>
                                     <td><span class="badge-ambiente" style="background:${badgeColor};font-size:10px;">${escapeHtml(c.status_validade || "ATIVO")}</span></td>
                                     <td style="white-space:nowrap;display:flex;gap:4px;justify-content:center;padding:6px 4px;">
-                                        <button type="button" class="botao" onclick="abrirModalEditarDadosFiscaisCert('${c.cnpj}');" style="font-size:10px;padding:3px 7px;color:#0284c7;border-color:#0284c7;" title="Configurar Inscrição Estadual e Endereço Fiscal">✏️ Fiscal</button>
-                                        <button type="button" class="botao" onclick="sincronizarEmpresaEspecifica('${c.cnpj}');" style="font-size:10px;padding:3px 7px;">⚡ Sync</button>
-                                        <button type="button" class="botao" onclick="excluirCertificado('${c.cnpj}', '${escapeHtml(c.razao_social)}');" style="font-size:10px;padding:3px 7px;color:#b00020;border-color:#b00020;">🗑️</button>
+                                        <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "abrirModalEditarDadosFiscaisCert", "args": [c.cnpj]}))}" style="font-size:10px;padding:3px 7px;color:#0284c7;border-color:#0284c7;" title="Configurar Inscrição Estadual e Endereço Fiscal">✏️ Fiscal</button>
+                                        <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "sincronizarEmpresaEspecifica", "args": [c.cnpj]}))}" style="font-size:10px;padding:3px 7px;">⚡ Sync</button>
+                                        <button type="button" class="botao" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "excluirCertificado", "args": [c.cnpj, c.razao_social]}))}" style="font-size:10px;padding:3px 7px;color:#b00020;border-color:#b00020;">🗑️</button>
                                     </td>
                                 </tr>
                             `;

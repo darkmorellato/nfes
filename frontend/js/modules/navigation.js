@@ -256,7 +256,7 @@ function renderCommandList() {
         }
         const isActive = idx === _cmdActiveIndex ? "active" : "";
         html += `
-            <div class="cmd-item ${isActive}" onclick="executarComando(${idx});">
+            <div class="cmd-item ${isActive}" data-onclick="${escapeAttrJson(JSON.stringify({"fn": "executarComando", "args": [idx]}))}">
                 <div style="display:flex;align-items:center;gap:10px;">
                     <span style="font-size:15px;">${cmd.icon}</span>
                     <span>${escapeHtml(cmd.label)}</span>

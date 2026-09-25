@@ -1,7 +1,9 @@
 import hashlib
+import secrets
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from backend.config import settings
 from backend.database import get_db_connection, get_certificate_record
 
 
@@ -51,13 +53,10 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
     now = datetime.now()
     now_iso = now.isoformat()
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Obtém próximo número de NFC-e da empresa
-        cursor.execute("SELECT MAX(CAST(numero AS INTEGER)) as max_n FROM nfe_docs WHERE modelo = '65' AND (empresa_cnpj = ? OR emitente_cnpj = ?)", (empresa_cnpj, empresa_cnpj))
-        r_num = cursor.fetchone()
-        proximo_numero = (r_num["max_n"] or 0) + 1 if r_num else 1
+    # Reserva atômica do número (mesma garantia da NF-e modelo 55): duas
+    # operações simultâneas no PDV nunca resolvem o mesmo número.
+    from backend.database import reservar_proximo_numero
+    proximo_numero = reservar_proximo_numero(empresa_cnpj, serie="1", modelo="65")
 
     # Monta Chave de Acesso Oficial de 44 dígitos
     uf_cod = "35"
@@ -66,8 +65,9 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
     serie = "001"
     num_str = f"{proximo_numero:09d}"
     tp_emis = "1"
-    c_cnf = f"{now.microsecond % 100000000:08d}"
-    chave_sem_dv = f"{uf_cod}{aamm}{empresa_cnpj.zfill(14)}{mod}{serie}{num_str}{tp_emis}{c_cnf}"
+    c_cnf = secrets.randbelow(100000000)   # cNF aleatório de 8 dígitos
+    chave_sem_dv = f"{uf_cod}{aamm}{empresa_cnpj.zfill(14)}{mod}{serie}{num_str}{tp_emis}{c_cnf:08d}"
+
 
     # Cálculo do dígito verificador módulo 11
     pesos = [4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
@@ -92,7 +92,7 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
         chave=chave_completa,
         csc_token=csc_token,
         csc_token_id=csc_token_id,
-        ambiente="1",
+        ambiente="2" if settings.HOMOLOGACAO else "1",
         valor_total=valor_total_venda,
         data_emissao=now_iso
     )
@@ -104,12 +104,17 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
         emit_nome = nome_empresa(empresa_cnpj, "JACKCELL CELULARES E IMPORTADOS LTDA")
 
         # 1. Salva Documento Fiscal
+        # A NFC-e NÃO é transmitida por este fluxo (falta o grupo infNFeSupl com
+        # o QR Code assinado e a chamada ao WS). Gravá-la como "Autorizada" com
+        # has_xml=1 seria a mesma falsificação fiscal combatida na Fase 1:
+        # aqui ela nasce como pendente de transmissão, sem XML.
         cursor.execute("""
             INSERT INTO nfe_docs (
                 chave, empresa_cnpj, numero, serie, modelo, emitente_cnpj, emitente_nome, emitente_uf,
                 destinatario_cnpj, destinatario_nome, destinatario_uf, data_emissao, data_autorizacao,
-                valor_total, valor_icms, situacao, tipo_doc, has_xml, created_at, updated_at
-            ) VALUES (?, ?, ?, '1', '65', ?, ?, 'SP', ?, ?, 'SP', ?, ?, ?, 0.0, 'Autorizada', 1, 1, ?, ?)
+                valor_total, valor_icms, situacao, tipo_doc, has_xml, tp_amb, created_at, updated_at
+            ) VALUES (?, ?, ?, '1', '65', ?, ?, 'SP', ?, ?, 'SP', ?, NULL, ?, 0.0,
+                      'Pendente de Transmissão', 1, 0, ?, ?, ?)
         """, (
             chave_completa,
             empresa_cnpj,
@@ -119,8 +124,8 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
             cpf_consumidor if cpf_consumidor else "00000000000",
             payload.get("nome_consumidor", "CONSUMIDOR FINAL"),
             now_iso,
-            now_iso,
             valor_total_venda,
+            2 if settings.HOMOLOGACAO else 1,
             now_iso,
             now_iso
         ))
@@ -153,7 +158,7 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
             INSERT INTO nfce_vendas (
                 chave, numero, serie, empresa_cnpj, valor_total, forma_pagamento,
                 cpf_consumidor, qrcode_url, status, created_at
-            ) VALUES (?, ?, '1', ?, ?, ?, ?, ?, 'Autorizada', ?)
+            ) VALUES (?, ?, '1', ?, ?, ?, ?, ?, 'Pendente de Transmissão', ?)
         """, (
             chave_completa, str(proximo_numero), empresa_cnpj, valor_total_venda,
             forma_pagto, cpf_consumidor, qrcode_url, now_iso
@@ -169,5 +174,11 @@ def emitir_nfce_pdv(payload: Dict[str, Any]) -> Dict[str, Any]:
         "valor_total": valor_total_venda,
         "qrcode_url": qrcode_url,
         "data_emissao": now_iso,
-        "mensagem": "NFC-e autorizada e emitida com sucesso no PDV!"
+        "situacao": "Pendente de Transmissão",
+        "transmitida": False,
+        "mensagem": (
+            "Venda do PDV registrada localmente. A NFC-e ainda NÃO foi transmitida "
+            "à SEFAZ e não tem validade fiscal — use o emissor de NFC-e para "
+            "assinar e enviar o cupom."
+        ),
     }

@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import nfe, nfce, mdfe, nfse, cert, status, reports, danfe, gestao, emissao
@@ -80,7 +81,44 @@ def _safe_firestore_auto_sync_cadastros() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Executa migrações versionadas do Alembic e inicializa SQLite
+    # 0) TLS dos webservices da SEFAZ: força verificação do certificado do
+    #    servidor (.gov.br) com a cadeia ICP-Brasil fixada no repositório.
+    #    Precisa rodar antes de qualquer chamada ao PyNFe.
+    try:
+        from backend.services.tls_sefaz import aplicar_verificacao_tls, verificar_cadeia, caminho_bundle
+        aplicar_verificacao_tls()
+        logger.info("[TLS] Bundle de CAs da SEFAZ: %s", caminho_bundle())
+
+        def _checar_cadeia() -> None:
+            # Em background: não bloqueia o startup nem falha se estiver offline.
+            for host in ("nfe.fazenda.sp.gov.br", "homologacao.nfe.fazenda.sp.gov.br"):
+                r = verificar_cadeia(host)
+                if r["ok"]:
+                    logger.info(
+                        "[TLS] %s validado (%s emitido por %s)",
+                        host, r["subject"], r["issuer"],
+                    )
+                else:
+                    logger.warning(
+                        "[TLS] Não foi possível validar %s: %s", host, r["detalhe"]
+                    )
+
+        import threading
+        threading.Thread(target=_checar_cadeia, daemon=True, name="sefaz-tls-check").start()
+    except Exception as e:
+        logger.warning("[TLS] Falha ao configurar a verificação TLS: %s", e)
+
+    # 1) Schema idempotente: init_db() usa CREATE TABLE IF NOT EXISTS + guards de
+    #    ALTER, portanto é seguro rodar sempre. Isso elimina a deriva em que
+    #    mudanças de schema.py nunca chegavam a bancos já migrados pelo Alembic
+    #    (upgrade head é no-op quando já está em head).
+    try:
+        init_db()
+        logger.info("[DB] Schema verificado/aplicado (init_db idempotente).")
+    except Exception as e:
+        logger.warning(f"[DB] Aviso ao aplicar schema idempotente: {e}")
+
+    # 2) Migrações versionadas do Alembic (estruturas específicas de versão)
     try:
         from alembic.config import Config
         from alembic import command
@@ -149,13 +187,17 @@ app = FastAPI(
 )
 
 # CORS middleware
+# A regex abaixo é deliberadamente estreita: aceita apenas localhost e o host
+# configurado em ALLOWED_ORIGINS. Uma regex ampla de rede privada (192.168.x,
+# 10.x, 172.x em qualquer porta) permitiria que qualquer página servida por um
+# dispositivo da LAN fizesse chamadas credenciadas contra a API.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins_list(),
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Session-Token", "X-Sync-Token", "X-Request-ID"],
 )
 
 # Correlation ID & Request Tracing middleware
@@ -171,15 +213,75 @@ async def correlation_id_middleware(request: Request, call_next):
     return response
 
 # Security headers middleware
+# CSP: sem 'unsafe-inline' em script-src — todos os handlers inline do
+# index.html e dos módulos foram migrados para data-on* delegados por
+# frontend/js/inline-actions.js. Um `<script>` inline ou um `onclick`
+# injetado por terceiros é bloqueado pelo navegador.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
+    "img-src 'self' data: https://www.nfe.fazenda.gov.br; "
+    # 'http:' cobre a sincronização P2P na LAN (porta/hostname livres);
+    # *.googleapis.com é o Firestore REST, wss:// cobre o transporte em
+    # tempo real do SDK (sem ele o listener fica pendurado).
+    "connect-src 'self' https://*.googleapis.com wss://*.googleapis.com "
+    "https://*.firebaseio.com wss://*.firebaseio.com http:; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = _CSP
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+
+    # HSTS só faz sentido (e só é seguro) sob TLS: emitido em HTTP puro ele é
+    # ignorado pelo navegador e dá falsa sensação de proteção.
+    proto = request.headers.get("X-Forwarded-Proto", "") if settings.TRUST_PROXY else ""
+    proto = proto or request.url.scheme
+    if proto == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Nunca cachear respostas da API (dados fiscais e sessão).
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    elif request.url.path.startswith("/static/"):
+        # Revalida a cada acesso (ETag/Last-Modified): sem isto o navegador
+        # servia JS antigo após uma atualização do sistema.
+        response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Validação de payload vira uma mensagem legível em ``detail`` (string).
+
+    O FastAPI padrão devolve ``detail`` como lista de objetos — o front exibiria
+    "[object Object]" na tela de rejeição fiscal.
+    """
+    partes = []
+    for erro in exc.errors():
+        local = ".".join(str(p) for p in erro.get("loc", ()) if p != "body")
+        msg = erro.get("msg", "valor inválido")
+        partes.append(f"{local}: {msg}" if local else msg)
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "; ".join(partes) or "Payload inválido.",
+            "errors": exc.errors(),
+            "success": False,
+        },
+    )
 
 
 @app.exception_handler(Exception)
@@ -215,6 +317,9 @@ app.include_router(cert.router, prefix="/api", tags=["Certificado"])
 app.include_router(reports.router, prefix="/api", tags=["Relatórios"])
 app.include_router(danfe.router, prefix="/api/danfe", tags=["DANFE"])
 app.include_router(gestao.router, prefix="/api", tags=["Gestão e Inteligência"])
+# Sincronização P2P: router separado porque usa X-Sync-Token em vez de sessão
+# de usuário (uma máquina chama a outra sem login no destino).
+app.include_router(gestao.router_rede, prefix="/api")
 app.include_router(emissao.router, prefix="/api", tags=["Emissão de NF-e e Cadastros"])
 app.include_router(nfe.router, prefix="/api/nfe", tags=["NF-e"])
 app.include_router(nfce.router, prefix="/api/nfce", tags=["NFC-e"])
@@ -239,7 +344,8 @@ async def favicon():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "nfe-manager"}
+    from backend.services.tls_sefaz import status_tls
+    return {"status": "ok", "service": "nfe-manager", "sefaz_tls": status_tls()}
 
 
 @app.get("/api/firebase-config")
